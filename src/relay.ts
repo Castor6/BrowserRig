@@ -1,6 +1,8 @@
 import http from "node:http"
 import stream from "node:stream"
 import crypto from "node:crypto"
+import fs from "node:fs"
+import { fileURLToPath } from "node:url"
 import { Clock, Config, Effect, Fiber, Semaphore } from "effect"
 import { WebSocket, WebSocketServer, type RawData } from "ws"
 import {
@@ -21,6 +23,7 @@ import { extensionProtocolCompatibility, isCdpRequest, isExtensionEvent, isExten
 import {
   closeHttpServer,
   closeWebSocketServer,
+  chromeExtensionOriginForPath,
   defaultHost,
   defaultPort,
   formatHostForUrl,
@@ -134,6 +137,15 @@ function debugEnvironmentEnabled(value: string | undefined): boolean {
   return value !== undefined && ["1", "true", "yes", "on"].includes(value.toLowerCase())
 }
 
+function getBundledUnpackedExtensionOrigin(): string | undefined {
+  try {
+    const extensionPath = fs.realpathSync(fileURLToPath(new URL("../extension/dist", import.meta.url)))
+    return chromeExtensionOriginForPath(extensionPath)
+  } catch {
+    return undefined
+  }
+}
+
 const makeRelay = Effect.fnUntraced(function* (options: {
   readonly host?: string
   readonly port?: number
@@ -146,6 +158,10 @@ const makeRelay = Effect.fnUntraced(function* (options: {
   const browserId = crypto.randomUUID()
   const endpointUrl = `http://${formatHostForUrl(host)}:${port}`
   const allowAnyChromeExtension = browserControlVersion === "0.0.0-dev"
+  const bundledUnpackedExtensionOrigin = getBundledUnpackedExtensionOrigin()
+  const additionalChromeExtensionOrigins = new Set(
+    bundledUnpackedExtensionOrigin ? [bundledUnpackedExtensionOrigin] : [],
+  )
   const sessionCatalog = options.sessionCatalogPath === null
     ? undefined
     : new SessionCatalog(options.sessionCatalogPath ?? defaultSessionCatalogPath(port))
@@ -596,7 +612,12 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     const requestUrl = new URL(request.url ?? "/", endpointUrl)
     const origin = Array.isArray(request.headers.origin) ? request.headers.origin[0] : request.headers.origin
     if (requestUrl.pathname === "/extension") {
-      const originError = validateWebSocketOrigin({ origin, requireChromeExtension: true, allowAnyChromeExtension })
+      const originError = validateWebSocketOrigin({
+        origin,
+        requireChromeExtension: true,
+        allowAnyChromeExtension,
+        additionalChromeExtensionOrigins,
+      })
       if (originError) {
         sendUpgradeError({ socket, status: 403, message: originError })
         return
@@ -607,7 +628,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
       return
     }
     if (requestUrl.pathname.startsWith("/devtools/browser/")) {
-      const originError = validateWebSocketOrigin({ origin, allowAnyChromeExtension })
+      const originError = validateWebSocketOrigin({ origin, allowAnyChromeExtension, additionalChromeExtensionOrigins })
       if (originError) {
         sendUpgradeError({ socket, status: 403, message: originError })
         return

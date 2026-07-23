@@ -1,4 +1,5 @@
 import http from "node:http"
+import crypto from "node:crypto"
 import { Effect, Schema } from "effect"
 import { WebSocket, WebSocketServer } from "ws"
 import type { ExecuteTargetSelection } from "./execute.ts"
@@ -10,6 +11,15 @@ import { RelayErrorCode } from "./relay-schema.ts"
 export const defaultHost = "127.0.0.1"
 export const defaultPort = 19989
 export const chromeWebStoreExtensionOrigin = "chrome-extension://gmjpoplfomnnjipeiojccjbpjlodkjhn"
+
+export function chromeExtensionOriginForPath(extensionPath: string): string {
+  const digest = crypto.createHash("sha256").update(extensionPath).digest()
+  let extensionId = ""
+  for (const byte of digest.subarray(0, 16)) {
+    extensionId += String.fromCharCode(97 + (byte >> 4), 97 + (byte & 0x0f))
+  }
+  return `chrome-extension://${extensionId}`
+}
 
 const maxCliBodyBytes = 1_000_000
 
@@ -55,13 +65,17 @@ export function validateBrowserFetchSite(request: http.IncomingMessage): string 
 
 export function validateWebSocketOrigin(options: {
   readonly origin: string | undefined
+  readonly additionalChromeExtensionOrigins?: ReadonlySet<string>
   readonly allowAnyChromeExtension?: boolean
   readonly requireChromeExtension?: boolean
 }): string | undefined {
   if (!options.origin) {
     return options.requireChromeExtension ? "Extension WebSocket origin is required" : undefined
   }
-  if (options.origin === chromeWebStoreExtensionOrigin) {
+  if (
+    options.origin === chromeWebStoreExtensionOrigin
+    || options.additionalChromeExtensionOrigins?.has(options.origin)
+  ) {
     return undefined
   }
   if (options.allowAnyChromeExtension && options.origin.startsWith("chrome-extension://")) {

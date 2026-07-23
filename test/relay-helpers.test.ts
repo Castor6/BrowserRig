@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  chromeExtensionOriginForPath,
   chromeWebStoreExtensionOrigin,
   generateSessionId,
   getTargetInfo,
@@ -57,6 +58,21 @@ describe("validateWebSocketOrigin", () => {
   it("accepts unpacked extension origins only in source development", () => {
     expect(validateWebSocketOrigin({ origin: "chrome-extension://unpacked", allowAnyChromeExtension: true })).toBeUndefined()
     expect(validateWebSocketOrigin({ origin: "chrome-extension://unpacked", requireChromeExtension: true })).toBeDefined()
+  })
+
+  it("accepts the explicitly derived bundled unpacked extension origin", () => {
+    const unpackedOrigin = chromeExtensionOriginForPath("/browser-control/extension/dist")
+    expect(unpackedOrigin).toBe("chrome-extension://mdipbeojbaeielgdffnemmkcgmddbgip")
+    expect(validateWebSocketOrigin({
+      origin: unpackedOrigin,
+      requireChromeExtension: true,
+      additionalChromeExtensionOrigins: new Set([unpackedOrigin]),
+    })).toBeUndefined()
+    expect(validateWebSocketOrigin({
+      origin: "chrome-extension://different-extension",
+      requireChromeExtension: true,
+      additionalChromeExtensionOrigins: new Set([unpackedOrigin]),
+    })).toBeDefined()
   })
 
   it("rejects web origins for the extension endpoint", () => {

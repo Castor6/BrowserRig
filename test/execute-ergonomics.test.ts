@@ -316,8 +316,38 @@ describe("snapshot helpers", () => {
     expect(evaluate.mock.calls[0]?.[1]).toMatchObject({ maxItems: 80, rootSelector: undefined })
     expect(helpers.ref("@e1")).toBe(resolvedLocator)
     expect(page.locator).toHaveBeenLastCalledWith("#save")
-    expect(page.getByRole).toHaveBeenCalledWith("button", { name: "Save", exact: true })
+    expect(page.getByRole).toHaveBeenCalledWith("button")
     expect(saveLocator.and).toHaveBeenCalledWith(saveRoleLocator)
+  })
+
+  it("does not use the approximate snapshot name to constrain a stable selector", async () => {
+    const evaluate = vi.fn().mockResolvedValue({
+      entries: [{
+        depth: 0,
+        role: "textbox",
+        name: "Organization or user *",
+        identityName: "Organization or user *",
+        selector: "#oidc-repositoryOwner",
+      }],
+      truncated: false,
+    })
+    const resolvedLocator = {} as Locator
+    const selectorLocator = { and: vi.fn(() => resolvedLocator) } as unknown as Locator
+    const roleLocator = {} as Locator
+    const page = {
+      evaluate,
+      locator: vi.fn(() => selectorLocator),
+      getByRole: vi.fn(() => roleLocator),
+      url: vi.fn(() => "https://www.npmjs.com/package/example/access"),
+      mainFrame: vi.fn(() => ({})),
+      on: vi.fn(),
+      off: vi.fn(),
+    } as unknown as Page
+    const helpers = createSnapshotHelpers(page, { selectors: new Map() })
+
+    await helpers.snapshot()
+    expect(helpers.ref("e1")).toBe(resolvedLocator)
+    expect(page.getByRole).toHaveBeenCalledWith("textbox")
   })
 
   it("diffs against the previous full snapshot and exposes only current changed refs", async () => {

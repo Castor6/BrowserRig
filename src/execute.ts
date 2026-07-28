@@ -1766,7 +1766,7 @@ return (${capture.toString()})(rootOrSettings, locatorSettings)`,
     const locator = page.locator(snapshotRef.selector)
     const role = snapshotRefAriaRole(snapshotRef.role)
     const resolved = role
-      ? locator.and(page.getByRole(role, snapshotRef.name ? { name: snapshotRef.name, exact: true } : undefined))
+      ? locator.and(page.getByRole(role))
       : locator
     refRoots.set(resolved, snapshotRef)
     return resolved

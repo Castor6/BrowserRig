@@ -82,7 +82,11 @@ Follow [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md). The `0.0.1` bootstrap ZIP
 created the independent draft. The manifest key, relay pin, and tests now bind
 version `0.0.2` to Item ID `dbobcmjamjdknplkplgdihdnmdjklpin`. Verify that ID
 and a production relay handshake with the unpacked build, then upload the final
-review ZIP and complete the unlisted listing without changing the identity.
+review ZIP without changing the identity. Publish and independently verify the
+first npm version before submitting Store review because the reviewer steps
+install the local driver from the official registry. Complete the unlisted
+listing only after that clean npm install succeeds; use deferred Store
+publishing so an approval does not make the listing public automatically.
 
 References: [npm dual-use policy](https://docs.npmjs.com/policies/dual-use/),
 [npm staged publishing](https://docs.npmjs.com/staged-publishing/), and

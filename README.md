@@ -397,13 +397,17 @@ These capabilities are dual-use. The npm package declares that classification
 and includes a concrete [`DISCLOSURE`](./DISCLOSURE) covering intended use,
 security boundaries, and prohibited unauthorized access.
 
+The [extension privacy policy](https://github.com/Castor6/browserrig/blob/main/docs/PRIVACY.md)
+explains BrowserRig's local data handling, retention, user controls, and Chrome
+Web Store Limited Use commitment.
+
 The extension requires broad browser permissions, including `debugger`,
 `tabCapture`, and a status content script on all URLs. Attaching a user tab gives
 BrowserRig access to that tab through your existing browser profile.
 
 BrowserRig does not enable or connect to Chrome's browser-wide remote
-debugging endpoint. Extension attachment can still display Chrome's debugging
-infobar; closing that infobar detaches the tab, and a later `session adopt
+debugging endpoint. Extension attachment displays Chrome's debugging infobar;
+closing that infobar detaches the tab, and a later `session adopt
 --active` can attach it again without a blocking approval dialog.
 
 The relay blocks destructive browser-wide CDP commands that clear cookies,

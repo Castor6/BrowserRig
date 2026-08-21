@@ -23,6 +23,13 @@ activity, and record a controlled tab when requested. Data is sent only to the
 BrowserRig driver on this computer at `127.0.0.1:19990`; the project publisher
 does not operate a BrowserRig cloud relay.
 
+Depending on the page the user chooses to control, this local handling can
+include personally identifiable, health, financial and payment,
+authentication, personal communication, location, web-history, user-activity,
+and website-content data. BrowserRig uses it only to perform the automation the
+user requested; it has no publisher analytics, advertising, or cloud data
+collection.
+
 BrowserRig lets trusted agents and programs running on your computer
 control tabs in your existing browser. It uses a local Node driver for
 Playwright execution and a small extension adapter for Chrome debugging APIs.
@@ -31,7 +38,8 @@ The extension connects only to `127.0.0.1:19990`. Browser data is not sent to a
 BrowserRig cloud service. A trusted local caller can attach the active tab
 in the last-focused browser window without clicking the toolbar; a visible page
 indicator identifies controlled tabs, and the toolbar remains available for
-manual attach or detach. Human handoff controls keep authentication, payment
+manual attach or detach. Chrome also shows its native debugging indicator while
+a tab is attached. Human handoff controls keep authentication, payment
 confirmation, CAPTCHAs, and other user-presence steps with the user rather than
 bypassing them.
 
@@ -63,21 +71,91 @@ inherited upstream package or repository.
 
 ## Remote Code Declaration
 
-The extension does not download or execute remotely hosted code in the
-extension runtime. All extension JavaScript is bundled in the submitted
-Manifest V3 package. As its disclosed purpose, the extension relays local
-Chrome DevTools Protocol commands, including page-context evaluation, to tabs
-controlled by the user.
+Select **Yes, I am using remote code**. Use this justification:
+
+> BrowserRig receives user-authored Playwright/CDP commands from a trusted
+> program on the same computer and can execute page-context JavaScript in
+> user-controlled tabs through the documented `chrome.debugger` API
+> (`Runtime.evaluate`). This is the extension's disclosed single purpose and
+> uses Chrome's explicit Debugger API exception for remote logic. BrowserRig
+> does not load remote JavaScript, Wasm, modules, or scripts into an extension
+> context; all extension runtime code is bundled in the submitted package, and
+> its driver connection is loopback-only at `127.0.0.1:19990`.
+
+Do not select **No** merely because the driver is local. Chrome defines code
+received from outside the submitted package as remote logic, while its
+Manifest V3 policy explicitly permits that logic through the Debugger API when
+the API is used for its documented purpose. The Store disclosure should be
+broader than the narrower statement that BrowserRig loads no remotely hosted
+files into its extension runtime.
 
 ## Data Use Disclosure
 
-Declare access to website content; controlled-page and captured request URLs;
-matching request and response headers and optional bodies; user activity on
-controlled pages; authentication information available to controlled pages;
-and screen or tab recordings requested by an authorized local caller. The data
-is used only to provide the extension's single purpose. It is
-not sold, used for advertising, used for credit decisions, or transferred to
-the publisher. See `docs/PRIVACY.md`.
+Chrome treats local processing as collection for this questionnaire. Select
+all nine available data categories because a user-authorized automation command
+can operate an arbitrary controlled page:
+
+- Personally identifiable information
+- Health information
+- Financial and payment information
+- Authentication information
+- Personal communications
+- Location
+- Web history
+- User activity
+- Website content
+
+This includes controlled-page content; captured request URLs, headers, and
+optional bodies; interactions on controlled pages; signed-in state available
+to those pages; and screen or tab recordings requested by an authorized local
+caller. Select all three Limited Use attestations. The data is used only to
+provide BrowserRig's single purpose. It is not sold, used for advertising or
+credit decisions, or transferred to the publisher. See `docs/PRIVACY.md`.
+
+Use this public privacy-policy URL:
+
+`https://github.com/Castor6/browserrig/blob/main/docs/PRIVACY.md`
+
+## Dashboard Field Map
+
+### Store listing
+
+| Field | Value |
+| --- | --- |
+| Description | Use **Detailed Description** above |
+| Category | Developer Tools |
+| Language | English |
+| Store icon | `docs/chrome-web-store/icon-128.png` |
+| Screenshot | `docs/chrome-web-store/browserrig-1280x800.jpg` |
+| Small promo tile | `docs/chrome-web-store/small-promo-440x280.png` |
+| Homepage URL | `https://github.com/Castor6/browserrig` |
+| Support URL | `https://github.com/Castor6/browserrig/issues` |
+| Adult content | Off |
+
+The top promotional tile and YouTube promotional video are optional and should
+remain empty for the initial release.
+
+### Distribution
+
+| Field | Value |
+| --- | --- |
+| Payment | Free; no in-app purchases |
+| Visibility | Unlisted |
+| Regions | All regions |
+
+### Testing instructions
+
+Leave username and password empty. The following copy fits the dashboard's
+500-character **Other instructions** limit:
+
+> No account or credentials are required. Install Node.js 24.15+ and run
+> `npm install -g browserrig`. Run
+> `browserrig execute 'await page.goto("https://example.com"); return await
+> page.title()'`; it should return `Example Domain`. To test no-click active-tab
+> control, open `https://example.org`, then run
+> `browserrig session new review-active`,
+> then `browserrig session adopt --session review-active --active`. The tab
+> shows a BrowserRig indicator. Run `browserrig doctor` for diagnostics.
 
 ## Reviewer Instructions
 
@@ -117,9 +195,12 @@ Store assets live under `docs/chrome-web-store/`:
 - `small-promo-440x280.png`
 
 Regenerate `small-promo-440x280.png` from the BrowserRig-branded
-`small-promo.svg`, and capture the review screenshot under the expected
+`small-promo.svg`, export it as a 24-bit RGB PNG with no alpha channel, and
+capture the real runtime screenshot under the expected
 `browserrig-1280x800.jpg` name. Historical binary previews must not be uploaded
-under the new listing without checking their visible branding.
+under the new listing without checking their visible branding. Before upload,
+verify dimensions and that the screenshot and promotional tile report
+`hasAlpha: no`.
 
 Run:
 
@@ -147,9 +228,12 @@ Before the first review submission:
 2. Verify that build connects to a production-mode relay and that an arbitrary
    extension origin is still rejected.
 3. Upload `browserrig-extension-0.0.2.zip` over the bootstrap package.
-4. Complete the listing, privacy questionnaire, testing instructions, and
-   unlisted distribution fields from this document, then use deferred
-   publishing so npm and Store availability can be coordinated after review.
+4. Publish `browserrig@0.1.0` to the official npm registry and verify the
+   review install command from a clean environment.
+5. Complete the listing, privacy questionnaire, testing instructions, and
+   unlisted distribution fields from this document, then submit with deferred
+   publishing so Store availability remains under maintainer control after
+   review.
 
 Do not ship a release that accepts arbitrary extension origins or restores the
 upstream Store ID: either choice would let code outside this project's
@@ -160,4 +244,8 @@ mask the production-ID test above.
 Chrome references: [stable extension IDs and manifest `key`](https://developer.chrome.com/docs/extensions/reference/manifest/key),
 [first publication and deferred publishing](https://developer.chrome.com/docs/webstore/publish/),
 [package updates and version rules](https://developer.chrome.com/docs/webstore/update/),
-and [Store distribution modes](https://developer.chrome.com/docs/webstore/cws-dashboard-distribution).
+[Store distribution modes](https://developer.chrome.com/docs/webstore/cws-dashboard-distribution),
+[Manifest V3 remote-logic exceptions](https://developer.chrome.com/docs/webstore/program-policies/mv3-requirements),
+[privacy-field guidance](https://developer.chrome.com/docs/webstore/cws-dashboard-privacy),
+[2026 disclosure-policy update](https://developer.chrome.com/blog/cws-policy-updates-2026),
+and [Store-policy troubleshooting](https://developer.chrome.com/docs/webstore/troubleshooting).

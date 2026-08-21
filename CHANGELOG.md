@@ -11,6 +11,8 @@ release claims.
 
 - Establish the independent BrowserRig package, CLI, MCP command, extension
   artifact, local state namespace, and agent skill.
+- Pin the independent Chrome Web Store draft's public manifest key and Item ID
+  instead of trusting the upstream publisher's extension origin.
 - Attach and adopt the active tab in the user's last-focused Chrome window
   without a toolbar click or Chrome's browser-wide remote-debugging approval
   dialog, while retaining manual multi-tab attachment and the complete driver.

@@ -415,10 +415,9 @@ of Node.js filesystem and network APIs.
 Current limitations:
 
 - The extension is installed unpacked; Chrome Web Store distribution is not
-  available yet. The repository can produce the review artifact with
-  `pnpm package:extension`; the first Store release will begin as an unlisted
-  beta after a draft Item ID replaces the temporary upstream production-origin
-  pin.
+  available until review completes. The independent Store draft and production
+  origin are pinned to BrowserRig Item ID `dbobcmjamjdknplkplgdihdnmdjklpin`;
+  the first Store release will begin as an unlisted beta.
 - One relay uses one connected browser-profile extension at a time. With
   multiple Chrome profiles, `--active` applies to the profile whose extension
   is currently connected and that profile's last-focused window.

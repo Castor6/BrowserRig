@@ -130,36 +130,32 @@ pnpm package:extension
 Upload `artifacts/browserrig-extension-<version>.zip`. Record the printed
 SHA-256 digest with the release notes.
 
-## Independent Listing Bootstrap
+## Independent Listing Identity
 
-The checked-in production relay currently accepts the upstream Store extension
-ID `gmjpoplfomnnjipeiojccjbpjlodkjhn`; this is temporary development heritage,
-not an ID for the independent release. A Store item receives its ID only after
-its first package is uploaded, so bootstrap the listing before preparing the
-final release:
+The `0.0.1` bootstrap package created the independent BrowserRig draft on
+August 22, 2026. Its Item ID is `dbobcmjamjdknplkplgdihdnmdjklpin`. The public
+key from **Package → View public key** is committed as the manifest `key`, and
+`src/relay-helpers.ts` accepts only the matching production origin. The key
+derives to the same Item ID in automated tests. It is public identity material,
+not an optional Verified CRX Uploads private key; a private upload key must
+never be committed.
 
-1. Confirm the selected BrowserRig name, permissions, descriptions, privacy
-   copy, `Castor6/browserrig` repository identity, publisher, and support
-   identifiers before uploading a reviewable build. Use manifest version
-   `0.0.1` for this bootstrap package only.
-2. In the Chrome Web Store Developer Dashboard, add a new item and upload the
-   bootstrap ZIP, but do not publish it.
-3. Copy the item's public key from **Package → View public key** into the
-   manifest `key` field. The public key may be committed; do not confuse it with
-   an optional Verified CRX Uploads private key, which must never be committed.
-4. Replace the upstream origin pin in `src/relay-helpers.ts` with the new Item
-   ID and update its tests and this document.
-5. Increase the manifest version, rebuild both release artifacts, and load the
-   unpacked extension. Verify its ID equals the draft Item ID and that it can
-   connect to a production-mode relay.
-6. Upload the higher-version final ZIP and use deferred publishing so npm and
-   Store availability can be coordinated after review.
+Before the first review submission:
 
-Do not ship a release that accepts arbitrary extension origins, and do not keep
-the upstream Store ID in the independent allowlist: either choice would let
-code outside this project's publisher identity connect to the trusted local
-driver. Source-mode relays may accept unpacked development origins, but that
-development exception must not mask the production-ID test above.
+1. Build extension version `0.0.2`, load `extension/dist` unpacked, and confirm
+   Chrome reports ID `dbobcmjamjdknplkplgdihdnmdjklpin`.
+2. Verify that build connects to a production-mode relay and that an arbitrary
+   extension origin is still rejected.
+3. Upload `browserrig-extension-0.0.2.zip` over the bootstrap package.
+4. Complete the listing, privacy questionnaire, testing instructions, and
+   unlisted distribution fields from this document, then use deferred
+   publishing so npm and Store availability can be coordinated after review.
+
+Do not ship a release that accepts arbitrary extension origins or restores the
+upstream Store ID: either choice would let code outside this project's
+publisher identity connect to the trusted local driver. Source-mode relays may
+accept unpacked development origins, but that development exception must not
+mask the production-ID test above.
 
 Chrome references: [stable extension IDs and manifest `key`](https://developer.chrome.com/docs/extensions/reference/manifest/key),
 [first publication and deferred publishing](https://developer.chrome.com/docs/webstore/publish/),

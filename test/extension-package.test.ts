@@ -1,3 +1,4 @@
+import crypto from "node:crypto"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -6,6 +7,21 @@ import { unzipSync } from "fflate"
 import { extensionVersion, isChromeExtensionVersion, makeExtensionArchive } from "../scripts/package-extension.ts"
 
 describe("Chrome Web Store extension package", () => {
+  it("pins the independent BrowserRig Store identity", async () => {
+    const manifest = JSON.parse(await fs.readFile(path.join(process.cwd(), "extension", "manifest.json"), "utf8")) as {
+      readonly key: string
+      readonly version: string
+    }
+    const digest = crypto.createHash("sha256").update(Buffer.from(manifest.key, "base64")).digest().subarray(0, 16)
+    const extensionId = [...digest]
+      .flatMap((byte) => [byte >> 4, byte & 0x0f])
+      .map((nibble) => String.fromCharCode(97 + nibble))
+      .join("")
+
+    expect(manifest.version).toBe("0.0.2")
+    expect(extensionId).toBe("dbobcmjamjdknplkplgdihdnmdjklpin")
+  })
+
   it("is deterministic and rooted at the extension manifest", async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-extension-package-"))
     try {

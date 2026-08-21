@@ -56,10 +56,10 @@ Verification:
   competing sessions, and reset/delete of a user-owned tab.
 - Build the npm package and deterministic Chrome Web Store ZIP from a clean
   checkout.
-- Create the independent Chrome Web Store draft before the release build, copy
-  its public key into the manifest, replace the temporary upstream Store-origin
-  pin with the draft Item ID, and verify that an unpacked release build reports
-  that same ID and connects to the production relay.
+- Keep the independent Chrome Web Store identity
+  `dbobcmjamjdknplkplgdihdnmdjklpin` derived from the committed manifest key,
+  and verify that an unpacked release build reports that ID and connects to the
+  production relay before every Store upload.
 
 ### 2. Split the relay into testable responsibilities
 
@@ -216,19 +216,18 @@ require a new extension capture protocol and permission model.
 
 - The independent product identity is BrowserRig across the repository, npm
   package and CLI (`browserrig`), MCP executable (`browserrig-mcp`), and Chrome
-  Web Store listing. The selected repository identity is `Castor6/browserrig`;
-  the public repository has not been created yet.
+  Web Store listing. The public repository is `Castor6/browserrig`.
 - The `browserrig` package will be published publicly on npm. Normal setup will
   install that npm artifact; until the first release, source development uses
-  `pnpm install`, `pnpm build`, and `bun link`.
+  `pnpm install`, `pnpm build`, and `npm link`.
 - Until the first Store review completes, the browser extension is loaded
   unpacked from the npm package's `extension/dist` directory or a source build.
-  Its bootstrap shim version is `0.0.1`.
-- The current production-origin allowlist still contains the upstream Store ID
-  and is a release blocker, not a compatibility promise. After the independent
-  Store draft exists, commit that item's public manifest key, replace the pin
-  with its Item ID, and test a production relay against the same-ID unpacked
-  build. Do not keep trusting the upstream publisher after the fork ships.
+  The `0.0.1` bootstrap package created the independent draft; the current shim
+  version is `0.0.2`.
+- The production-origin allowlist and committed public manifest key pin Store
+  Item ID `dbobcmjamjdknplkplgdihdnmdjklpin`. Test a production relay against a
+  same-ID unpacked build before Store submission; never broaden this to an
+  arbitrary extension origin.
 - Extension and npm releases are independently versioned. The extension hello
   reports an explicit protocol version, and compatibility rather than exact
   package-version equality determines whether the local driver may use it.

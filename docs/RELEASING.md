@@ -78,11 +78,11 @@ acceptable release path for this package.
 
 ## Chrome Web Store
 
-Follow [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md). The `0.0.1` extension ZIP
-is a bootstrap draft only: obtain the independent Store Item ID and public key,
-pin that identity in the manifest and relay tests, increase the extension
-version, verify the unpacked ID and production relay handshake, and only then
-upload the final review build.
+Follow [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md). The `0.0.1` bootstrap ZIP
+created the independent draft. The manifest key, relay pin, and tests now bind
+version `0.0.2` to Item ID `dbobcmjamjdknplkplgdihdnmdjklpin`. Verify that ID
+and a production relay handshake with the unpacked build, then upload the final
+review ZIP and complete the unlisted listing without changing the identity.
 
 References: [npm dual-use policy](https://docs.npmjs.com/policies/dual-use/),
 [npm staged publishing](https://docs.npmjs.com/staged-publishing/), and

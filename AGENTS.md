@@ -246,7 +246,8 @@ browserrig skill
 
 - Load `extension/dist` as the unpacked extension.
 - The relay listens on `127.0.0.1:19990` by default.
-- Current bootstrap shim version is `0.0.1` and extension protocol version is `3`.
+- Current shim version is `0.0.2`, Store Item ID is
+  `dbobcmjamjdknplkplgdihdnmdjklpin`, and extension protocol version is `3`.
 - Store and npm versions may differ while their extension protocol versions remain compatible.
 - On socket open the shim sends `hello` and then re-announces every tab it still
   has `chrome.debugger` attached to (`debugger.attached` events), so a restarted

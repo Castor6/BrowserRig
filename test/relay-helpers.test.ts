@@ -51,6 +51,7 @@ describe("validateBrowserFetchSite", () => {
 
 describe("validateWebSocketOrigin", () => {
   it("accepts the Store extension and missing origins for non-extension clients", () => {
+    expect(chromeWebStoreExtensionOrigin).toBe("chrome-extension://dbobcmjamjdknplkplgdihdnmdjklpin")
     expect(validateWebSocketOrigin({ origin: chromeWebStoreExtensionOrigin })).toBeUndefined()
     expect(validateWebSocketOrigin({ origin: undefined })).toBeUndefined()
   })

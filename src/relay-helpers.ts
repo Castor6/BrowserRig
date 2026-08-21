@@ -10,7 +10,7 @@ import { RelayErrorCode } from "./relay-schema.ts"
 
 export const defaultHost = "127.0.0.1"
 export const defaultPort = 19990
-export const chromeWebStoreExtensionOrigin = "chrome-extension://gmjpoplfomnnjipeiojccjbpjlodkjhn"
+export const chromeWebStoreExtensionOrigin = "chrome-extension://dbobcmjamjdknplkplgdihdnmdjklpin"
 
 export function chromeExtensionOriginForPath(extensionPath: string): string {
   const digest = crypto.createHash("sha256").update(extensionPath).digest()

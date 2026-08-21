@@ -29,8 +29,9 @@ release claims.
 - Pin the Effect runtime and its Node adapter to one compatible prerelease line,
   and declare the Node.js versions required by their dependency graph so clean
   npm installs cannot silently mix incompatible Effect releases.
-- Derive packaged CLI build IDs from release inputs instead of wall-clock time,
-  making repeated npm packs byte-for-byte reproducible.
+- Derive packaged CLI build IDs from release inputs instead of wall-clock time
+  and normalize gzip's informational source-OS byte, making npm packs
+  byte-for-byte reproducible across supported release hosts.
 
 ---
 

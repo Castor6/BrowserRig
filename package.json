@@ -47,7 +47,7 @@
     "build:cli": "tsx scripts/build-cli.ts",
     "build": "pnpm build:cli && pnpm build:extension",
     "build:extension": "tsx scripts/build-extension.ts",
-    "package:npm": "pnpm pack --pack-destination artifacts",
+    "package:npm": "tsx scripts/package-npm.ts",
     "package:extension": "pnpm build:extension && tsx scripts/package-extension.ts",
     "changeset": "changeset",
     "ci": "pnpm typecheck && pnpm test && pnpm build && pnpm package:extension",

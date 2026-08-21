@@ -30,7 +30,9 @@ Before release, inspect the npm tarball and confirm that it contains
 `extension/dist/`, and `skills/browserrig/SKILL.md`, and no source maps or local
 state. Record the extension ZIP SHA-256 printed by `pnpm package:extension`.
 Run `pnpm package:npm` twice without changing the checkout and confirm that the
-npm tarball's SHA-256 is identical before publishing it.
+npm tarball's printed SHA-256 is identical before publishing it. The packaging
+script normalizes gzip's informational source-OS byte so the same source also
+hashes identically on macOS and Linux.
 
 ## Bootstrap npm 0.1.0
 

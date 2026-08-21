@@ -13,7 +13,7 @@ import type {
 export type Json = Schema.Schema.Type<typeof Schema.Json>
 
 export class ClientError extends Schema.TaggedErrorClass<ClientError>()(
-  "BrowserControlClient.Error",
+  "BrowserRigClient.Error",
   {
     message: Schema.String,
     reason: Schema.Literals(["connect", "session", "invalid-request"]),
@@ -112,7 +112,7 @@ export interface AuthenticatedOrigin {
   }
 }
 
-/** Reveal a sensitive response using Browser Control's Effect runtime. */
+/** Reveal a sensitive response using BrowserRig's Effect runtime. */
 export const reveal = <A>(value: Redacted.Redacted<A>): A => Redacted.value(value)
 
 export interface AuthenticatedOriginOptions {
@@ -146,10 +146,10 @@ export interface MakeOptions {
 }
 
 export class Service extends Context.Service<Service, Interface>()(
-  "@opencode-ai/browser-control/BrowserControlClient",
+  "browserrig/BrowserRigClient",
 ) {}
 
-export const make = Effect.fn("BrowserControlClient.make")(function* (options: MakeOptions = {}) {
+export const make = Effect.fn("BrowserRigClient.make")(function* (options: MakeOptions = {}) {
   const relay = yield* RelayClient.make(options).pipe(
     Effect.provide(FetchHttpClient.layer),
     Effect.mapError((error) => clientError("connect", error)),
@@ -170,7 +170,7 @@ export const make = Effect.fn("BrowserControlClient.make")(function* (options: M
     waitForReconnect: readiness.started,
   }).pipe(Effect.mapError((error) => clientError("connect", error)))
 
-  const ensureSession = Effect.fn("BrowserControlClient.ensureSession")(function* (
+  const ensureSession = Effect.fn("BrowserRigClient.ensureSession")(function* (
     sessionOptions: EnsureSessionOptions,
   ) {
     const summary = yield* relay.sessionEnsure(sessionOptions.id, {
@@ -179,7 +179,7 @@ export const make = Effect.fn("BrowserControlClient.make")(function* (options: M
     return makeSession(relay, summary)
   })
 
-  const resetSession = Effect.fn("BrowserControlClient.resetSession")(function* (id: string) {
+  const resetSession = Effect.fn("BrowserRigClient.resetSession")(function* (id: string) {
     const summary = yield* relay.sessionReset(id).pipe(
       Effect.mapError((error) => clientError("session", error)),
     )
@@ -272,7 +272,7 @@ function decodeOutcome<S extends Schema.Top>(
     case "Success": {
       if (request.sensitive === true) {
         return Schema.decodeUnknownEffect(Schema.RedactedFromValue(request.response, {
-          label: "Browser Control authenticated response",
+          label: "BrowserRig authenticated response",
           disallowEncode: true,
         }))(outcome.value).pipe(
           Effect.mapError(() => mutation
@@ -344,10 +344,10 @@ function clientError(reason: ClientError["reason"], error: unknown): ClientError
     })
   }
   return new ClientError({
-    message: error instanceof globalThis.Error ? error.message : "Browser Control request failed",
+    message: error instanceof globalThis.Error ? error.message : "BrowserRig request failed",
     reason,
   })
 }
 
-export * as BrowserControlClient from "./browser-control-client.ts"
-export * as AuthenticatedOrigin from "./browser-control-client.ts"
+export * as BrowserRigClient from "./browserrig-client.ts"
+export * as AuthenticatedOrigin from "./browserrig-client.ts"

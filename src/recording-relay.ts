@@ -9,7 +9,7 @@ import { mjpegMatroskaFrame, mjpegMatroskaHeader } from "./mjpeg-matroska.ts"
 import type { ExtensionCommand, JsonObject } from "./protocol.ts"
 import { getObject } from "./relay-helpers.ts"
 import type { ConnectedTarget } from "./relay-types.ts"
-import { decodeRecordingFrame } from "./recording-protocol.ts"
+import { decodeRecordingFrame, tabCaptureGrantRequiredErrorCode } from "./recording-protocol.ts"
 
 const defaultMaxDurationMs = 15 * 60 * 1_000
 const defaultCdpFrameRate = 25
@@ -187,6 +187,7 @@ type ExtensionStartResult =
   | {
     readonly success: false
     readonly error: string
+    readonly code?: string
   }
 
 type ExtensionStopResult =
@@ -221,7 +222,7 @@ export class RecordingRelay {
 
   async startRecording(options: RecordingStartOptions): Promise<RecordingStartResult> {
     if (!this.options.isExtensionConnected()) {
-      return { success: false, error: "Browser Control extension is not connected" }
+      return { success: false, error: "BrowserRig extension is not connected" }
     }
     if (this.activeRecordings.has(options.tabId) || this.startingRecordings.has(options.tabId)) {
       return { success: false, error: "Recording already in progress for this tab" }
@@ -245,7 +246,7 @@ export class RecordingRelay {
 
   async stopRecording(options: RecordingTargetOptions): Promise<RecordingStopResult> {
     if (!this.options.isExtensionConnected()) {
-      return { success: false, error: "Browser Control extension is not connected" }
+      return { success: false, error: "BrowserRig extension is not connected" }
     }
     const recording = this.findRecording(options)
     if (!recording) {
@@ -370,7 +371,7 @@ export class RecordingRelay {
     if (!this.options.isExtensionConnected()) {
       recording.resolveStop?.({ success: false, error: "Recording was cancelled" })
       await this.cleanupRecording(recording.tabId)
-      return { success: false, error: "Browser Control extension is not connected" }
+      return { success: false, error: "BrowserRig extension is not connected" }
     }
     try {
       const result = await this.options.sendToExtension({ method: "recording.cancel", params: { tabId: recording.tabId } })
@@ -684,7 +685,16 @@ export class RecordingRelay {
     if (!result.success || starting.cancelled || result.tabId !== options.tabId || this.activeRecordings.get(options.tabId) !== recording) {
       if (result.success) await this.options.sendToExtension({ method: "recording.cancel", params: { tabId: result.tabId } }).catch(() => {})
       await this.cleanupRecording(options.tabId)
-      if (!result.success) return result
+      if (!result.success) {
+        if (starting.cancelled) return { success: false, error: "Recording was cancelled while starting" }
+        if (shouldFallBackToCdp(options, result)) {
+          return this.startCdpRecording(options, starting)
+        }
+        return {
+          success: false,
+          error: tabCaptureStartError(options, result),
+        }
+      }
       return {
         success: false,
         error: starting.cancelled
@@ -945,6 +955,24 @@ function selectRecordingMode(options: RecordingStartOptions): ActiveRecordingMod
   return options.owner === "relay" ? "cdp" : "tab-capture"
 }
 
+function shouldFallBackToCdp(options: RecordingStartOptions, result: Extract<ExtensionStartResult, { readonly success: false }>): boolean {
+  return result.code === tabCaptureGrantRequiredErrorCode
+    && options.owner === "user"
+    && (options.mode === undefined || options.mode === "auto")
+    && options.audio !== true
+}
+
+function tabCaptureStartError(options: RecordingStartOptions, result: Extract<ExtensionStartResult, { readonly success: false }>): string {
+  if (result.code !== tabCaptureGrantRequiredErrorCode) return result.error
+  if (options.audio === true) {
+    return `${result.error} Audio recording requires tabCapture; the video-only CDP fallback cannot preserve audio.`
+  }
+  if (options.mode === "tab-capture") {
+    return `${result.error} Explicit tab-capture mode does not fall back to CDP.`
+  }
+  return result.error
+}
+
 function recordingStartParams(options: RecordingStartOptions): JsonObject {
   return {
     tabId: options.tabId,
@@ -965,7 +993,11 @@ function parseExtensionStartResult(value: JsonObject): ExtensionStartResult {
     }
   }
   if (value.success === false && typeof value.error === "string") {
-    return { success: false, error: value.error }
+    return {
+      success: false,
+      error: value.error,
+      ...(typeof value.code === "string" ? { code: value.code } : {}),
+    }
   }
   return { success: false, error: "Invalid recording.start response from extension" }
 }

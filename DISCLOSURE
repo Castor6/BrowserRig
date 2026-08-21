@@ -1,0 +1,46 @@
+BROWSERRIG DUAL-USE DISCLOSURE
+
+BrowserRig is an open-source, user-authorized local browser automation driver.
+Its intended use is to let trusted programs and AI agents automate the user's
+own already-running Chromium-family browser, including pages where that user is
+already signed in.
+
+Security-relevant capabilities
+
+- A locally installed Chrome extension can attach to active or background tabs
+  through the chrome.debugger API and expose them to Playwright-compatible code.
+- Trusted execute sessions can run arbitrary Playwright JavaScript and use a
+  limited set of local Node.js modules, including filesystem and network APIs.
+- Network capture can observe authenticated requests and responses. Credential
+  profiles can persist selected cookies, headers, and tokens and can inject
+  them into an explicitly requested child command without printing secret
+  values.
+- BrowserRig can record controlled tabs and can operate pages in the user's
+  existing signed-in browser profile.
+
+Security model and mitigations
+
+- The driver binds to the loopback interface and does not provide a hosted
+  relay, cloud account, analytics, or telemetry.
+- The Chrome extension must be deliberately installed and requests broad
+  permissions including debugger, tabCapture, tabGroups, and content-script
+  access. Controlled pages display a BrowserRig status indicator, use a visible
+  BrowserRig tab group, and may show Chrome's native debugger infobar.
+- The relay validates local HTTP and WebSocket request metadata and the expected
+  extension origin. Session ownership isolates controlled tabs between clients.
+- Credential output is redacted, credential files use restrictive local file
+  permissions, and selected destructive browser-wide CDP commands are blocked.
+- The loopback relay does not authenticate individual local callers. Any
+  process running as the same trusted user may be able to drive BrowserRig.
+  Install and run it only on a machine where local programs are trusted.
+- BrowserRig is not an untrusted-code sandbox. Read-only sessions and command
+  guardrails reduce accidents but do not make hostile agent code safe.
+
+Prohibited use
+
+Do not use BrowserRig to access, monitor, record, modify, or extract information
+from browsers, accounts, systems, or people without authorization. Do not use
+it for credential theft, session hijacking, covert surveillance, malware,
+fraud, or bypassing security controls. Users and downstream distributors are
+responsible for obtaining permission and complying with applicable law and
+service terms.

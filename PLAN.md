@@ -1,11 +1,11 @@
 ---
-title: Browser Control Plan
-description: Current product direction, architecture decisions, and prioritized work for Browser Control.
+title: BrowserRig Plan
+description: Current product direction, architecture decisions, and prioritized work for BrowserRig.
 ---
 
-# Browser Control Plan
+# BrowserRig Plan
 
-Browser Control is a local driver that lets trusted agents automate the user's
+BrowserRig is a local driver that lets trusted agents automate the user's
 already-running Chromium-family browser. It provides browser control, session
 isolation, and diagnostics; it does not call models or decide what to do.
 
@@ -17,17 +17,51 @@ Agent / MCP client / CLI
   -> user's Chromium-family browser tabs
 ```
 
-The end-to-end path is working. Current work should simplify the relay and make
-recording robust. New features
-should not weaken the code-first interface or move behavior into the extension
-without a concrete browser-API reason.
+The end-to-end path is working. The current product bet is frictionless control
+of the user's real, signed-in browser: no separate automation profile, no
+browser-wide remote-debugging approval, and no toolbar click for the active
+tab. New features should not weaken the code-first interface or move behavior
+into the extension without a concrete browser-API reason.
 
 ## Next Priorities
 
 Work these in order unless field evidence changes the priority. Every item
 should land with unit or smoke evidence appropriate to the behavior.
 
-### 1. Split the relay into testable responsibilities
+### 1. Complete the independent no-click personal-browser release
+
+- Land `session adopt --active` in CLI and MCP. The extension must capture and
+  attach the active tab id in one protocol request; the relay still verifies the
+  target generation, binds initialization to that extension connection
+  generation, and uses the existing adoption transaction.
+- Preserve background tab creation in the user's existing profile so normal
+  automation does not steal focus.
+- Keep recording usable on no-click adopted tabs: `auto` may fall back from tab
+  capture to CDP when Chrome reports a missing Tab-Capture Grant and audio was
+  not requested. Explicit tab-capture and audio recording continue to require a
+  toolbar invocation because Chrome grants `activeTab` only on user action.
+- Use the selected independent `BrowserRig` brand consistently: npm package and
+  CLI `browserrig`, MCP executable `browserrig-mcp`, `BROWSERRIG_*` environment
+  variables, `~/.browserrig` local state, and repository slug `browserrig`.
+  Use `Castor6/browserrig` as the independent GitHub publishing identity.
+- Rewrite first-run documentation and Store disclosures around the actual
+  differentiators and the broad trusted-local permissions.
+
+Verification:
+
+- Cover active attach, repeat attach, selection exclusivity, protocol
+  compatibility, and CLI/MCP wire shapes without a real browser.
+- Manually verify current-tab attach in Chrome and Brave across multiple
+  windows, a tab already occupied by DevTools, debugger-infobar dismissal,
+  competing sessions, and reset/delete of a user-owned tab.
+- Build the npm package and deterministic Chrome Web Store ZIP from a clean
+  checkout.
+- Create the independent Chrome Web Store draft before the release build, copy
+  its public key into the manifest, replace the temporary upstream Store-origin
+  pin with the draft Item ID, and verify that an unpacked release build reports
+  that same ID and connects to the production relay.
+
+### 2. Split the relay into testable responsibilities
 
 Extract cohesive modules from `makeRelay` without changing the protocol:
 
@@ -49,7 +83,7 @@ Verification:
 - Extend reconnect, OOPIF, and multi-client smoke cases to cover root detach and
   conflicting client auto-attach settings.
 
-### 2. Extend recording surfaces
+### 3. Extend recording surfaces
 
 - Add MCP recording start, stop, status, and cancel tools after the relay path is
   robust.
@@ -59,7 +93,7 @@ Verification:
 
 - Confirm CLI and MCP recording behavior match.
 
-### 3. Resolve smaller agent-experience gaps
+### 4. Resolve smaller agent-experience gaps
 
 Verification:
 
@@ -73,8 +107,9 @@ Verification:
 
 ### Tab-capture recordings stream with intrinsic framing
 
-Extension protocol `2` sends each recording chunk as a sequenced `BCRD` binary
-frame containing its tab id. The relay validates framing and sequence, bounds
+Extension protocol `3` retains protocol 2's sequenced `BCRD` binary recording
+frames and adds no-click active-tab attachment. The relay validates framing and
+sequence, bounds
 pending writes, streams each tab to an adjacent temporary file, and atomically
 renames complete recordings. Interleaving, oversized queues, malformed frames,
 and output larger than a single frame have direct coverage.
@@ -88,7 +123,7 @@ unavailable and suggests `locator.fill()` when Playwright can resolve the field.
 ### Session lifecycle selectors are consistent
 
 `session reset` and `session delete` accept positional ids, `--session`/`-s`,
-and `BROWSER_CONTROL_SESSION` before falling back to the saved current session.
+and `BROWSERRIG_SESSION` before falling back to the saved current session.
 Smoke coverage verifies explicit missing flag and environment ids fail instead
 of falling back to the saved current session.
 
@@ -117,7 +152,7 @@ A 2026-07-09 field failure left a relay-owned page open but unusable after its
 execution context was destroyed. Later calls each consumed their full timeout,
 and the target remained at `chrome-error://chromewebdata/`.
 
-Browser Control now remembers context failures and browser crash events. Before
+BrowserRig now remembers context failures and browser crash events. Before
 the next normal execute, it gives the default page a one-second health check.
 An unhealthy relay-owned page is closed and recreated with a stale-reference
 warning; if it cannot be closed, execute fails with reset guidance instead of
@@ -147,7 +182,7 @@ session default or producing cross-extension navigation failures.
 Chromium rejects both `Browser.setDownloadBehavior` and the legacy
 `Page.setDownloadBehavior` through a tab-scoped `chrome.debugger` attachment.
 Without either command, stock Playwright cannot retain the GUID-named artifact
-that backs `download.saveAs()`. Browser Control therefore rejects
+that backs `download.saveAs()`. BrowserRig therefore rejects
 `page.waitForEvent("download")` immediately with the reason and a fetch-plus-`fs`
 workaround rather than allowing a 30-second timeout. A local blob/fetch fixture
 keeps this failure direct. Supporting native download artifacts later would
@@ -155,7 +190,7 @@ require a new extension capture protocol and permission model.
 
 ## Product Boundaries
 
-- **Driver, not agent**: Browser Control never calls models or plans tasks.
+- **Driver, not agent**: BrowserRig never calls models or plans tasks.
 - **User browser first**: the primary target is an already-running
   Chromium-family browser with the extension installed.
 - **Trusted local execution**: `execute(code)` trusts the calling agent. It is
@@ -173,56 +208,65 @@ require a new extension capture protocol and permission model.
 - **Minimal extension UI**: the toolbar controls attachment, while subtle
   in-page UI communicates attached, running, and waiting states. There is no
   side panel.
-- **Concise self-description**: `browser-control skill` prints one short,
+- **Concise self-description**: `browserrig skill` prints one short,
   current workflow document. Do not split it into topic subcommands or require
   agents to perform a reading ceremony.
 
 ## Distribution And Installation
 
-- The product, repository, CLI, and MCP server use the name `browser-control`.
-  The npm package is `@opencode-ai/browser-control`.
-- The package is published publicly on npm. Normal setup installs the npm
-  artifact; source development uses `pnpm install`, `pnpm build`, and `bun
-  link`.
+- The independent product identity is BrowserRig across the repository, npm
+  package and CLI (`browserrig`), MCP executable (`browserrig-mcp`), and Chrome
+  Web Store listing. The selected repository identity is `Castor6/browserrig`;
+  the public repository has not been created yet.
+- The `browserrig` package will be published publicly on npm. Normal setup will
+  install that npm artifact; until the first release, source development uses
+  `pnpm install`, `pnpm build`, and `bun link`.
 - Until the first Store review completes, the browser extension is loaded
   unpacked from the npm package's `extension/dist` directory or a source build.
-  Its current shim version is `0.0.23`.
+  Its bootstrap shim version is `0.0.1`.
+- The current production-origin allowlist still contains the upstream Store ID
+  and is a release blocker, not a compatibility promise. After the independent
+  Store draft exists, commit that item's public manifest key, replace the pin
+  with its Item ID, and test a production relay against the same-ID unpacked
+  build. Do not keep trusting the upstream publisher after the fork ships.
 - Extension and npm releases are independently versioned. The extension hello
   reports an explicit protocol version, and compatibility rather than exact
   package-version equality determines whether the local driver may use it.
 - Browser data crosses only the loopback connection unless an authorized local
-  caller sends returned data elsewhere.
+  caller sends returned data elsewhere. The default endpoint is
+  `127.0.0.1:19990`.
 - Extension source changes require rebuilding and reloading the unpacked
   extension. Relay-only changes do not.
-- `pnpm package:extension` produces the deterministic Chrome Web Store review
-  ZIP. Distribution starts as an unlisted beta before becoming public. A bundled
+- `pnpm package:extension` produces the deterministic
+  `browserrig-extension-<version>.zip` Chrome Web Store review artifact.
+  Distribution starts as an unlisted beta before becoming public. A bundled
   unpacked extension belongs to future managed-browser launch flows.
 
 ## Session And Tab Model
 
 An attached tab is a browser target exposed by the extension. An unowned
 attached tab remains visible to connected clients for explicit recovery and raw
-CDP workflows. A Browser Control session owns one default page and persistent
+CDP workflows. A BrowserRig session owns one default page and persistent
 JavaScript `state`; normal execute calls use that page instead of choosing an
 arbitrary tab from the attached pool.
 
 - Bare CLI execute atomically creates a fresh readable session and prints its
   id.
-- `--session` or `BROWSER_CONTROL_SESSION` explicitly continues a CLI session.
+- `--session` or `BROWSERRIG_SESSION` explicitly continues a CLI session.
 - One MCP server process owns one implicit execute session. Explicit MCP session
   management remains available for lifecycle operations.
 - The CLI never infers an agent's session from human-shell current state.
 - Human session-management commands store their endpoint-scoped current id in
-  `~/.browser-control/session.json`.
+  `~/.browserrig/session.json`.
 - The relay stores private session descriptors under
-  `~/.browser-control/relays/<port>/sessions.json`. Relay restart restores ids,
+  `~/.browserrig/relays/<port>/sessions.json`. Relay restart restores ids,
   read-only mode, and exact target ownership when the tab reappears; JavaScript
   `state` and snapshot refs reset with an explicit warning.
 - A session owns one default page. Relay-created pages persist across
   short-lived CLI connections.
 - `session adopt` makes an attached user tab the session's default page and
   closes the session's previous relay-created page.
-- Adoption is exclusive: one target can belong to only one Browser Control
+- Adoption is exclusive: one target can belong to only one BrowserRig
   session. `TargetRegistry` is the ownership authority; session state retains
   only the adopted default-page pointer.
 - Adoption reserves target ownership before Playwright resolves the page, then
@@ -241,7 +285,7 @@ arbitrary tab from the attached pool.
 - The relay wins the endpoint port before loading the catalog or enabling
   catalog writes. Lifecycle responses wait for atomic file replacement, file
   sync, and directory sync before acknowledging durable state.
-- Session-owned tabs share a purple `control` group within each browser window.
+- Session-owned tabs share a purple `BrowserRig` group within each browser window.
   Merely attached, unowned tabs stay in their existing location.
 - Explicit URL selection must match exactly one page. URL and index selectors
   cannot be combined.
@@ -282,7 +326,8 @@ reconciles existing client announcements, browser grouping, and page status.
 - Request and response bodies have per-body and aggregate byte budgets;
   truncation, failures, and dropped-entry counts remain visible in summaries.
 - Written artifacts always replace credential-bearing headers, cookies, query
-  parameters, and structured body fields with stable `BC_SECRET_N` references.
+  parameters, and structured body fields with stable `BROWSERRIG_SECRET_N`
+  references.
 - Named secret profiles retain lossless values in restrictive local files.
   Cross-process locks serialize profile publication; repeated captures and
   reload-based refresh preserve references by observed request source.
@@ -343,9 +388,9 @@ reconciles existing client announcements, browser grouping, and page status.
 - `doctor` reports relay and extension versions, build mismatches, sessions,
   active targets, child targets, crashed/browser-error targets, and built
   artifacts.
-- `browser-control skill` prints the concise, current agent workflow.
+- `browserrig skill` prints the concise, current agent workflow.
 - Each execute appends a best-effort bounded entry to
-  `~/.browser-control/sessions/<id>/journal.jsonl`.
+  `~/.browserrig/sessions/<id>/journal.jsonl`.
 - Recording supports extension `chrome.tabCapture` WebM for user-owned tabs and
   relay-owned CDP screencasting to WebM or MP4.
 
@@ -433,7 +478,7 @@ page.
 
 ### Debug traces exclude user data
 
-With `BROWSER_CONTROL_DEBUG=1`, `[bc:ctx]` logs contain bounded target,
+With `BROWSERRIG_DEBUG=1`, `[browserrig:ctx]` logs contain bounded target,
 ownership, context-lifecycle, loader, reset, and error-shape metadata. They do
 not contain expressions, arguments, results, headers, cookies, or form values.
 
@@ -449,7 +494,7 @@ restarts can be distinguished from session eviction.
 
 ## Known Limitations
 
-- Browser Control does not expose custom `page.sessionId()`, `page.targetId()`,
+- BrowserRig does not expose custom `page.sessionId()`, `page.targetId()`,
   `frame.frameId()`, or `locator.selector()` APIs.
 - Raw CDP behavior has no guarantees beyond stock Playwright and the relay's
   documented guardrails.
@@ -465,6 +510,9 @@ restarts can be distinguished from session eviction.
 - CDP recording activates its tab to avoid background compositor throttling,
   fits the viewport within 1280x720, requires `ffmpeg` on `PATH`, and does not
   capture audio.
+- A no-click Active-Tab Attach does not create Chrome's Tab-Capture Grant.
+  Automatic, no-audio recording falls back to CDP when that grant is absent;
+  explicit tab-capture and audio recording require one toolbar invocation.
 - The trusted sandbox exposes selected Node built-ins, not unrestricted local
   command execution.
 - Exact parity across third-party authentication remains a manual diagnostic.
@@ -498,14 +546,14 @@ These items are accepted directions but are not current priorities:
   failures.
 - Add broader local execution behind an explicit capability only when an agent
   workflow requires it.
-- Consider a right-click `send element to Browser Control` pin if handoff
+- Consider a right-click `send element to BrowserRig` pin if handoff
   evidence shows a recurring element-selection problem.
 - Add true mid-script cancellation. Toolbar clicks currently preserve active
   executes and handoffs rather than interrupting them.
 
 Explicitly declined for now:
 
-- Dedicated observation commands such as `browser-control snapshot`,
+- Dedicated observation commands such as `browserrig snapshot`,
   `screenshot`, or `logs`; execute-level helpers are sufficient.
 - Topic-specific `skill` subcommands; the workflow should remain one concise
   document.

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { Effect } from "effect"
 import { WebSocket } from "ws"
 import { ExtensionRpc } from "../src/extension-rpc.ts"
+import { extensionProtocolVersion } from "../src/protocol.ts"
 
 type SentMessage = { readonly id: number; readonly method: string }
 
@@ -56,7 +57,7 @@ const makeFakeSocket = (): FakeSocket => {
 const connect = (rpc: ExtensionRpc): FakeSocket => {
   const socket = makeFakeSocket()
   rpc.replaceSocket(socket)
-  rpc.markHandshake("0.0.23", 2)
+  rpc.markHandshake("0.0.23", extensionProtocolVersion)
   rpc.markReady()
   return socket
 }
@@ -83,11 +84,11 @@ describe("ExtensionRpc", () => {
     const rpc = new ExtensionRpc()
     const socket = makeFakeSocket()
     rpc.replaceSocket(socket)
-    rpc.markHandshake("1.0.0", 3)
+    rpc.markHandshake("1.0.0", extensionProtocolVersion + 1)
 
     expect(rpc.connected).toBe(false)
     await expect(Effect.runPromise(rpc.send({ method: "tabs.create", params: {} }))).rejects.toThrow(
-      "extension protocol 3 is incompatible",
+      `extension protocol ${extensionProtocolVersion + 1} is incompatible`,
     )
     expect(socket.sent).toHaveLength(0)
   })

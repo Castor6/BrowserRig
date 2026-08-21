@@ -87,7 +87,7 @@ describe("CLI argument normalization", () => {
       "--",
       "/usr/bin/node",
       "-e",
-      "process.stdout.write(process.env.BC_SECRET_1 || '')",
+      "process.stdout.write(process.env.BROWSERRIG_SECRET_1 || '')",
     ])
 
     expect(normalized).toEqual([
@@ -97,7 +97,7 @@ describe("CLI argument normalization", () => {
       "bc-cli-operands:v1",
       "bc-cli-operand:%2Fusr%2Fbin%2Fnode",
       "bc-cli-operand:-e",
-      "bc-cli-operand:process.stdout.write(process.env.BC_SECRET_1%20%7C%7C%20'')",
+      "bc-cli-operand:process.stdout.write(process.env.BROWSERRIG_SECRET_1%20%7C%7C%20'')",
     ])
   })
 

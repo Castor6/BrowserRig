@@ -2,6 +2,6 @@ allowBuilds:
   esbuild: true
   msgpackr-extract: false
 minimumReleaseAgeExclude:
-  - '@effect/platform-node-shared@4.0.0-beta.92'
-  - '@effect/platform-node@4.0.0-beta.92'
-  - effect@4.0.0-beta.92
+  - '@effect/platform-node-shared@4.0.0-beta.97'
+  - '@effect/platform-node@4.0.0-beta.97'
+  - effect@4.0.0-beta.97

@@ -4,7 +4,7 @@ export type JsonValue = JsonPrimitive | JsonValue[] | { readonly [key: string]: 
 
 export type JsonObject = { readonly [key: string]: JsonValue }
 
-export const extensionProtocolVersion = 2
+export const extensionProtocolVersion = 3
 export const legacyExtensionProtocolVersion = 1
 
 export type ExtensionProtocolCompatibility = {
@@ -70,6 +70,7 @@ export type ExtensionCommand = {
     | "debugger.attach"
     | "debugger.detach"
     | "debugger.sendCommand"
+    | "tabs.attachActive"
     | "tabs.create"
     | "tabs.remove"
     | "tabs.group"
@@ -122,6 +123,7 @@ const extensionCommandMethods = new Set<ExtensionCommand["method"]>([
   "debugger.attach",
   "debugger.detach",
   "debugger.sendCommand",
+  "tabs.attachActive",
   "tabs.create",
   "tabs.remove",
   "tabs.group",

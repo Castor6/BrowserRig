@@ -6,7 +6,7 @@ import { Schema } from "effect"
 /**
  * Session journal: an auditable per-session record of what agents did to the
  * user's browser. The relay appends one JSON line per execute call to
- * `~/.browser-control/sessions/<id>/journal.jsonl`; the CLI `journal` command
+ * `~/.browserrig/sessions/<id>/journal.jsonl`; the CLI `journal` command
  * reads the file locally and renders a human-readable timeline.
  */
 
@@ -31,7 +31,7 @@ export interface JournalEntry extends Schema.Schema.Type<typeof JournalEntry> {}
 const decodeJournalEntry = Schema.decodeUnknownOption(JournalEntry)
 
 export const defaultJournalBaseDir = (): string => {
-  return path.join(os.homedir(), ".browser-control", "sessions")
+  return path.join(os.homedir(), ".browserrig", "sessions")
 }
 
 export function journalPathForSession(baseDir: string, sessionId: string): string {

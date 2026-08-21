@@ -11,12 +11,12 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import util from "node:util"
 import { getObject } from "../src/relay-helpers.ts"
-import { browserControlBuildId } from "../src/version.ts"
+import { browserRigBuildId } from "../src/version.ts"
 
-const endpointUrl = process.env.BROWSER_CONTROL_ENDPOINT ?? "http://127.0.0.1:19989"
+const endpointUrl = process.env.BROWSERRIG_ENDPOINT ?? "http://127.0.0.1:19990"
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const localCliPath = path.join(repoRoot, "src", "cli.ts")
-const browserControlTimeoutMs = parsePositiveInteger(process.env.SMOKE_BROWSER_CONTROL_TIMEOUT_MS) ?? 90_000
+const browserRigTimeoutMs = parsePositiveInteger(process.env.SMOKE_BROWSERRIG_TIMEOUT_MS) ?? 90_000
 const repeatCount = parsePositiveInteger(process.env.SMOKE_REPEAT) ?? 1
 const selectedCaseNames = parseCaseFilter(process.env.SMOKE_CASE)
 
@@ -171,7 +171,7 @@ const runLocalCheckoutFlow = Effect.fnUntraced(function* (page: Page) {
     page,
     [
       { selector: "#first-name", value: "Kit" },
-      { selector: "#last-name", value: "BrowserControl" },
+      { selector: "#last-name", value: "BrowserRig" },
       { selector: "#postal-code", value: "12345" },
     ],
     "sauce checkout fields",
@@ -232,7 +232,7 @@ const cases: SmokeCase[] = [
       yield* playwright("set text input fixture", () =>
         page.setContent(`<input aria-label="text input" /><button id="updatingButton">Button That Should Change</button><script>document.querySelector('button').addEventListener('click', () => { document.querySelector('button').textContent = document.querySelector('input').value })</script>`),
       )
-      yield* fill(page.getByRole("textbox"), "Browser Control wins", "text input")
+      yield* fill(page.getByRole("textbox"), "BrowserRig wins", "text input")
       yield* click(page.getByRole("button", { name: "Button That Should Change" }), "rename button")
       results.push({ challenge: "text-input", buttonName: yield* textContent(page.locator("#updatingButton"), "renamed button") })
 
@@ -314,18 +314,18 @@ const cases: SmokeCase[] = [
     run: runLocalCheckoutFlow,
   },
   {
-    // Regression for issue #7: a pre-existing Browser Control session sandbox
+    // Regression for issue #7: a pre-existing BrowserRig session sandbox
     // must not attach to a second raw CDP client's pages. If it does, the cart
     // page can appear to work but checkout's first locator.evaluate wedges.
     name: "stale-client-checkout",
     run: Effect.fnUntraced(function* (page) {
-      const marker = `bc-stale-${Date.now()}`
+      const marker = `br-stale-${Date.now()}`
       const staleSession = `${marker}-session`
       yield* boundedCleanup("close wrapper stale-client page", () => page.close())
       yield* closeOwningBrowser(page, "close wrapper client before stale-client checkout")
       return yield* Effect.gen(function* () {
-        yield* runBrowserControl(["session", "new", staleSession])
-        const output = yield* runBrowserControl(["execute", "--session", staleSession, "return page.url()"])
+        yield* runBrowserRig(["session", "new", staleSession])
+        const output = yield* runBrowserRig(["execute", "--session", staleSession, "return page.url()"])
         return yield* Effect.scoped(
           Effect.gen(function* () {
             const browser = yield* scopedBrowser()
@@ -338,7 +338,7 @@ const cases: SmokeCase[] = [
             }).pipe(Effect.ensuring(boundedCleanup("close stale checkout page", () => checkoutPage.close())))
           }),
         )
-      }).pipe(Effect.ensuring(runBrowserControl(["session", "delete", staleSession]).pipe(Effect.ignore)))
+      }).pipe(Effect.ensuring(runBrowserRig(["session", "delete", staleSession]).pipe(Effect.ignore)))
     }),
   },
   {
@@ -348,22 +348,22 @@ const cases: SmokeCase[] = [
     // session so the raw client's evaluate path stays healthy.
     name: "raw-first-checkout",
     run: Effect.fnUntraced(function* (page) {
-      const marker = `bc-raw-first-${Date.now()}`
+      const marker = `br-raw-first-${Date.now()}`
       const session = `${marker}-session`
       yield* playwright("set raw-first marker", () => page.setContent(`<title>${marker}</title><input placeholder="raw marker" />`))
       return yield* Effect.gen(function* () {
-        yield* runBrowserControl(["session", "new", session])
-        const output = yield* runBrowserControl(["execute", "--session", session, "return page.url()"])
+        yield* runBrowserRig(["session", "new", session])
+        const output = yield* runBrowserRig(["execute", "--session", session, "return page.url()"])
         const cart = yield* runLocalCartFlow(page)
         const checkout = yield* runLocalCheckoutFlow(page)
         return { session, output: output.trim(), cart, checkout }
-      }).pipe(Effect.ensuring(runBrowserControl(["session", "delete", session]).pipe(Effect.ignore)))
+      }).pipe(Effect.ensuring(runBrowserRig(["session", "delete", session]).pipe(Effect.ignore)))
     }),
   },
   {
     name: "reconnect-evaluate",
     run: Effect.fnUntraced(function* (page) {
-      const marker = `bc-reconnect-${Date.now()}`
+      const marker = `br-reconnect-${Date.now()}`
       yield* goto(page, "about:blank")
       yield* playwright("set reconnect content", () => page.setContent(`<title>${marker}</title><main id="marker">${marker}</main>`))
       yield* closeOwningBrowser(page, "close first reconnect client")
@@ -385,7 +385,7 @@ const cases: SmokeCase[] = [
   {
     name: "redirect-reconnect-evaluate",
     run: Effect.fnUntraced(function* (page) {
-      const marker = `bc-redirect-${Date.now()}`
+      const marker = `br-redirect-${Date.now()}`
       return yield* Effect.scoped(
         Effect.gen(function* () {
           const fixture = yield* scopedRedirectFixture(marker)
@@ -423,7 +423,7 @@ const cases: SmokeCase[] = [
   {
     name: "oopif-reconnect",
     run: Effect.fnUntraced(function* (page) {
-      const marker = `bc-oopif-${Date.now()}`
+      const marker = `br-oopif-${Date.now()}`
       const html = `<title>${marker}</title><h1>${marker}</h1><iframe src="https://example.com/"></iframe>`
       yield* goto(page, "about:blank")
       yield* playwright("set oopif content", () => page.setContent(html))
@@ -457,7 +457,7 @@ const cases: SmokeCase[] = [
     name: "session-missing-selector",
     run: Effect.fnUntraced(function* () {
       const missing = `missing-${Date.now()}`
-      const flagOutcome = yield* Effect.result(runBrowserControl(["session", "reset", "--session", missing]))
+      const flagOutcome = yield* Effect.result(runBrowserRig(["session", "reset", "--session", missing]))
       if (flagOutcome._tag === "Success") {
         return yield* Effect.fail(new Error(`explicit missing --session unexpectedly succeeded: ${flagOutcome.success}`))
       }
@@ -465,13 +465,13 @@ const cases: SmokeCase[] = [
       if (!flagError.message.includes(`Session not found: ${missing}`)) {
         return yield* Effect.fail(new Error(`explicit missing --session returned the wrong error: ${flagError.message}`))
       }
-      const environmentOutcome = yield* Effect.result(runBrowserControl(["session", "delete"], { sessionId: missing }))
+      const environmentOutcome = yield* Effect.result(runBrowserRig(["session", "delete"], { sessionId: missing }))
       if (environmentOutcome._tag === "Success") {
-        return yield* Effect.fail(new Error(`explicit missing BROWSER_CONTROL_SESSION unexpectedly succeeded: ${environmentOutcome.success}`))
+        return yield* Effect.fail(new Error(`explicit missing BROWSERRIG_SESSION unexpectedly succeeded: ${environmentOutcome.success}`))
       }
       const environmentError = environmentOutcome.failure
       if (!environmentError.message.includes(`Session not found: ${missing}`)) {
-        return yield* Effect.fail(new Error(`explicit missing BROWSER_CONTROL_SESSION returned the wrong error: ${environmentError.message}`))
+        return yield* Effect.fail(new Error(`explicit missing BROWSERRIG_SESSION returned the wrong error: ${environmentError.message}`))
       }
       return "explicit missing session selectors fail closed"
     }),
@@ -479,15 +479,15 @@ const cases: SmokeCase[] = [
   {
     name: "execute-target-url",
     run: Effect.fnUntraced(function* (page) {
-      const firstMarker = `bc-target-a-${Date.now()}`
-      const secondMarker = `bc-target-b-${Date.now()}`
+      const firstMarker = `br-target-a-${Date.now()}`
+      const secondMarker = `br-target-b-${Date.now()}`
       const smokeSession = `${secondMarker}-session`
       const extraPage = yield* playwright("create target selection page", () => page.context().newPage())
       return yield* Effect.gen(function* () {
         yield* goto(page, `https://example.com/?${firstMarker}`)
         yield* goto(extraPage, `https://example.com/?${secondMarker}`)
-        yield* runBrowserControl(["session", "new", smokeSession])
-        const output = yield* runBrowserControl([
+        yield* runBrowserRig(["session", "new", smokeSession])
+        const output = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -503,7 +503,7 @@ const cases: SmokeCase[] = [
         Effect.ensuring(
           Effect.all([
             boundedCleanup("close target selection page", () => extraPage.close()),
-            runBrowserControl(["session", "delete", smokeSession]).pipe(Effect.ignore),
+            runBrowserRig(["session", "delete", smokeSession]).pipe(Effect.ignore),
           ]).pipe(Effect.ignore),
         ),
       )
@@ -512,17 +512,17 @@ const cases: SmokeCase[] = [
   {
     name: "execute-page-recovery",
     run: Effect.fnUntraced(function* () {
-      const smokeSession = `bc-recovery-${Date.now()}`
+      const smokeSession = `br-recovery-${Date.now()}`
       return yield* Effect.gen(function* () {
-        yield* runBrowserControl(["session", "new", smokeSession])
-        yield* runBrowserControl([
+        yield* runBrowserRig(["session", "new", smokeSession])
+        yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
           "await page.setContent('<title>Recovery fixture</title>'); return await page.title()",
         ])
         const crashStartedAt = yield* Clock.currentTimeMillis
-        const crashResult = yield* Effect.result(runBrowserControl([
+        const crashResult = yield* Effect.result(runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -535,11 +535,11 @@ const cases: SmokeCase[] = [
         if (crashDurationMs > 10_000) {
           return yield* Effect.fail(new Error(`crash execute took ${crashDurationMs}ms instead of failing promptly`))
         }
-        const statusOutput = yield* runBrowserControl(["status"])
+        const statusOutput = yield* runBrowserRig(["status"])
         if (!statusOutput.includes("crashed=true")) {
           return yield* Effect.fail(new Error(`status did not expose the crashed target: ${statusOutput}`))
         }
-        const output = yield* runBrowserControl([
+        const output = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -549,16 +549,16 @@ const cases: SmokeCase[] = [
           return yield* Effect.fail(new Error(`execute did not recover the crashed session page: ${output}`))
         }
         return output.trim()
-      }).pipe(Effect.ensuring(runBrowserControl(["session", "delete", smokeSession]).pipe(Effect.ignore)))
+      }).pipe(Effect.ensuring(runBrowserRig(["session", "delete", smokeSession]).pipe(Effect.ignore)))
     }),
   },
   {
     name: "execute-page-detach-recovery",
     run: Effect.fnUntraced(function* () {
-      const smokeSession = `bc-detach-recovery-${Date.now()}`
+      const smokeSession = `br-detach-recovery-${Date.now()}`
       return yield* Effect.gen(function* () {
-        yield* runBrowserControl(["session", "new", smokeSession])
-        const closeOutput = yield* runBrowserControl([
+        yield* runBrowserRig(["session", "new", smokeSession])
+        const closeOutput = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -567,7 +567,7 @@ const cases: SmokeCase[] = [
         if (!closeOutput.includes("session default page was closed")) {
           return yield* Effect.fail(new Error(`closing the session root did not report stale page state: ${closeOutput}`))
         }
-        const output = yield* runBrowserControl([
+        const output = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -577,17 +577,17 @@ const cases: SmokeCase[] = [
           return yield* Effect.fail(new Error(`execute retained the detached session page: ${output}`))
         }
         return output.trim()
-      }).pipe(Effect.ensuring(runBrowserControl(["session", "delete", smokeSession]).pipe(Effect.ignore)))
+      }).pipe(Effect.ensuring(runBrowserRig(["session", "delete", smokeSession]).pipe(Effect.ignore)))
     }),
   },
   {
     name: "execute-fill-helpers",
     run: Effect.fnUntraced(function* () {
-      const marker = `bc-fill-${Date.now()}`
+      const marker = `br-fill-${Date.now()}`
       const smokeSession = `${marker}-session`
       return yield* Effect.gen(function* () {
-        yield* runBrowserControl(["session", "new", smokeSession])
-        const output = yield* runBrowserControl(
+        yield* runBrowserRig(["session", "new", smokeSession])
+        const output = yield* runBrowserRig(
           [
             "execute",
             "--session",
@@ -684,17 +684,17 @@ return {
           return yield* Effect.fail(new Error(`execute fill helpers did not fill fields: ${output}`))
         }
         return output.trim()
-      }).pipe(Effect.ensuring(runBrowserControl(["session", "delete", smokeSession]).pipe(Effect.ignore)))
+      }).pipe(Effect.ensuring(runBrowserRig(["session", "delete", smokeSession]).pipe(Effect.ignore)))
     }),
   },
   {
     name: "execute-snapshot-refs",
     run: Effect.fnUntraced(function* () {
-      const marker = `bc-snapshot-${Date.now()}`
+      const marker = `br-snapshot-${Date.now()}`
       const smokeSession = `${marker}-session`
       return yield* Effect.gen(function* () {
-        yield* runBrowserControl(["session", "new", smokeSession])
-        const snapshotOutput = yield* runBrowserControl([
+        yield* runBrowserRig(["session", "new", smokeSession])
+        const snapshotOutput = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -742,7 +742,7 @@ return await snapshot()
         ) {
           return yield* Effect.fail(new Error(`compact snapshot output was incomplete: ${snapshotOutput}`))
         }
-        const diffOutput = yield* runBrowserControl([
+        const diffOutput = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -770,7 +770,7 @@ return await snapshot({ diff: true })
         ) {
           return yield* Effect.fail(new Error(`snapshot diff did not isolate additions: ${diffOutput}`))
         }
-        const diffRefOutput = yield* runBrowserControl([
+        const diffRefOutput = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -793,7 +793,7 @@ return { previousRefError, addedRefCount, restored }
         ) {
           return yield* Effect.fail(new Error(`snapshot diff refs were unsafe or unusable: ${diffRefOutput}`))
         }
-        const duplicateOutput = yield* runBrowserControl([
+        const duplicateOutput = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -802,7 +802,7 @@ return { previousRefError, addedRefCount, restored }
         if (!duplicateOutput.includes("duplicate: 'second'")) {
           return yield* Effect.fail(new Error(`duplicate-id snapshot ref resolved incorrectly: ${duplicateOutput}`))
         }
-        const driftOutput = yield* runBrowserControl([
+        const driftOutput = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -822,7 +822,7 @@ return { driftedCount }
         if (!driftOutput.includes("driftedCount: 0")) {
           return yield* Effect.fail(new Error(`snapshot ref did not fail closed after DOM drift: ${driftOutput}`))
         }
-        const scopedOutput = yield* runBrowserControl([
+        const scopedOutput = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -831,7 +831,7 @@ return { driftedCount }
         if (!scopedOutput.includes('button "Continue" [ref=e1]')) {
           return yield* Effect.fail(new Error(`snapshot omitted the within root: ${scopedOutput}`))
         }
-        const actionOutput = yield* runBrowserControl([
+        const actionOutput = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -840,7 +840,7 @@ return { driftedCount }
         if (!actionOutput.includes("continued: true")) {
           return yield* Effect.fail(new Error(`snapshot ref did not resolve across execute calls: ${actionOutput}`))
         }
-        const escapedAttributeOutput = yield* runBrowserControl([
+        const escapedAttributeOutput = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -853,7 +853,7 @@ return { captured, count: await ref('e1').count() }
         if (!escapedAttributeOutput.includes("count: 1")) {
           return yield* Effect.fail(new Error(`snapshot ref did not escape multiline attribute values: ${escapedAttributeOutput}`))
         }
-        const denseOutput = yield* runBrowserControl([
+        const denseOutput = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -869,7 +869,7 @@ return await snapshot()
         if (!denseOutput.includes('link "Story 30 primary destination"') || denseOutput.includes('link "author30"')) {
           return yield* Effect.fail(new Error(`snapshot budget did not prioritize primary items across the dense feed: ${denseOutput}`))
         }
-        const structureOutput = yield* runBrowserControl([
+        const structureOutput = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -909,7 +909,7 @@ return await snapshot({ interactive: true })
         ) {
           return yield* Effect.fail(new Error(`snapshot omitted semantic structure or leaked a form value: ${structureOutput}`))
         }
-        const unnamedRefOutput = yield* runBrowserControl([
+        const unnamedRefOutput = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -918,7 +918,7 @@ return await snapshot({ interactive: true })
         if (!unnamedRefOutput.includes('textbox "q"') || !unnamedRefOutput.includes("count: 1")) {
           return yield* Effect.fail(new Error(`snapshot ref for an unnamed control did not preserve structural identity: ${unnamedRefOutput}`))
         }
-        const classRefOutput = yield* runBrowserControl([
+        const classRefOutput = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -933,7 +933,7 @@ return await snapshot({ within: '.drop-down-click' })
         if (!classRefOutput.includes('button "Books" [ref=e1]')) {
           return yield* Effect.fail(new Error(`snapshot omitted the unique-class control: ${classRefOutput}`))
         }
-        const classRerenderOutput = yield* runBrowserControl([
+        const classRerenderOutput = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -970,26 +970,26 @@ return { result: await page.locator('#class-result').textContent() }
           classRefOutput: classRefOutput.trim(),
           classRerenderOutput: classRerenderOutput.trim(),
         }
-      }).pipe(Effect.ensuring(runBrowserControl(["session", "delete", smokeSession]).pipe(Effect.ignore)))
+      }).pipe(Effect.ensuring(runBrowserRig(["session", "delete", smokeSession]).pipe(Effect.ignore)))
     }),
   },
   {
     name: "handoff-navigation",
     run: Effect.fnUntraced(function* (page) {
       const extension = yield* fetchStatus()
-      if (extension.protocolVersion !== 1 || extension.protocolCompatible !== true) {
-        return yield* Effect.fail(new Error(`handoff-navigation requires extension protocol 1; connected extension reports ${extension.protocolVersion ?? "unknown"}`))
+      if (extension.protocolCompatible !== true) {
+        return yield* Effect.fail(new Error(`handoff-navigation requires a compatible extension protocol; connected extension reports ${extension.protocolVersion ?? "unknown"}`))
       }
-      const marker = `bc-handoff-${Date.now()}`
+      const marker = `br-handoff-${Date.now()}`
       const smokeSession = `${marker}-session`
       return yield* Effect.scoped(
         Effect.gen(function* () {
           const fixture = yield* scopedHandoffFixture(marker)
           yield* goto(page, fixture.beforeUrl)
-          yield* runBrowserControl(["session", "new", smokeSession])
-          yield* runBrowserControl(["session", "adopt", "--session", smokeSession, "--target-url", marker])
+          yield* runBrowserRig(["session", "new", smokeSession])
+          yield* runBrowserRig(["session", "adopt", "--session", smokeSession, "--target-url", marker])
 
-          const executeFiber = yield* runBrowserControl([
+          const executeFiber = yield* runBrowserRig([
             "execute",
             "--session",
             smokeSession,
@@ -998,9 +998,9 @@ return { result: await page.locator('#class-result').textContent() }
           yield* Effect.sleep("500 millis")
           const ownerPage = yield* scopedOwnerCdpPage({ sessionId: smokeSession, urlIncludes: marker })
 
-          yield* ownerPage.waitFor(`document.querySelector('#__browser_control_page_status__')?.shadowRoot?.querySelector('button') != null`)
+          yield* ownerPage.waitFor(`document.querySelector('#__browserrig_page_status__')?.shadowRoot?.querySelector('button') != null`)
           yield* ownerPage.navigate(fixture.afterUrl)
-          yield* ownerPage.waitFor(`document.querySelector('#__browser_control_page_status__')?.shadowRoot?.querySelector('button') != null`)
+          yield* ownerPage.waitFor(`document.querySelector('#__browserrig_page_status__')?.shadowRoot?.querySelector('button') != null`)
           yield* ownerPage.evaluate(`document.querySelector('#decoy')?.click()`)
 
           const premature = yield* Fiber.join(executeFiber).pipe(Effect.timeoutOption("200 millis"))
@@ -1008,13 +1008,13 @@ return { result: await page.locator('#class-result').textContent() }
             return yield* Effect.fail(new Error(`handoff resumed from a non-matching page control: ${premature.value}`))
           }
 
-          yield* ownerPage.evaluate(`document.querySelector('#__browser_control_page_status__')?.shadowRoot?.querySelector('button')?.click()`)
+          yield* ownerPage.evaluate(`document.querySelector('#__browserrig_page_status__')?.shadowRoot?.querySelector('button')?.click()`)
           const output = yield* Fiber.join(executeFiber)
           if (!output.includes("resumed: true") || !output.includes(fixture.afterUrl)) {
             return yield* Effect.fail(new Error(`handoff did not resume on the navigated page: ${output}`))
           }
           return output.trim()
-        }).pipe(Effect.ensuring(runBrowserControl(["session", "delete", smokeSession]).pipe(Effect.ignore))),
+        }).pipe(Effect.ensuring(runBrowserRig(["session", "delete", smokeSession]).pipe(Effect.ignore))),
       )
     }),
   },
@@ -1022,11 +1022,11 @@ return { result: await page.locator('#class-result').textContent() }
     name: "handoff-cross-tab",
     run: Effect.fnUntraced(function* (page) {
       const extension = yield* fetchStatus()
-      if (extension.protocolVersion !== 1 || extension.protocolCompatible !== true) {
-        return yield* Effect.fail(new Error(`handoff-cross-tab requires extension protocol 1; connected extension reports ${extension.protocolVersion ?? "unknown"}`))
+      if (extension.protocolCompatible !== true) {
+        return yield* Effect.fail(new Error(`handoff-cross-tab requires a compatible extension protocol; connected extension reports ${extension.protocolVersion ?? "unknown"}`))
       }
-      const marker = `bc-handoff-a-${Date.now()}`
-      const peerMarker = `bc-handoff-b-${Date.now()}`
+      const marker = `br-handoff-a-${Date.now()}`
+      const peerMarker = `br-handoff-b-${Date.now()}`
       const waitingSession = `${marker}-session`
       const peerSession = `${peerMarker}-session`
       const peerPage = yield* playwright("create peer handoff page", () => page.context().newPage())
@@ -1036,12 +1036,12 @@ return { result: await page.locator('#class-result').textContent() }
           const peerUrl = fixture.afterUrl.replace(marker, peerMarker)
           yield* goto(page, fixture.beforeUrl)
           yield* goto(peerPage, peerUrl)
-          yield* runBrowserControl(["session", "new", waitingSession])
-          yield* runBrowserControl(["session", "new", peerSession])
-          yield* runBrowserControl(["session", "adopt", "--session", waitingSession, "--target-url", marker])
-          yield* runBrowserControl(["session", "adopt", "--session", peerSession, "--target-url", peerMarker])
+          yield* runBrowserRig(["session", "new", waitingSession])
+          yield* runBrowserRig(["session", "new", peerSession])
+          yield* runBrowserRig(["session", "adopt", "--session", waitingSession, "--target-url", marker])
+          yield* runBrowserRig(["session", "adopt", "--session", peerSession, "--target-url", peerMarker])
 
-          const executeFiber = yield* runBrowserControl([
+          const executeFiber = yield* runBrowserRig([
             "execute",
             "--session",
             waitingSession,
@@ -1051,13 +1051,13 @@ return { result: await page.locator('#class-result').textContent() }
           const waitingOwnerPage = yield* scopedOwnerCdpPage({ sessionId: waitingSession, urlIncludes: marker })
           const peerOwnerPage = yield* scopedOwnerCdpPage({ sessionId: peerSession, urlIncludes: peerMarker })
 
-          yield* waitingOwnerPage.waitFor(`document.querySelector('#__browser_control_page_status__')?.shadowRoot?.querySelector('button') != null`)
-          const peerCompletionCount = yield* peerOwnerPage.evaluate<number>(`document.querySelector('#__browser_control_page_status__')?.shadowRoot?.querySelectorAll('button').length ?? 0`)
+          yield* waitingOwnerPage.waitFor(`document.querySelector('#__browserrig_page_status__')?.shadowRoot?.querySelector('button') != null`)
+          const peerCompletionCount = yield* peerOwnerPage.evaluate<number>(`document.querySelector('#__browserrig_page_status__')?.shadowRoot?.querySelectorAll('button').length ?? 0`)
           if (peerCompletionCount !== 0) {
             return yield* Effect.fail(new Error(`peer tab exposed ${peerCompletionCount} handoff completion control(s)`))
           }
 
-          const peerOutput = yield* runBrowserControl([
+          const peerOutput = yield* runBrowserRig([
             "execute",
             "--session",
             peerSession,
@@ -1073,7 +1073,7 @@ return { result: await page.locator('#class-result').textContent() }
             return yield* Effect.fail(new Error(`handoff resumed from peer tab activity: ${premature.value}`))
           }
 
-          yield* waitingOwnerPage.evaluate(`document.querySelector('#__browser_control_page_status__')?.shadowRoot?.querySelector('button')?.click()`)
+          yield* waitingOwnerPage.evaluate(`document.querySelector('#__browserrig_page_status__')?.shadowRoot?.querySelector('button')?.click()`)
           const output = yield* Fiber.join(executeFiber)
           if (!output.includes("resumed: true") || !output.includes(marker)) {
             return yield* Effect.fail(new Error(`handoff did not resume from tab A: ${output}`))
@@ -1083,8 +1083,8 @@ return { result: await page.locator('#class-result').textContent() }
           Effect.ensuring(
             Effect.all([
               boundedCleanup("close peer handoff page", () => peerPage.close()),
-              runBrowserControl(["session", "delete", waitingSession]).pipe(Effect.ignore),
-              runBrowserControl(["session", "delete", peerSession]).pipe(Effect.ignore),
+              runBrowserRig(["session", "delete", waitingSession]).pipe(Effect.ignore),
+              runBrowserRig(["session", "delete", peerSession]).pipe(Effect.ignore),
             ]).pipe(Effect.ignore),
           ),
         ),
@@ -1094,16 +1094,16 @@ return { result: await page.locator('#class-result').textContent() }
   {
     name: "handoff-target-detach",
     run: Effect.fnUntraced(function* (page) {
-      const marker = `bc-handoff-detach-${Date.now()}`
+      const marker = `br-handoff-detach-${Date.now()}`
       const smokeSession = `${marker}-session`
       return yield* Effect.scoped(
         Effect.gen(function* () {
           const fixture = yield* scopedHandoffFixture(marker)
           yield* goto(page, fixture.beforeUrl)
-          yield* runBrowserControl(["session", "new", smokeSession])
-          yield* runBrowserControl(["session", "adopt", "--session", smokeSession, "--target-url", marker])
+          yield* runBrowserRig(["session", "new", smokeSession])
+          yield* runBrowserRig(["session", "adopt", "--session", smokeSession, "--target-url", marker])
 
-          const executeFiber = yield* runBrowserControl([
+          const executeFiber = yield* runBrowserRig([
             "execute",
             "--session",
             smokeSession,
@@ -1111,7 +1111,7 @@ return { result: await page.locator('#class-result').textContent() }
           ]).pipe(Effect.forkChild)
           yield* Effect.sleep("500 millis")
           const ownerPage = yield* scopedOwnerCdpPage({ sessionId: smokeSession, urlIncludes: marker })
-          yield* ownerPage.waitFor(`document.querySelector('#__browser_control_page_status__')?.shadowRoot?.querySelector('button') != null`)
+          yield* ownerPage.waitFor(`document.querySelector('#__browserrig_page_status__')?.shadowRoot?.querySelector('button') != null`)
           yield* ownerPage.closeTarget()
 
           const promptOutcome = yield* Effect.result(Fiber.join(executeFiber)).pipe(Effect.timeoutOption("5 seconds"))
@@ -1123,18 +1123,18 @@ return { result: await page.locator('#class-result').textContent() }
             return yield* Effect.fail(new Error(`target detach did not cancel the handoff promptly: ${outcome._tag === "Success" ? outcome.success : outcome.failure.message}`))
           }
           return "handoff cancelled on exact target detach"
-        }).pipe(Effect.ensuring(runBrowserControl(["session", "delete", smokeSession]).pipe(Effect.ignore))),
+        }).pipe(Effect.ensuring(runBrowserRig(["session", "delete", smokeSession]).pipe(Effect.ignore))),
       )
     }),
   },
   {
     name: "dedicated-worker",
     run: Effect.fnUntraced(function* () {
-      const marker = `bc-worker-${Date.now()}`
+      const marker = `br-worker-${Date.now()}`
       const smokeSession = `${marker}-session`
       return yield* Effect.gen(function* () {
-        yield* runBrowserControl(["session", "new", smokeSession])
-        const output = yield* runBrowserControl([
+        yield* runBrowserRig(["session", "new", smokeSession])
+        const output = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -1144,7 +1144,7 @@ const workerPromise = page.waitForEvent('worker')
 await page.evaluate(() => {
   const source = 'self.answer = 42; self.postMessage(self.answer)'
   const worker = new Worker(URL.createObjectURL(new Blob([source], { type: 'text/javascript' })))
-  globalThis.__browserControlSmokeWorker = worker
+  globalThis.__browserRigSmokeWorker = worker
 })
 const worker = await workerPromise
 return { answer: await worker.evaluate(() => globalThis.answer), url: worker.url() }
@@ -1154,24 +1154,24 @@ return { answer: await worker.evaluate(() => globalThis.answer), url: worker.url
           return yield* Effect.fail(new Error(`dedicated worker was not routed through Playwright: ${output}`))
         }
         return output.trim()
-      }).pipe(Effect.ensuring(runBrowserControl(["session", "delete", smokeSession]).pipe(Effect.ignore)))
+      }).pipe(Effect.ensuring(runBrowserRig(["session", "delete", smokeSession]).pipe(Effect.ignore)))
     }),
   },
   {
     name: "network-capture",
     run: Effect.fnUntraced(function* () {
-      const marker = `bc-network-${Date.now()}`
+      const marker = `br-network-${Date.now()}`
       const smokeSession = `${marker}-session`
       const profile = `${marker}-profile`
       const outputPath = path.join(repoRoot, "tmp", `${marker}.har`)
       return yield* Effect.scoped(
         Effect.gen(function* () {
           const fixture = yield* scopedNetworkFixture(marker)
-          yield* runBrowserControl(["session", "new", smokeSession])
-          yield* runBrowserControl([
+          yield* runBrowserRig(["session", "new", smokeSession])
+          yield* runBrowserRig([
             "network", "start", "--session", smokeSession, "--url", "/api/", "--resource-type", "fetch",
           ])
-          const executeOutput = yield* runBrowserControl([
+          const executeOutput = yield* runBrowserRig([
             "execute",
             "--session",
             smokeSession,
@@ -1180,11 +1180,11 @@ return { answer: await worker.evaluate(() => globalThis.answer), url: worker.url
           if (!executeOutput.includes(marker) || executeOutput.includes("smoke-refresh-")) {
             return yield* Effect.fail(new Error(`network fixture execute output was missing its marker or exposed a credential: ${executeOutput}`))
           }
-          const journalOutput = yield* runBrowserControl(["journal", "--session", smokeSession, "--json"])
+          const journalOutput = yield* runBrowserRig(["journal", "--session", smokeSession, "--json"])
           if (journalOutput.includes("smoke-refresh-") || journalOutput.includes("smoke-access-") || journalOutput.includes("smoke-query-token")) {
             return yield* Effect.fail(new Error("network capture credential appeared in the session journal"))
           }
-          const stopOutput = yield* runBrowserControl([
+          const stopOutput = yield* runBrowserRig([
             "network", "stop", "--session", smokeSession, "--output", outputPath, "--secrets", profile, "--json",
           ])
           const stop = parseJsonObject(stopOutput, "network stop")
@@ -1195,30 +1195,30 @@ return { answer: await worker.evaluate(() => globalThis.answer), url: worker.url
             try: () => fs.readFile(outputPath, "utf8"),
             catch: (cause) => new Error("read network smoke artifact", { cause }),
           })
-          if (artifact.includes("smoke-access-") || artifact.includes("smoke-query-token") || !artifact.includes("${BC_SECRET_1}")) {
+          if (artifact.includes("smoke-access-") || artifact.includes("smoke-query-token") || !artifact.includes("${BROWSERRIG_SECRET_1}")) {
             return yield* Effect.fail(new Error("network artifact did not redact synthetic credentials"))
           }
-          const refreshOutput = yield* runBrowserControl([
+          const refreshOutput = yield* runBrowserRig([
             "secrets", "refresh", profile, "--session", smokeSession, "--url", "/api/", "--json",
           ])
           const refresh = parseJsonObject(refreshOutput, "secrets refresh")
           if (!Array.isArray(refresh.observedSecretRefs) || refresh.observedSecretRefs.length < 2 || !Array.isArray(refresh.updatedSecretRefs) || refresh.updatedSecretRefs.length < 1) {
             return yield* Effect.fail(new Error(`secret refresh did not observe and update stable refs: ${refreshOutput}`))
           }
-          const runOutput = yield* runBrowserControl([
-            "secrets", "run", profile, "--", process.execPath, "-e", "process.stdout.write(process.env.BC_SECRET_1 || '')",
+          const runOutput = yield* runBrowserRig([
+            "secrets", "run", profile, "--", process.execPath, "-e", "process.stdout.write(process.env.BROWSERRIG_SECRET_1 || '')",
           ])
-          if (runOutput !== "${BC_SECRET_1}") {
+          if (runOutput !== "${BROWSERRIG_SECRET_1}") {
             return yield* Effect.fail(new Error(`secret command output was not redacted: ${runOutput}`))
           }
           return { entries: stop.entryCount, observed: refresh.observedSecretRefs.length, refreshed: refresh.updatedSecretRefs.length }
         }).pipe(
           Effect.ensuring(
             Effect.gen(function* () {
-              yield* runBrowserControl(["network", "cancel", "--session", smokeSession]).pipe(Effect.ignore)
-              yield* runBrowserControl(["session", "delete", smokeSession]).pipe(Effect.ignore)
+              yield* runBrowserRig(["network", "cancel", "--session", smokeSession]).pipe(Effect.ignore)
+              yield* runBrowserRig(["session", "delete", smokeSession]).pipe(Effect.ignore)
               yield* removePath(outputPath)
-              yield* removePath(path.join(os.homedir(), ".browser-control", "secrets", `${profile}.json`))
+              yield* removePath(path.join(os.homedir(), ".browserrig", "secrets", `${profile}.json`))
             }),
           ),
         ),
@@ -1228,13 +1228,13 @@ return { answer: await worker.evaluate(() => globalThis.answer), url: worker.url
   {
     name: "session-download-capability",
     run: Effect.fnUntraced(function* () {
-      const marker = `bc-download-${Date.now()}`
+      const marker = `br-download-${Date.now()}`
       const smokeSession = `${marker}-session`
       return yield* Effect.scoped(
         Effect.gen(function* () {
           const fixture = yield* scopedDownloadFixture(marker)
-          yield* runBrowserControl(["session", "new", smokeSession])
-          const output = yield* runBrowserControl([
+          yield* runBrowserRig(["session", "new", smokeSession])
+          const output = yield* runBrowserRig([
             "execute",
             "--session",
             smokeSession,
@@ -1250,14 +1250,14 @@ try {
 return { message, durationMs: Date.now() - startedAt, fixtureReady: await page.getByRole('button', { name: 'Download JSON' }).isVisible() }
           `,
           ])
-          if (!output.includes("Downloads are unavailable in Browser Control extension-backed tabs") || !output.includes("fixtureReady: true")) {
+          if (!output.includes("Downloads are unavailable in BrowserRig extension-backed tabs") || !output.includes("fixtureReady: true")) {
             return yield* Effect.fail(new Error(`session download did not return the expected capability error: ${output}`))
           }
           return output.trim()
         }).pipe(
           Effect.ensuring(
             Effect.gen(function* () {
-              yield* runBrowserControl(["session", "delete", smokeSession]).pipe(Effect.ignore)
+              yield* runBrowserRig(["session", "delete", smokeSession]).pipe(Effect.ignore)
             }),
           ),
         ),
@@ -1267,11 +1267,11 @@ return { message, durationMs: Date.now() - startedAt, fixtureReady: await page.g
   {
     name: "execute-ghost-cursor",
     run: Effect.fnUntraced(function* () {
-      const marker = `bc-cursor-${Date.now()}`
+      const marker = `br-cursor-${Date.now()}`
       const smokeSession = `${marker}-session`
       return yield* Effect.gen(function* () {
-        yield* runBrowserControl(["session", "new", smokeSession])
-        const output = yield* runBrowserControl([
+        yield* runBrowserRig(["session", "new", smokeSession])
+        const output = yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
@@ -1282,31 +1282,31 @@ await page.mouse.down()
 await page.mouse.up()
 await page.waitForTimeout(150)
 const automatic = await page.evaluate(() => {
-  const element = document.getElementById('__browser_control_ghost_cursor__')
+  const element = document.getElementById('__browserrig_ghost_cursor__')
   return { exists: Boolean(element), motion: element?.dataset.motion, targetX: element?.dataset.targetX, targetY: element?.dataset.targetY, pressed: element?.dataset.pressed }
 })
 await page.getByRole('button', { name: 'Cursor target' }).click()
-const locatorDriven = await page.evaluate(() => document.getElementById('__browser_control_ghost_cursor__')?.dataset.pressed)
+const locatorDriven = await page.evaluate(() => document.getElementById('__browserrig_ghost_cursor__')?.dataset.pressed)
 await page.waitForTimeout(1000)
-const faded = await page.evaluate(() => Boolean(document.getElementById('__browser_control_ghost_cursor__')))
+const faded = await page.evaluate(() => Boolean(document.getElementById('__browserrig_ghost_cursor__')))
 await page.mouse.move(40, 50)
 await page.waitForTimeout(100)
-const returned = await page.evaluate(() => Boolean(document.getElementById('__browser_control_ghost_cursor__')))
+const returned = await page.evaluate(() => Boolean(document.getElementById('__browserrig_ghost_cursor__')))
 await ghostCursor.hide()
 await page.mouse.move(60, 70)
 await page.waitForTimeout(100)
-const disabled = await page.evaluate(() => Boolean(document.getElementById('__browser_control_ghost_cursor__')))
+const disabled = await page.evaluate(() => Boolean(document.getElementById('__browserrig_ghost_cursor__')))
 await showGhostCursor({ size: 20 })
 await page.mouse.move(80, 90)
 await page.waitForTimeout(1000)
 const persistent = await page.evaluate(() => {
-  const element = document.getElementById('__browser_control_ghost_cursor__')
+  const element = document.getElementById('__browserrig_ghost_cursor__')
   return { exists: Boolean(element), motion: element?.dataset.motion, targetX: element?.dataset.targetX, targetY: element?.dataset.targetY, transform: element?.style.transform }
 })
 await page.reload()
 await page.waitForTimeout(100)
 const restored = await page.evaluate(() => {
-  const element = document.getElementById('__browser_control_ghost_cursor__')
+  const element = document.getElementById('__browserrig_ghost_cursor__')
   return { exists: Boolean(element), targetX: element?.dataset.targetX, targetY: element?.dataset.targetY, transform: element?.style.transform }
 })
 if (!automatic.exists || automatic.motion !== 'spring' || automatic.targetX !== '80' || automatic.targetY !== '90' || automatic.pressed !== 'false' || locatorDriven !== 'false' || faded || !returned || disabled || !persistent.exists || persistent.motion !== 'spring' || persistent.targetX !== '80' || persistent.targetY !== '90' || !persistent.transform?.includes('80px, 90px') || !restored.exists || restored.targetX !== '80' || restored.targetY !== '90' || !restored.transform?.includes('80px, 90px')) {
@@ -1319,24 +1319,24 @@ return { automatic, locatorDriven, faded, returned, disabled, persistent, restor
           return yield* Effect.fail(new Error(`execute ghost cursor helper failed: ${output}`))
         }
         return output.trim()
-      }).pipe(Effect.ensuring(runBrowserControl(["session", "delete", smokeSession]).pipe(Effect.ignore)))
+      }).pipe(Effect.ensuring(runBrowserRig(["session", "delete", smokeSession]).pipe(Effect.ignore)))
     }),
   },
   {
     name: "recording-logical-session",
     run: Effect.fnUntraced(function* () {
-      const marker = `bc-recording-${Date.now()}`
+      const marker = `br-recording-${Date.now()}`
       const smokeSession = `${marker}-session`
       const outputPath = path.join(repoRoot, "tmp", `${marker}.webm`)
       return yield* Effect.gen(function* () {
-        yield* runBrowserControl(["session", "new", smokeSession])
-        yield* runBrowserControl([
+        yield* runBrowserRig(["session", "new", smokeSession])
+        yield* runBrowserRig([
           "execute",
           "--session",
           smokeSession,
           `await page.setContent('<main style="min-height:100vh;display:grid;place-items:center;background:#0f172a;color:white;font:48px system-ui"><h1 id="title">${marker}</h1></main>'); return await page.locator('#title').textContent()`,
         ])
-        yield* runBrowserControl([
+        yield* runBrowserRig([
           "recording",
           "start",
           outputPath,
@@ -1350,7 +1350,7 @@ return { automatic, locatorDriven, faded, returned, disabled, persistent, restor
           "30000",
         ])
         yield* Effect.sleep("1500 millis")
-        const stopOutput = yield* runBrowserControl(["recording", "stop", "--session", smokeSession])
+        const stopOutput = yield* runBrowserRig(["recording", "stop", "--session", smokeSession])
         const metadata = yield* readRecordingMetadata(`${outputPath}.json`)
         if (metadata.mode !== "cdp" || metadata.artifactType !== "webm" || metadata.frameCount < 1) {
           return yield* Effect.fail(new Error(`logical recording metadata invalid: ${formatValue(metadata)} stop=${stopOutput}`))
@@ -1359,8 +1359,8 @@ return { automatic, locatorDriven, faded, returned, disabled, persistent, restor
       }).pipe(
         Effect.ensuring(
           Effect.gen(function* () {
-            yield* runBrowserControl(["recording", "cancel", "--session", smokeSession]).pipe(Effect.ignore)
-            yield* runBrowserControl(["session", "delete", smokeSession]).pipe(Effect.ignore)
+            yield* runBrowserRig(["recording", "cancel", "--session", smokeSession]).pipe(Effect.ignore)
+            yield* runBrowserRig(["session", "delete", smokeSession]).pipe(Effect.ignore)
             yield* removePath(outputPath)
             yield* removePath(`${outputPath}.json`)
           }),
@@ -1371,25 +1371,25 @@ return { automatic, locatorDriven, faded, returned, disabled, persistent, restor
   {
     name: "session-isolation",
     run: Effect.fnUntraced(function* () {
-      const marker = `bc-session-${Date.now()}`
+      const marker = `br-session-${Date.now()}`
       const firstSession = `${marker}-a`
       const secondSession = `${marker}-b`
       return yield* Effect.gen(function* () {
-        yield* runBrowserControl(["session", "new", firstSession])
-        yield* runBrowserControl(["session", "new", secondSession])
-        const firstOutput = yield* runBrowserControl([
+        yield* runBrowserRig(["session", "new", firstSession])
+        yield* runBrowserRig(["session", "new", secondSession])
+        const firstOutput = yield* runBrowserRig([
           "execute",
           "--session",
           firstSession,
           `await page.goto('about:blank'); await page.setContent('<title>${firstSession}</title><h1>${firstSession}</h1>'); return { title: await page.title(), url: page.url() }`,
         ])
-        const secondOutput = yield* runBrowserControl([
+        const secondOutput = yield* runBrowserRig([
           "execute",
           "--session",
           secondSession,
           `await page.goto('about:blank'); await page.setContent('<title>${secondSession}</title><h1>${secondSession}</h1>'); return { title: await page.title(), url: page.url() }`,
         ])
-        const firstAgain = yield* runBrowserControl([
+        const firstAgain = yield* runBrowserRig([
           "execute",
           "--session",
           firstSession,
@@ -1402,8 +1402,8 @@ return { automatic, locatorDriven, faded, returned, disabled, persistent, restor
       }).pipe(
         Effect.ensuring(
           Effect.all([
-            runBrowserControl(["session", "delete", firstSession]).pipe(Effect.ignore),
-            runBrowserControl(["session", "delete", secondSession]).pipe(Effect.ignore),
+            runBrowserRig(["session", "delete", firstSession]).pipe(Effect.ignore),
+            runBrowserRig(["session", "delete", secondSession]).pipe(Effect.ignore),
           ]).pipe(Effect.ignore),
         ),
       )
@@ -1415,12 +1415,12 @@ return { automatic, locatorDriven, faded, returned, disabled, persistent, restor
     // forever because both Playwright clients were told about each other's tabs.
     name: "multi-client",
     run: Effect.fnUntraced(function* () {
-      const marker = `bc-multi-${Date.now()}`
+      const marker = `br-multi-${Date.now()}`
       const firstSession = `${marker}-a`
       const secondSession = `${marker}-b`
       return yield* Effect.gen(function* () {
-        yield* runBrowserControl(["session", "new", firstSession])
-        const firstOutput = yield* runBrowserControl([
+        yield* runBrowserRig(["session", "new", firstSession])
+        const firstOutput = yield* runBrowserRig([
           "execute",
           "--session",
           firstSession,
@@ -1431,8 +1431,8 @@ return { automatic, locatorDriven, faded, returned, disabled, persistent, restor
         }
         // Session A's sandbox stays connected inside the relay; a fresh session
         // must still be able to drive its own new page without interference.
-        yield* runBrowserControl(["session", "new", secondSession])
-        const secondOutput = yield* runBrowserControl([
+        yield* runBrowserRig(["session", "new", secondSession])
+        const secondOutput = yield* runBrowserRig([
           "execute",
           "--session",
           secondSession,
@@ -1453,7 +1453,7 @@ return await page.evaluate(() => ({
         if (!secondOutput.includes("alpha") || !secondOutput.includes("beta") || !secondOutput.includes("gamma")) {
           return yield* Effect.fail(new Error(`second session was blocked or interfered with: ${secondOutput}`))
         }
-        const firstAgain = yield* runBrowserControl([
+        const firstAgain = yield* runBrowserRig([
           "execute",
           "--session",
           firstSession,
@@ -1466,8 +1466,8 @@ return await page.evaluate(() => ({
       }).pipe(
         Effect.ensuring(
           Effect.all([
-            runBrowserControl(["session", "delete", firstSession]).pipe(Effect.ignore),
-            runBrowserControl(["session", "delete", secondSession]).pipe(Effect.ignore),
+            runBrowserRig(["session", "delete", firstSession]).pipe(Effect.ignore),
+            runBrowserRig(["session", "delete", secondSession]).pipe(Effect.ignore),
           ]).pipe(Effect.ignore),
         ),
       )
@@ -1483,7 +1483,7 @@ const main = Effect.fn("Smoke.main")(function* () {
     return yield* Effect.fail(new Error(`No smoke cases matched: ${Array.from(selectedCaseNames).join(", ")}`))
   }
 
-  yield* Console.log(`browser-control smoke: ${selectedCases.map((testCase) => testCase.name).join(", ")} x${repeatCount}`)
+  yield* Console.log(`browserrig smoke: ${selectedCases.map((testCase) => testCase.name).join(", ")} x${repeatCount}`)
   yield* assertCompatibleRelay()
   yield* waitForExtensionConnected()
   const before = yield* fetchStatus()
@@ -1608,13 +1608,13 @@ async function makeOwnerCdpPage(options: { readonly sessionId: string; readonly 
   const targets = await targetsResponse.json() as Array<{
     readonly id?: unknown
     readonly url?: unknown
-    readonly browserControlSessionId?: unknown
+    readonly browserRigSessionId?: unknown
   }>
   if (typeof version.webSocketDebuggerUrl !== "string") {
     throw new Error("Relay did not provide a browser websocket URL")
   }
   const target = targets.find((candidate) => {
-    return candidate.browserControlSessionId === options.sessionId &&
+    return candidate.browserRigSessionId === options.sessionId &&
       typeof candidate.url === "string" && candidate.url.includes(options.urlIncludes)
   })
   if (!target || typeof target.id !== "string") {
@@ -1622,7 +1622,7 @@ async function makeOwnerCdpPage(options: { readonly sessionId: string; readonly 
   }
 
   const websocketUrl = new URL(version.webSocketDebuggerUrl)
-  websocketUrl.searchParams.set("browserControlSessionId", options.sessionId)
+  websocketUrl.searchParams.set("browserRigSessionId", options.sessionId)
   const socket = new WebSocket(websocketUrl)
   let nextId = 1
   const pending = new Map<number, {
@@ -2046,44 +2046,44 @@ function boundedCleanup(label: string, run: () => PromiseLike<unknown>, timeoutM
   }).pipe(Effect.withSpan(`Smoke.cleanup.${label}`))
 }
 
-type RunBrowserControlOptions = {
+type RunBrowserRigOptions = {
   readonly retryOnTimeout?: boolean
   readonly sessionId?: string
 }
 
-function runBrowserControl(args: readonly string[], options: RunBrowserControlOptions = {}): Effect.Effect<string, Error> {
-  return runBrowserControlOnce(args, options).pipe(
+function runBrowserRig(args: readonly string[], options: RunBrowserRigOptions = {}): Effect.Effect<string, Error> {
+  return runBrowserRigOnce(args, options).pipe(
     Effect.catchIf(
-      (error) => options.retryOnTimeout === true && isBrowserControlTimeout(error),
-      () => runBrowserControlOnce(args, options),
+      (error) => options.retryOnTimeout === true && isBrowserRigTimeout(error),
+      () => runBrowserRigOnce(args, options),
     ),
   )
 }
 
-function runBrowserControlOnce(args: readonly string[], options: RunBrowserControlOptions): Effect.Effect<string, Error> {
+function runBrowserRigOnce(args: readonly string[], options: RunBrowserRigOptions): Effect.Effect<string, Error> {
   return Effect.callback<string, Error>((resume) => {
     let completed = false
     const endpointPort = new URL(endpointUrl).port
     const childEnv: NodeJS.ProcessEnv = {
       ...process.env,
-      ...(endpointPort ? { BROWSER_CONTROL_PORT: endpointPort } : {}),
+      ...(endpointPort ? { BROWSERRIG_PORT: endpointPort } : {}),
     }
-    delete childEnv.BROWSER_CONTROL_TARGET_URL
-    delete childEnv.BROWSER_CONTROL_TARGET_INDEX
-    delete childEnv.BROWSER_CONTROL_SESSION
-    if (options.sessionId) childEnv.BROWSER_CONTROL_SESSION = options.sessionId
+    delete childEnv.BROWSERRIG_TARGET_URL
+    delete childEnv.BROWSERRIG_TARGET_INDEX
+    delete childEnv.BROWSERRIG_SESSION
+    if (options.sessionId) childEnv.BROWSERRIG_SESSION = options.sessionId
     const child = cp.execFile(
       process.execPath,
       ["--import", "tsx", localCliPath, ...args],
       {
         cwd: repoRoot,
         env: childEnv,
-        timeout: browserControlTimeoutMs,
+        timeout: browserRigTimeoutMs,
       },
       (error, stdout, stderr) => {
         completed = true
         if (error) {
-          resume(Effect.fail(new Error(`browser-control ${args.join(" ")} failed: ${stderr || stdout}`, { cause: error })))
+          resume(Effect.fail(new Error(`browserrig ${args.join(" ")} failed: ${stderr || stdout}`, { cause: error })))
           return
         }
         resume(Effect.succeed(stdout))
@@ -2097,7 +2097,7 @@ function runBrowserControlOnce(args: readonly string[], options: RunBrowserContr
   })
 }
 
-function isBrowserControlTimeout(error: Error): boolean {
+function isBrowserRigTimeout(error: Error): boolean {
   const cause = error.cause
   if (!cause || typeof cause !== "object" || Array.isArray(cause)) {
     return false
@@ -2192,9 +2192,9 @@ const assertCompatibleRelay = Effect.fnUntraced(function* () {
   })
   const object = getObject(version)
   const buildId = typeof object?.buildId === "string" ? object.buildId : undefined
-  if (buildId !== browserControlBuildId) {
+  if (buildId !== browserRigBuildId) {
     return yield* Effect.fail(new Error(
-      `Smoke relay build ${buildId ?? "unknown"} does not match source build ${browserControlBuildId}; restart the relay before running smoke.`,
+      `Smoke relay build ${buildId ?? "unknown"} does not match source build ${browserRigBuildId}; restart the relay before running smoke.`,
     ))
   }
 })
@@ -2218,7 +2218,7 @@ const waitForExtensionConnected = Effect.fnUntraced(function* () {
     }
     yield* Effect.sleep("100 millis")
   }
-  return yield* Effect.fail(new Error("Browser Control extension did not connect within 10s"))
+  return yield* Effect.fail(new Error("BrowserRig extension did not connect within 10s"))
 })
 
 function parseExtensionStatus(value: unknown): ExtensionStatus {

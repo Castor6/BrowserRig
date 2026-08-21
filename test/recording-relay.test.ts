@@ -3,7 +3,7 @@ import os from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { RecordingRelay, type VideoEncoder } from "../src/recording-relay.ts"
-import { encodeRecordingFrame } from "../src/recording-protocol.ts"
+import { encodeRecordingFrame, tabCaptureGrantRequiredErrorCode } from "../src/recording-protocol.ts"
 
 const temporaryPaths: string[] = []
 
@@ -13,8 +13,144 @@ afterEach(async () => {
 })
 
 describe("RecordingRelay tab capture", () => {
+  it("falls back cleanly from auto tabCapture to CDP for a user tab without an invocation grant", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-fallback-"))
+    temporaryPaths.push(directory)
+    const outputPath = path.join(directory, "fallback.webm")
+    const debuggerMethods: string[] = []
+    let partialFilesAtEncoderStart: string[] | undefined
+    const relay = new RecordingRelay({
+      isExtensionConnected: () => true,
+      sendToExtension: async (command) => command.method === "recording.start"
+        ? {
+            success: false,
+            code: tabCaptureGrantRequiredErrorCode,
+            error: "Chrome denied tab capture because this tab lacks an activeTab grant.",
+          }
+        : { success: true },
+      sendDebuggerCommand: async (command) => {
+        debuggerMethods.push(command.method)
+        if (command.method === "Page.getLayoutMetrics") {
+          return { cssVisualViewport: { clientWidth: 800, clientHeight: 600 } }
+        }
+        return {}
+      },
+      startVideoEncoder: async () => {
+        partialFilesAtEncoderStart = (await fs.readdir(directory)).filter((entry) => entry.includes(".partial-"))
+        return {
+          write: async () => {},
+          finish: async () => {},
+          cancel: async () => {},
+        }
+      },
+    })
+
+    await expect(relay.startRecording({
+      tabId: 7,
+      owner: "user",
+      outputPath,
+      mode: "auto",
+      audio: false,
+    })).resolves.toMatchObject({ success: true, mode: "cdp", artifactType: "webm" })
+
+    expect(partialFilesAtEncoderStart).toEqual([])
+    expect(debuggerMethods).toEqual(["Page.bringToFront", "Page.getLayoutMetrics", "Page.startScreencast"])
+    await relay.cancelRecording({ tabId: 7 })
+  })
+
+  it("does not fall back from explicit tab-capture mode", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-fallback-"))
+    temporaryPaths.push(directory)
+    const debuggerMethods: string[] = []
+    const relay = new RecordingRelay({
+      isExtensionConnected: () => true,
+      sendToExtension: async () => ({
+        success: false,
+        code: tabCaptureGrantRequiredErrorCode,
+        error: "Click the extension toolbar icon on this tab once, then retry.",
+      }),
+      sendDebuggerCommand: async (command) => {
+        debuggerMethods.push(command.method)
+        return {}
+      },
+    })
+
+    await expect(relay.startRecording({
+      tabId: 7,
+      owner: "user",
+      outputPath: path.join(directory, "explicit.webm"),
+      mode: "tab-capture",
+    })).resolves.toEqual({
+      success: false,
+      error: "Click the extension toolbar icon on this tab once, then retry. Explicit tab-capture mode does not fall back to CDP.",
+    })
+
+    expect(debuggerMethods).toEqual([])
+    expect((await fs.readdir(directory)).some((entry) => entry.includes(".partial-"))).toBe(false)
+  })
+
+  it("does not drop requested audio by falling back to CDP", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-fallback-"))
+    temporaryPaths.push(directory)
+    const debuggerMethods: string[] = []
+    const relay = new RecordingRelay({
+      isExtensionConnected: () => true,
+      sendToExtension: async () => ({
+        success: false,
+        code: tabCaptureGrantRequiredErrorCode,
+        error: "Click the extension toolbar icon on this tab once, then retry.",
+      }),
+      sendDebuggerCommand: async (command) => {
+        debuggerMethods.push(command.method)
+        return {}
+      },
+    })
+
+    await expect(relay.startRecording({
+      tabId: 7,
+      owner: "user",
+      outputPath: path.join(directory, "audio.webm"),
+      mode: "auto",
+      audio: true,
+    })).resolves.toEqual({
+      success: false,
+      error: "Click the extension toolbar icon on this tab once, then retry. Audio recording requires tabCapture; the video-only CDP fallback cannot preserve audio.",
+    })
+
+    expect(debuggerMethods).toEqual([])
+    expect((await fs.readdir(directory)).some((entry) => entry.includes(".partial-"))).toBe(false)
+  })
+
+  it("requires the structured grant code instead of guessing from extension error text", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-fallback-"))
+    temporaryPaths.push(directory)
+    const debuggerMethods: string[] = []
+    const relay = new RecordingRelay({
+      isExtensionConnected: () => true,
+      sendToExtension: async () => ({
+        success: false,
+        error: "Extension has not been invoked for the current page",
+      }),
+      sendDebuggerCommand: async (command) => {
+        debuggerMethods.push(command.method)
+        return {}
+      },
+    })
+
+    await expect(relay.startRecording({
+      tabId: 7,
+      owner: "user",
+      outputPath: path.join(directory, "uncoded.webm"),
+      mode: "auto",
+    })).resolves.toEqual({
+      success: false,
+      error: "Extension has not been invoked for the current page",
+    })
+    expect(debuggerMethods).toEqual([])
+  })
+
   it("streams intrinsically framed chunks to an atomic output", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-tab-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-tab-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "demo.webm")
     let relay: RecordingRelay
@@ -62,7 +198,7 @@ describe("RecordingRelay tab capture", () => {
   })
 
   it("streams output larger than one frame without retaining the complete recording", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-tab-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-tab-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "large.webm")
     let relay: RecordingRelay
@@ -96,7 +232,7 @@ describe("RecordingRelay tab capture", () => {
   })
 
   it("keeps interleaved tab frames isolated", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-tab-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-tab-recording-"))
     temporaryPaths.push(directory)
     const outputs = new Map([[1, path.join(directory, "one.webm")], [2, path.join(directory, "two.webm")]])
     let relay: RecordingRelay
@@ -130,7 +266,7 @@ describe("RecordingRelay tab capture", () => {
   })
 
   it("shares an in-flight stop across concurrent callers", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-tab-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-tab-recording-"))
     temporaryPaths.push(directory)
     let stopCalls = 0
     let relay: RecordingRelay
@@ -165,7 +301,7 @@ describe("RecordingRelay tab capture", () => {
   })
 
   it("does not let cancellation race a stream that is already finalizing", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-tab-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-tab-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "finalizing.webm")
     const relay = new RecordingRelay({
@@ -190,7 +326,7 @@ describe("RecordingRelay tab capture", () => {
   })
 
   it("accepts frames that arrive before the extension start response", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-tab-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-tab-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "early.webm")
     let resolveStart: ((result: { success: true; tabId: number; startedAt: number; mimeType: string }) => void) | undefined
@@ -228,7 +364,7 @@ describe("RecordingRelay tab capture", () => {
   })
 
   it("does not let stale cleanup capture a recording started by a new generation", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-tab-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-tab-recording-"))
     temporaryPaths.push(directory)
     let resolveOldStart: ((result: { success: true; tabId: number; startedAt: number; mimeType: string }) => void) | undefined
     const relay = new RecordingRelay({
@@ -260,7 +396,7 @@ describe("RecordingRelay tab capture", () => {
   })
 
   it("aborts and removes partial output on a sequence violation", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-tab-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-tab-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "bad.webm")
     const commands: string[] = []
@@ -288,7 +424,7 @@ describe("RecordingRelay tab capture", () => {
   })
 
   it("aborts when pending disk writes exceed the memory bound", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-tab-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-tab-recording-"))
     temporaryPaths.push(directory)
     const commands: string[] = []
     const relay = new RecordingRelay({
@@ -317,7 +453,7 @@ describe("RecordingRelay tab capture", () => {
 
 describe("RecordingRelay CDP screencast", () => {
   it("acknowledges compositor frames and timestamps source frames for constant-rate encoding", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "demo.mp4")
     const debuggerCommands: Array<{ readonly method: string; readonly params: object }> = []
@@ -419,13 +555,13 @@ describe("RecordingRelay CDP screencast", () => {
     await expect(relay.startRecording({
       tabId: 7,
       owner: "relay",
-      outputPath: "/tmp/browser-control-frames",
+      outputPath: "/tmp/browserrig-frames",
       mode: "cdp",
     })).resolves.toEqual({ success: false, error: "CDP recording output path must end in .webm or .mp4" })
   })
 
   it("caps timestamp discontinuities by wall-clock duration", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "jump.webm")
     let now = 0
@@ -459,7 +595,7 @@ describe("RecordingRelay CDP screencast", () => {
   })
 
   it("does not overfeed the encoder when compositor frames exceed output fps", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "fast.mp4")
     let now = 0
@@ -493,7 +629,7 @@ describe("RecordingRelay CDP screencast", () => {
   })
 
   it("stops Chrome screencasting before relay shutdown cleanup", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "shutdown.webm")
     const debuggerMethods: string[] = []
@@ -532,14 +668,14 @@ describe("RecordingRelay CDP screencast", () => {
     await expect(relay.startRecording({
       tabId: 7,
       owner: "user",
-      outputPath: "/tmp/browser-control.mp4",
+      outputPath: "/tmp/browserrig.mp4",
       mode: "auto",
     })).resolves.toEqual({ success: false, error: "tabCapture recording output path must end in .webm; use --mode cdp for MP4" })
   })
 
   it("clears a failed tabCapture stop timer before a later recording starts", async () => {
     vi.useFakeTimers()
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "timer.webm")
     let stopAttempts = 0
@@ -573,7 +709,7 @@ describe("RecordingRelay CDP screencast", () => {
   })
 
   it("reserves a tab while its encoder is starting", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "concurrent.mp4")
     const encoderStarted = deferred<void>()
@@ -607,7 +743,7 @@ describe("RecordingRelay CDP screencast", () => {
   })
 
   it("cancels a recording while its encoder is starting", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "cancel-start.mp4")
     const encoderStarted = deferred<void>()
@@ -642,7 +778,7 @@ describe("RecordingRelay CDP screencast", () => {
   })
 
   it("keeps a stopping recording reserved until the encoder finishes", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "stopping.mp4")
     const finishStarted = deferred<void>()
@@ -679,7 +815,7 @@ describe("RecordingRelay CDP screencast", () => {
   })
 
   it("turns encoder write failures into a stop result and cancels the encoder", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-recording-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "write-error.mp4")
     let now = 0

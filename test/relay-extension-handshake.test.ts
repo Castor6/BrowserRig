@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { WebSocket } from "ws"
-import type { CdpEvent, CdpRequest, CdpResponse } from "../src/protocol.ts"
+import { extensionProtocolVersion, type CdpEvent, type CdpRequest, type CdpResponse } from "../src/protocol.ts"
 import { startRelay } from "../src/relay.ts"
 
 describe("relay extension handshake", () => {
@@ -24,7 +24,7 @@ describe("relay extension handshake", () => {
     await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
       const relay = yield* startRelay({ port, sessionCatalogPath: null })
       const extension = yield* Effect.promise(() => connectExtension(relay.url))
-      extension.send(JSON.stringify({ method: "hello", params: { version: "2.0.0", protocolVersion: 3 } }))
+      extension.send(JSON.stringify({ method: "hello", params: { version: "2.0.0", protocolVersion: extensionProtocolVersion + 1 } }))
       extension.send(JSON.stringify({ method: "debugger.attached", params: { tabId: 7 } }))
       yield* Effect.sleep("20 millis")
 
@@ -32,7 +32,7 @@ describe("relay extension handshake", () => {
       expect(status).toMatchObject({
         connected: false,
         version: "2.0.0",
-        protocolVersion: 3,
+        protocolVersion: extensionProtocolVersion + 1,
         protocolCompatible: false,
         protocolLegacy: false,
         activeTargets: 0,
@@ -46,15 +46,15 @@ describe("relay extension handshake", () => {
     await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
       const relay = yield* startRelay({ port, sessionCatalogPath: null })
       const extension = yield* Effect.promise(() => connectExtension(relay.url))
-      extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 2 } }))
+      extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: extensionProtocolVersion } }))
 
       const beforeReady = yield* Effect.promise(() => fetch(`${relay.url}/extension/status`).then((response) => response.json()))
-      expect(beforeReady).toMatchObject({ connected: false, protocolVersion: 2, protocolCompatible: true })
+      expect(beforeReady).toMatchObject({ connected: false, protocolVersion: extensionProtocolVersion, protocolCompatible: true })
 
       extension.send(JSON.stringify({ method: "ready" }))
       yield* Effect.sleep("10 millis")
       const ready = yield* Effect.promise(() => fetch(`${relay.url}/extension/status`).then((response) => response.json()))
-      expect(ready).toMatchObject({ connected: true, protocolVersion: 2, protocolCompatible: true, protocolLegacy: false })
+      expect(ready).toMatchObject({ connected: true, protocolVersion: extensionProtocolVersion, protocolCompatible: true, protocolLegacy: false })
       extension.close()
     })))
   })
@@ -64,7 +64,7 @@ describe("relay extension handshake", () => {
     await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
       const relay = yield* startRelay({ port, sessionCatalogPath: null })
       const compatible = yield* Effect.promise(() => connectExtension(relay.url))
-      compatible.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 2 } }))
+      compatible.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: extensionProtocolVersion } }))
 
       const incompatible = yield* Effect.promise(() => connectExtension(relay.url))
       const closed = waitForClose(incompatible)
@@ -73,7 +73,7 @@ describe("relay extension handshake", () => {
 
       compatible.send(JSON.stringify({ method: "ready" }))
       const status = yield* Effect.promise(() => waitForStatus(relay.url, (candidate) => candidate.connected === true))
-      expect(status).toMatchObject({ connected: true, protocolVersion: 2, activeTargets: 0 })
+      expect(status).toMatchObject({ connected: true, protocolVersion: extensionProtocolVersion, activeTargets: 0 })
       compatible.close()
     })))
   })
@@ -83,7 +83,7 @@ describe("relay extension handshake", () => {
     await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
       const relay = yield* startRelay({ port, sessionCatalogPath: null })
       const first = yield* Effect.promise(() => connectRespondingExtension(relay.url, "stale-target"))
-      first.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 2 } }))
+      first.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: extensionProtocolVersion } }))
       first.send(JSON.stringify({ method: "debugger.attached", params: { tabId: 7 } }))
       first.send(JSON.stringify({ method: "ready" }))
       yield* Effect.promise(() => waitForStatus(relay.url, (status) => status.connected === true && status.activeTargets === 1))
@@ -92,7 +92,7 @@ describe("relay extension handshake", () => {
       expect(client.events.some((event) => event.method === "Target.attachedToTarget")).toBe(true)
 
       const second = yield* Effect.promise(() => connectExtension(relay.url))
-      second.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 2 } }))
+      second.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: extensionProtocolVersion } }))
       second.send(JSON.stringify({ method: "ready" }))
       const status = yield* Effect.promise(() => waitForStatus(relay.url, (candidate) => candidate.connected === true))
 
@@ -109,7 +109,7 @@ describe("relay extension handshake", () => {
       const relay = yield* startRelay({ port, sessionCatalogPath: null })
       const extension = yield* Effect.promise(() => connectRespondingExtension(relay.url, undefined, "synthetic reconciliation failure"))
       const closed = waitForClose(extension)
-      extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 2 } }))
+      extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: extensionProtocolVersion } }))
       extension.send(JSON.stringify({ method: "debugger.attached", params: { tabId: 7 } }))
       extension.send(JSON.stringify({ method: "ready" }))
 
@@ -142,7 +142,7 @@ async function connectRespondingExtension(relayUrl: string, targetId?: string, e
 function connectExtension(relayUrl: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(`${relayUrl.replace(/^http/, "ws")}/extension`, {
-      origin: "chrome-extension://browser-control-test",
+      origin: "chrome-extension://browserrig-test",
     })
     socket.once("open", () => resolve(socket))
     socket.once("error", reject)

@@ -6,13 +6,13 @@ function root(options: {
   readonly tabId?: number
   readonly sessionId: string
   readonly targetId: string
-  readonly browserControlSessionId?: string
+  readonly browserRigSessionId?: string
 }): ConnectedTarget {
   return {
     tabId: options.tabId ?? 7,
     sessionId: options.sessionId,
     owner: "relay",
-    ...(options.browserControlSessionId ? { browserControlSessionId: options.browserControlSessionId } : {}),
+    ...(options.browserRigSessionId ? { browserRigSessionId: options.browserRigSessionId } : {}),
     targetInfo: {
       targetId: options.targetId,
       type: "page",
@@ -27,7 +27,7 @@ function root(options: {
 describe("TargetRegistry root generations", () => {
   it("preserves ownership and reports same-tab root replacement", () => {
     const registry = new TargetRegistry()
-    registry.addRootTarget(root({ sessionId: "bc-tab-1", targetId: "target-1", browserControlSessionId: "alpha" }))
+    registry.addRootTarget(root({ sessionId: "bc-tab-1", targetId: "target-1", browserRigSessionId: "alpha" }))
     registry.addChildTarget({
       tabId: 7,
       sessionId: "child-1",
@@ -48,7 +48,7 @@ describe("TargetRegistry root generations", () => {
     expect(change).toMatchObject({
       kind: "replaced",
       previous: { sessionId: "bc-tab-1", targetInfo: { targetId: "target-1" } },
-      target: { sessionId: "bc-tab-2", browserControlSessionId: "alpha", targetInfo: { targetId: "target-2" } },
+      target: { sessionId: "bc-tab-2", browserRigSessionId: "alpha", targetInfo: { targetId: "target-2" } },
       childSessionIds: ["child-1"],
     })
     expect(registry.targets.has("bc-tab-1")).toBe(false)
@@ -63,15 +63,15 @@ describe("TargetRegistry root generations", () => {
 
     const change = registry.addRootTarget(root({ sessionId: "bc-tab-2", targetId: "target-2" }))
 
-    expect(change.target.browserControlSessionId).toBeUndefined()
+    expect(change.target.browserRigSessionId).toBeUndefined()
     expect(registry.rollbackTargetOwnership(reservation)).toEqual({ targetIds: [], tabIds: [] })
   })
 
   it("keeps a staged replacement non-authoritative and commits current ownership", () => {
     const registry = new TargetRegistry()
-    registry.addRootTarget(root({ sessionId: "bc-tab-1", targetId: "target-1", browserControlSessionId: "alpha" }))
+    registry.addRootTarget(root({ sessionId: "bc-tab-1", targetId: "target-1", browserRigSessionId: "alpha" }))
 
-    const staged = registry.stageRootTarget(root({ sessionId: "bc-tab-2", targetId: "target-2", browserControlSessionId: "alpha" }))
+    const staged = registry.stageRootTarget(root({ sessionId: "bc-tab-2", targetId: "target-2", browserRigSessionId: "alpha" }))
     expect(registry.tabTargets.get(7)?.targetInfo.targetId).toBe("target-1")
     expect(registry.targetsByTargetId.has("target-2")).toBe(false)
     expect(registry.routingRootTarget(7)).toBe(staged)
@@ -80,7 +80,7 @@ describe("TargetRegistry root generations", () => {
     const change = registry.commitStagedRootTarget(7, "bc-tab-2")
 
     expect(change?.target.targetInfo.targetId).toBe("target-2")
-    expect(change?.target.browserControlSessionId).toBeUndefined()
+    expect(change?.target.browserRigSessionId).toBeUndefined()
   })
 
   it("preserves children attached to a staged generation when it commits", () => {

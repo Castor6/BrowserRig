@@ -7,7 +7,7 @@ import { extensionVersion, isChromeExtensionVersion, makeExtensionArchive } from
 
 describe("Chrome Web Store extension package", () => {
   it("is deterministic and rooted at the extension manifest", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-extension-package-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-extension-package-"))
     try {
       await fs.mkdir(path.join(directory, "icons"))
       await fs.writeFile(path.join(directory, "manifest.json"), JSON.stringify({ manifest_version: 3, version: "1.2.3.4" }))
@@ -40,7 +40,7 @@ describe("Chrome Web Store extension package", () => {
   })
 
   it("rejects source maps", async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-extension-package-"))
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-extension-package-"))
     try {
       await fs.writeFile(path.join(directory, "background.js.map"), "{}")
       await expect(makeExtensionArchive(directory)).rejects.toThrow("must not contain source maps")

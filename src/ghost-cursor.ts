@@ -26,17 +26,17 @@ type GhostCursorBrowserApi = {
   readonly isVisible: () => boolean
 }
 
-export const ghostCursorElementId = "__browser_control_ghost_cursor__"
+export const ghostCursorElementId = "__browserrig_ghost_cursor__"
 
 export const ghostCursorClientSource = `(() => {
   if (window !== window.top) {
     return;
   }
-  if (globalThis.__browserControlGhostCursor?.version === 3) {
+  if (globalThis.__browserRigGhostCursor?.version === 3) {
     return;
   }
   const cursorId = "${ghostCursorElementId}";
-  const positionStorageKey = "__browser_control_ghost_cursor_position__";
+  const positionStorageKey = "__browserrig_ghost_cursor_position__";
   const defaults = { color: "#7c3aed", size: 22, zIndex: 2147483646 };
   const spring = { stiffness: 220, damping: 24, mass: 1 };
   const svgNamespace = "http://www.w3.org/2000/svg";
@@ -272,7 +272,7 @@ export const ghostCursorClientSource = `(() => {
     }
     scheduleIdleFade();
   };
-  globalThis.__browserControlGhostCursor = { version: 3, show, hide, restore, applyMouseEvent, isVisible: () => state.mode !== "disabled" && Boolean(state.element) };
+  globalThis.__browserRigGhostCursor = { version: 3, show, hide, restore, applyMouseEvent, isVisible: () => state.mode !== "disabled" && Boolean(state.element) };
   try {
     const savedPosition = JSON.parse(window.sessionStorage.getItem(positionStorageKey) || "null");
     if (typeof savedPosition?.x === "number" && typeof savedPosition?.y === "number") {
@@ -311,11 +311,11 @@ export function inputDispatchMouseEventToGhostCursorAction(params: JsonObject | 
 }
 
 export function ghostCursorMouseActionExpression(action: GhostCursorMouseAction): string {
-  return `globalThis.__browserControlGhostCursor?.applyMouseEvent(${JSON.stringify(action)})`
+  return `globalThis.__browserRigGhostCursor?.applyMouseEvent(${JSON.stringify(action)})`
 }
 
 export function ghostCursorRestoreExpression(position: { readonly x: number; readonly y: number }): string {
-  return `globalThis.__browserControlGhostCursor?.restore(${JSON.stringify(position)})`
+  return `globalThis.__browserRigGhostCursor?.restore(${JSON.stringify(position)})`
 }
 
 export async function showGhostCursor(options: { readonly page: Page; readonly cursorOptions?: GhostCursorClientOptions }): Promise<void> {
@@ -323,7 +323,7 @@ export async function showGhostCursor(options: { readonly page: Page; readonly c
   const payload: GhostCursorEvaluatePayload = options.cursorOptions ? { cursorOptions: options.cursorOptions } : {}
   await options.page.evaluate(
     (payload: GhostCursorEvaluatePayload) => {
-      const api = (globalThis as { __browserControlGhostCursor?: GhostCursorBrowserApi }).__browserControlGhostCursor
+      const api = (globalThis as { __browserRigGhostCursor?: GhostCursorBrowserApi }).__browserRigGhostCursor
       api?.show(payload.cursorOptions)
     },
     payload,
@@ -332,14 +332,14 @@ export async function showGhostCursor(options: { readonly page: Page; readonly c
 
 export async function hideGhostCursor(options: { readonly page: Page }): Promise<void> {
   await options.page.evaluate(() => {
-    const api = (globalThis as { __browserControlGhostCursor?: GhostCursorBrowserApi }).__browserControlGhostCursor
+    const api = (globalThis as { __browserRigGhostCursor?: GhostCursorBrowserApi }).__browserRigGhostCursor
     api?.hide()
   })
 }
 
 async function ensureGhostCursorInjected(page: Page): Promise<void> {
   const hasGhostCursor = await page.evaluate(() => {
-    return Boolean((globalThis as { __browserControlGhostCursor?: unknown }).__browserControlGhostCursor)
+    return Boolean((globalThis as { __browserRigGhostCursor?: unknown }).__browserRigGhostCursor)
   })
   if (hasGhostCursor) {
     return

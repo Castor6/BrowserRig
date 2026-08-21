@@ -39,7 +39,7 @@ export class SecretCollector {
       for (const source of copy.sources) {
         this.refsBySource.set(source, copy.ref)
       }
-      const number = /^BC_SECRET_(\d+)$/.exec(copy.ref)?.[1]
+      const number = /^BROWSERRIG_SECRET_(\d+)$/.exec(copy.ref)?.[1]
       if (number) this.nextRef = Math.max(this.nextRef, Number(number) + 1)
     }
   }
@@ -254,7 +254,7 @@ export class SecretCollector {
       this.addSource(valueRef, source)
       return `\${${valueRef}}`
     }
-    const ref = `BC_SECRET_${this.nextRef++}`
+    const ref = `BROWSERRIG_SECRET_${this.nextRef++}`
     const expiresAt = jwtExpiration(value)
     this.slotsByRef.set(ref, { ref, value, sources: [source], ...(expiresAt ? { expiresAt } : {}) })
     this.refsByValue.set(value, ref)
@@ -273,7 +273,7 @@ export class SecretCollector {
 }
 
 function restoreReferencePlaceholders(value: string): string {
-  return value.replace(/(?:%24|\$)%7B(BC_SECRET_\d+)%7D/gi, (_match, ref: string) => `\${${ref}}`)
+  return value.replace(/(?:%24|\$)%7B(BROWSERRIG_SECRET_\d+)%7D/gi, (_match, ref: string) => `\${${ref}}`)
 }
 
 function protectRelativeUrl(
@@ -346,7 +346,7 @@ function redactSecretValue(value: unknown): unknown {
 
 function replaceOutsideReferences(text: string, value: string, replacement: string): string {
   if (!value) return text
-  const referencePattern = /\$\{BC_SECRET_\d+\}/g
+  const referencePattern = /\$\{BROWSERRIG_SECRET_\d+\}/g
   let output = ""
   let offset = 0
   for (const match of text.matchAll(referencePattern)) {

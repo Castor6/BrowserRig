@@ -8,7 +8,7 @@ import type { JsonObject } from "./protocol.ts"
 import { getObject, parseTargetSelection } from "./relay-helpers.ts"
 import * as RelayClient from "./relay-client.ts"
 import * as RelayLifecycle from "./relay-lifecycle.ts"
-import { browserControlVersion } from "./version.ts"
+import { browserRigVersion } from "./version.ts"
 
 const packageRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 type CurrentSession = { id: string; established: boolean }
@@ -32,6 +32,7 @@ type ExecuteArguments = {
 
 type AdoptArguments = {
   readonly session?: string | undefined
+  readonly active?: true | undefined
   readonly targetUrl?: string | undefined
   readonly targetIndex?: number | undefined
 }
@@ -42,10 +43,10 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
   return [
     {
       name: "execute",
-      description: "Execute trusted Playwright JavaScript against the Browser Control session. The result includes console logs, warnings, a bounded execution-context diagnostic when relevant, and an aftermath summary (URL movement, navigations, error counts, handoffs).",
+      description: "Execute trusted Playwright JavaScript against the BrowserRig session. The result includes console logs, warnings, a bounded execution-context diagnostic when relevant, and an aftermath summary (URL movement, navigations, error counts, handoffs).",
       inputSchema: objectSchema({
         code: { type: "string", description: "JavaScript code to execute. It receives browser, context, page, state, modules, fillInput, fillInputs, snapshot(options?) for a compact semantic outline or explicit diff against the previous snapshot, ref(id) for the latest snapshot's locator, screenshotWithLabels, ariaSnapshot(target?, { timeout }), ghostCursor (show/hide), and handoff(message, { timeoutMs, start? })." },
-        session: { type: "string", description: "Optional existing Browser Control session id. Explicit ids must already exist; omit this field to use the MCP server's current session, which is created when needed." },
+        session: { type: "string", description: "Optional existing BrowserRig session id. Explicit ids must already exist; omit this field to use the MCP server's current session, which is created when needed." },
         targetUrl: { type: "string", description: "Optional URL substring selecting an existing attached page. This does not navigate or open a URL; use page.goto() for that." },
         targetIndex: { type: "integer", minimum: 0, description: "Optional zero-based attached page index selector." },
       }, ["code"]),
@@ -92,7 +93,7 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
     },
     {
       name: "session_new",
-      description: "Create a Browser Control session and make it current for this MCP server.",
+      description: "Create a BrowserRig session and make it current for this MCP server.",
       inputSchema: objectSchema({
         id: { type: "string", description: "Optional lowercase session id." },
         readOnly: { type: "boolean", description: "Create a read-only session: the relay rejects input-dispatching CDP so scripts can inspect but not click or type." },
@@ -111,7 +112,7 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
     },
     {
       name: "session_list",
-      description: "List Browser Control sessions.",
+      description: "List BrowserRig sessions.",
       inputSchema: emptyInputSchema,
       readOnly: true,
       destructive: false,
@@ -120,7 +121,7 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
     },
     {
       name: "session_current",
-      description: "Return this MCP server's current Browser Control session id.",
+      description: "Return this MCP server's current BrowserRig session id.",
       inputSchema: emptyInputSchema,
       readOnly: true,
       destructive: false,
@@ -129,9 +130,9 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
     },
     {
       name: "session_use",
-      description: "Set this MCP server's current Browser Control session id.",
+      description: "Set this MCP server's current BrowserRig session id.",
       inputSchema: objectSchema({
-        id: { type: "string", description: "Existing Browser Control session id." },
+        id: { type: "string", description: "Existing BrowserRig session id." },
       }, ["id"]),
       readOnly: false,
       destructive: false,
@@ -146,7 +147,7 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
     },
     {
       name: "session_reset",
-      description: "Reset a Browser Control session's state and page.",
+      description: "Reset a BrowserRig session's state and page.",
       inputSchema: objectSchema({
         id: { type: "string", description: "Optional session id. Defaults to this MCP server's current session." },
       }),
@@ -163,7 +164,7 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
     },
     {
       name: "session_delete",
-      description: "Delete a Browser Control session.",
+      description: "Delete a BrowserRig session.",
       inputSchema: objectSchema({
         id: { type: "string", description: "Optional session id. Defaults to this MCP server's current session." },
       }),
@@ -182,9 +183,10 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
     },
     {
       name: "session_adopt",
-      description: "Make an attached tab the Browser Control session's default page for subsequent bare execute calls.",
+      description: "Make an attached tab the BrowserRig session's default page for subsequent bare execute calls.",
       inputSchema: objectSchema({
-        session: { type: "string", description: "Optional existing Browser Control session id. Explicit ids must already exist; omit this field to use the MCP server's current session, which is created when needed." },
+        session: { type: "string", description: "Optional existing BrowserRig session id. Explicit ids must already exist; omit this field to use the MCP server's current session, which is created when needed." },
+        active: { type: "boolean", description: "Attach and adopt the active tab in the last-focused browser window without a toolbar click." },
         targetUrl: { type: "string", description: "Adopt an existing attached page whose URL contains this text. This does not navigate or open a URL." },
         targetIndex: { type: "integer", minimum: 0, description: "Adopt the attached page at this zero-based target index." },
       }),
@@ -192,15 +194,19 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
       destructive: false,
       idempotent: false,
       handle: (input) => Effect.gen(function* () {
-        const args = yield* Effect.try(() => parseAdoptArguments(input))
+        const args = yield* Effect.try(() => parseMcpAdoptArguments(input))
         const sessionId = args.session ?? currentSession.id
         const result = yield* relay.sessionAdopt({
           sessionId,
           createIfMissing: !args.session,
-          targetSelection: {
-            ...(args.targetUrl ? { urlIncludes: args.targetUrl } : {}),
-            ...(args.targetIndex !== undefined ? { index: args.targetIndex } : {}),
-          },
+          ...(args.active
+            ? { active: true }
+            : {
+                targetSelection: {
+                  ...(args.targetUrl ? { urlIncludes: args.targetUrl } : {}),
+                  ...(args.targetIndex !== undefined ? { index: args.targetIndex } : {}),
+                },
+              }),
         })
         currentSession.id = sessionId
         currentSession.established = true
@@ -209,7 +215,7 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
     },
     {
       name: "network_start",
-      description: "Start session-scoped network capture. Browser Control records normalized Playwright exchanges; HAR is only the optional export format. Bodies are embedded by default with per-body and total memory limits.",
+      description: "Start session-scoped network capture. BrowserRig records normalized Playwright exchanges; HAR is only the optional export format. Bodies are embedded by default with per-body and total memory limits.",
       inputSchema: objectSchema({
         session: { type: "string", description: "Optional existing session id. Omit to use or create this MCP server's current session." },
         urlFilter: { type: "string", description: "Capture only request URLs containing this text." },
@@ -274,7 +280,7 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
       description: "Stop network capture. Optionally write a credential-redacted HAR and store lossless credential values in a reusable secret profile. At least one of outputPath or secrets is required.",
       inputSchema: objectSchema({
         session: { type: "string", description: "Optional session id. Defaults to this MCP server's current session." },
-        outputPath: { type: "string", description: "Optional artifact path, resolved against the MCP process working directory. The HAR contains stable ${BC_SECRET_N} references, not captured values." },
+        outputPath: { type: "string", description: "Optional artifact path, resolved against the MCP process working directory. The HAR contains stable ${BROWSERRIG_SECRET_N} references, not captured values." },
         secrets: { type: "string", description: "Optional reusable profile name for captured credential values." },
       }),
       readOnly: false,
@@ -314,7 +320,7 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
     },
     {
       name: "secrets_refresh",
-      description: "Reload a session page, observe fresh credentials, and update a secret profile while preserving stable BC_SECRET_N references.",
+      description: "Reload a session page, observe fresh credentials, and update a secret profile while preserving stable BROWSERRIG_SECRET_N references.",
       inputSchema: objectSchema({
         name: { type: "string", description: "Existing secret profile name." },
         session: { type: "string", description: "Optional session id. Defaults to this MCP server's current session." },
@@ -338,7 +344,7 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
     },
     {
       name: "secrets_run",
-      description: "Run a local command with a captured profile injected as BC_SECRET_N environment variables. Known values are replaced with their references in stdout and stderr.",
+      description: "Run a local command with a captured profile injected as BROWSERRIG_SECRET_N environment variables. Known values are replaced with their references in stdout and stderr.",
       inputSchema: objectSchema({
         name: { type: "string", description: "Secret profile name." },
         command: { type: "string", description: "Executable path or command name." },
@@ -365,14 +371,14 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
     },
     {
       name: "skill",
-      description: "Return the Browser Control agent skill instructions.",
+      description: "Return the BrowserRig agent skill instructions.",
       inputSchema: emptyInputSchema,
       readOnly: true,
       destructive: false,
       idempotent: true,
       handle: () => Effect.tryPromise({
-        try: () => fs.readFile(path.join(packageRoot, "skills", "browser-control", "SKILL.md"), "utf8"),
-        catch: (cause) => new Error("read browser-control skill", { cause }),
+        try: () => fs.readFile(path.join(packageRoot, "skills", "browserrig", "SKILL.md"), "utf8"),
+        catch: (cause) => new Error("read browserrig skill", { cause }),
       }),
     },
   ]
@@ -388,7 +394,7 @@ const relayLayer = Layer.effectDiscard(
 const registerTools = Effect.gen(function* () {
   const server = yield* McpServer.McpServer
   const relay = yield* RelayClient.Service
-  const configuredSession = Option.getOrUndefined(yield* Config.option(Config.string("BROWSER_CONTROL_SESSION")))
+  const configuredSession = Option.getOrUndefined(yield* Config.option(Config.string("BROWSERRIG_SESSION")))
   const currentSession: CurrentSession = {
     id: configuredSession || `mcp-${crypto.randomUUID().slice(0, 8)}`,
     established: Boolean(configuredSession),
@@ -435,7 +441,7 @@ export const runMcpServer: Effect.Effect<never, Error> = Layer.launch(
     relayLayer,
     Layer.effectDiscard(registerTools),
   ).pipe(
-    Layer.provide(McpServer.layerStdio({ name: "browser-control", version: browserControlVersion })),
+    Layer.provide(McpServer.layerStdio({ name: "browserrig", version: browserRigVersion })),
     Layer.provide(NodeStdio.layer),
     Layer.provide(RelayClient.layerFetch),
   ),
@@ -464,15 +470,18 @@ function parseExecuteArguments(input: unknown): ExecuteArguments {
   }
 }
 
-function parseAdoptArguments(input: unknown): AdoptArguments {
+export function parseMcpAdoptArguments(input: unknown): AdoptArguments {
   const object = requireObject(input)
   const session = optionalStringField(object, "session")
+  const active = optionalBooleanField(object, "active") === true
   const targetSelection = parseMcpTargetSelection(object)
-  if (!targetSelection.urlIncludes && targetSelection.index === undefined) {
-    throw new Error("session_adopt requires targetUrl or targetIndex")
+  const hasTargetSelection = Boolean(targetSelection.urlIncludes) || targetSelection.index !== undefined
+  if (active === hasTargetSelection) {
+    throw new Error("session_adopt requires exactly one of active, targetUrl, or targetIndex")
   }
   return {
     ...(session ? { session } : {}),
+    ...(active ? { active: true } : {}),
     ...(targetSelection.urlIncludes ? { targetUrl: targetSelection.urlIncludes } : {}),
     ...(targetSelection.index !== undefined ? { targetIndex: targetSelection.index } : {}),
   }

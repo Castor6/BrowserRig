@@ -11,22 +11,22 @@ import {
   validateHostHeader,
   validateWebSocketOrigin,
 } from "../src/relay-helpers.ts"
-import type { BrowserControlSession } from "../src/relay-types.ts"
+import type { BrowserRigSession } from "../src/relay-types.ts"
 import type { TargetInfo } from "../src/protocol.ts"
 
 describe("validateHostHeader", () => {
-  const base = { host: "127.0.0.1", port: 19989 }
+  const base = { host: "127.0.0.1", port: 19990 }
 
   it("accepts local hosts with the right port", () => {
-    expect(validateHostHeader({ hostHeader: "127.0.0.1:19989", ...base })).toBeUndefined()
-    expect(validateHostHeader({ hostHeader: "localhost:19989", ...base })).toBeUndefined()
-    expect(validateHostHeader({ hostHeader: "[::1]:19989", ...base })).toBeUndefined()
+    expect(validateHostHeader({ hostHeader: "127.0.0.1:19990", ...base })).toBeUndefined()
+    expect(validateHostHeader({ hostHeader: "localhost:19990", ...base })).toBeUndefined()
+    expect(validateHostHeader({ hostHeader: "[::1]:19990", ...base })).toBeUndefined()
     expect(validateHostHeader({ hostHeader: "localhost", ...base })).toBeUndefined()
   })
 
   it("rejects DNS-rebinding style hosts", () => {
-    expect(validateHostHeader({ hostHeader: "evil.example.com:19989", ...base })).toBeDefined()
-    expect(validateHostHeader({ hostHeader: "127.0.0.1.evil.example:19989", ...base })).toBeDefined()
+    expect(validateHostHeader({ hostHeader: "evil.example.com:19990", ...base })).toBeDefined()
+    expect(validateHostHeader({ hostHeader: "127.0.0.1.evil.example:19990", ...base })).toBeDefined()
   })
 
   it("rejects wrong ports and malformed headers", () => {
@@ -61,8 +61,8 @@ describe("validateWebSocketOrigin", () => {
   })
 
   it("accepts the explicitly derived bundled unpacked extension origin", () => {
-    const unpackedOrigin = chromeExtensionOriginForPath("/browser-control/extension/dist")
-    expect(unpackedOrigin).toBe("chrome-extension://mdipbeojbaeielgdffnemmkcgmddbgip")
+    const unpackedOrigin = chromeExtensionOriginForPath("/browserrig/extension/dist")
+    expect(unpackedOrigin).toBe("chrome-extension://miijffkcakggnggaaljnpkjdogoohkep")
     expect(validateWebSocketOrigin({
       origin: unpackedOrigin,
       requireChromeExtension: true,
@@ -119,7 +119,7 @@ describe("parseTargetSelection", () => {
 
 describe("generateSessionId", () => {
   it("generates readable unique ids", () => {
-    const existing = new Map<string, BrowserControlSession>()
+    const existing = new Map<string, BrowserRigSession>()
     const id = generateSessionId(existing)
     expect(id).toMatch(/^[a-z]+-[a-z]+-\d{3}$/)
   })

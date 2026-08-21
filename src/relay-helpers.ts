@@ -5,11 +5,11 @@ import { WebSocket, WebSocketServer } from "ws"
 import type { ExecuteTargetSelection } from "./execute.ts"
 import type { CdpEvent, CdpResponse, JsonObject, TargetInfo } from "./protocol.ts"
 import { parseJsonObject } from "./protocol.ts"
-import type { BrowserControlSession } from "./relay-types.ts"
+import type { BrowserRigSession } from "./relay-types.ts"
 import { RelayErrorCode } from "./relay-schema.ts"
 
 export const defaultHost = "127.0.0.1"
-export const defaultPort = 19989
+export const defaultPort = 19990
 export const chromeWebStoreExtensionOrigin = "chrome-extension://gmjpoplfomnnjipeiojccjbpjlodkjhn"
 
 export function chromeExtensionOriginForPath(extensionPath: string): string {
@@ -358,7 +358,7 @@ export function parseTargetSelection(value: JsonObject[string] | undefined): Exe
   }
 }
 
-export function generateSessionId(existing: ReadonlyMap<string, BrowserControlSession>): string {
+export function generateSessionId(existing: ReadonlyMap<string, BrowserRigSession>): string {
   const adjectives = ["amber", "brisk", "calm", "clever", "cosmic", "gentle", "lucky", "quiet", "rapid", "tidy"]
   const nouns = ["badger", "comet", "falcon", "otter", "panda", "raven", "sparrow", "tiger", "walrus", "wombat"]
   for (let attempt = 0; attempt < 100; attempt++) {

@@ -7,7 +7,7 @@ import { terminateChildProcess } from "./child-process.ts"
 import { redactKnownValues, type CredentialSlot } from "./network-redaction.ts"
 
 const StoredCredentialSlot = Schema.Struct({
-  ref: Schema.String.check(Schema.isPattern(/^BC_SECRET_[1-9][0-9]*$/)),
+  ref: Schema.String.check(Schema.isPattern(/^BROWSERRIG_SECRET_[1-9][0-9]*$/)),
   value: Schema.String,
   sources: Schema.Array(Schema.String),
   expiresAt: Schema.optionalKey(Schema.String),
@@ -61,7 +61,7 @@ export class AuthProfileError extends Schema.TaggedErrorClass<AuthProfileError>(
   },
 ) {}
 
-export const defaultBaseDir = (): string => path.join(os.homedir(), ".browser-control", "secrets")
+export const defaultBaseDir = (): string => path.join(os.homedir(), ".browserrig", "secrets")
 const writeLock = Semaphore.makeUnsafe(1)
 const profileLockTimeoutMs = 30_000
 const staleProfileLockMs = 60_000
@@ -380,7 +380,7 @@ function runChild(options: {
 
 function childEnvironment(profile: Readonly<Record<string, string>>): NodeJS.ProcessEnv {
   const inherited = Object.fromEntries(
-    Object.entries(process.env).filter(([name]) => !/^BC_SECRET_[1-9][0-9]*$/.test(name)),
+    Object.entries(process.env).filter(([name]) => !/^BROWSERRIG_SECRET_[1-9][0-9]*$/.test(name)),
   )
   return { ...inherited, ...profile }
 }

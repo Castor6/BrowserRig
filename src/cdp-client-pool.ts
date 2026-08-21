@@ -5,7 +5,7 @@ import type { ChildTarget, ConnectedTarget } from "./relay-types.ts"
 type CdpClientState = {
   readonly aliases: Map<string, ClientCdpSessionAlias>
   readonly announcements: ClientTargetAnnouncements
-  readonly browserControlSessionId?: string
+  readonly browserRigSessionId?: string
   autoAttachParams?: JsonObject
 }
 
@@ -14,12 +14,12 @@ export class CdpClientPool<Client extends object> implements Iterable<Client> {
   private nextAliasId = 1
   private connectionGeneration = 0
 
-  register(client: Client, browserControlSessionId?: string): void {
+  register(client: Client, browserRigSessionId?: string): void {
     if (this.states.has(client)) throw new Error("CDP client is already registered")
     this.states.set(client, {
       aliases: new Map(),
       announcements: createClientTargetAnnouncements(),
-      ...(browserControlSessionId ? { browserControlSessionId } : {}),
+      ...(browserRigSessionId ? { browserRigSessionId } : {}),
     })
     this.connectionGeneration += 1
   }
@@ -38,7 +38,7 @@ export class CdpClientPool<Client extends object> implements Iterable<Client> {
   }
 
   sessionId(client: Client): string | undefined {
-    return this.states.get(client)?.browserControlSessionId
+    return this.states.get(client)?.browserRigSessionId
   }
 
   announcements(client: Client): ClientTargetAnnouncements {

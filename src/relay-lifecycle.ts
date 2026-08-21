@@ -4,7 +4,7 @@ import path from "node:path"
 import process from "node:process"
 import * as RelayClient from "./relay-client.ts"
 import type { ExtensionStatus, RelayVersion } from "./relay-schema.ts"
-import { browserControlBuildId } from "./version.ts"
+import { browserRigBuildId } from "./version.ts"
 
 export type RelayReadiness = {
   readonly version: RelayVersion
@@ -42,7 +42,7 @@ export class ExtensionProtocolIncompatible extends Schema.TaggedErrorClass<Exten
   },
 ) {}
 
-export function relayBuildProblem(version: RelayVersion, buildId = browserControlBuildId): string | undefined {
+export function relayBuildProblem(version: RelayVersion, buildId = browserRigBuildId): string | undefined {
   if (!version.buildId) {
     return `Running relay does not report a build id; restart it with the current CLI (${buildId}).`
   }
@@ -53,7 +53,7 @@ export function relayBuildProblem(version: RelayVersion, buildId = browserContro
 }
 
 export const ensureRelay = Effect.fn("RelayLifecycle.ensureRelay")(function* (options: EnsureRelayOptions) {
-  const buildId = options.buildId ?? browserControlBuildId
+  const buildId = options.buildId ?? browserRigBuildId
   const probe = options.relay.version
   const initial = yield* Effect.result(probe)
   if (initial._tag === "Success") {
@@ -74,7 +74,7 @@ export const ensureRelay = Effect.fn("RelayLifecycle.ensureRelay")(function* (op
     }),
     Effect.mapError((error) => isRelayStartingOrUnreachable(error)
       ? new RelayStartFailed({
-        message: `Browser Control relay did not start at ${options.relay.endpoint}`,
+        message: `BrowserRig relay did not start at ${options.relay.endpoint}`,
         endpoint: options.relay.endpoint,
         cause: error,
       })
@@ -96,14 +96,14 @@ export const ensureExtensionConnected = Effect.fn("RelayLifecycle.ensureExtensio
   > => {
     if (status.protocolCompatible === false) {
       return Effect.fail(new ExtensionProtocolIncompatible({
-        message: `Browser Control extension protocol ${status.protocolVersion ?? "unknown"} is incompatible with this relay.`,
+        message: `BrowserRig extension protocol ${status.protocolVersion ?? "unknown"} is incompatible with this relay.`,
         protocolVersion: status.protocolVersion ?? null,
       }))
     }
     return status.connected
       ? Effect.succeed(status)
       : Effect.fail(new ExtensionDisconnected({
-        message: "Browser Control extension is not connected. Load extension/dist in Chromium; it reconnects automatically when the relay starts.",
+        message: "BrowserRig extension is not connected. Load extension/dist in Chromium; it reconnects automatically when the relay starts.",
       }))
   }))
   if (!options.waitForReconnect) {
@@ -143,17 +143,17 @@ export function startManagedRelay(
   return Effect.try({
     try: () => {
       if (!entrypoint) {
-        throw new Error("Cannot locate the browser-control CLI entrypoint")
+        throw new Error("Cannot locate the browserrig CLI entrypoint")
       }
       const launch = managedRelayLaunch(entrypoint, executable, execArgv)
       const child = spawn(launch.executable, launch.args, {
         detached: true,
         stdio: "ignore",
-        env: { ...process.env, BROWSER_CONTROL_MANAGED_RELAY: "1" },
+        env: { ...process.env, BROWSERRIG_MANAGED_RELAY: "1" },
       })
       child.unref()
     },
-    catch: (cause) => cause instanceof Error ? cause : new Error("Failed to start Browser Control relay", { cause }),
+    catch: (cause) => cause instanceof Error ? cause : new Error("Failed to start BrowserRig relay", { cause }),
   })
 }
 
@@ -170,13 +170,13 @@ export function managedRelayLaunch(
 
 export function managedRelayEntrypoint(entrypoint: string): string {
   const name = path.basename(entrypoint)
-  if (name === "browser-control-mcp") {
-    return path.join(path.dirname(entrypoint), "browser-control")
+  if (name === "browserrig-mcp") {
+    return path.join(path.dirname(entrypoint), "browserrig")
   }
-  if (name === "mcp.js" || name === "index.js" || name === "browser-control-client.js") {
+  if (name === "mcp.js" || name === "index.js" || name === "browserrig-client.js") {
     return path.join(path.dirname(entrypoint), "cli.js")
   }
-  if (name === "mcp-main.ts" || name === "index.ts" || name === "browser-control-client.ts") {
+  if (name === "mcp-main.ts" || name === "index.ts" || name === "browserrig-client.ts") {
     return path.join(path.dirname(entrypoint), "cli.ts")
   }
   return entrypoint

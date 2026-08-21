@@ -24,7 +24,7 @@ const Catalog = Schema.Struct({
 })
 
 export function defaultSessionCatalogPath(port: number, home = os.homedir()): string {
-  return path.join(home, ".browser-control", "relays", String(port), "sessions.json")
+  return path.join(home, ".browserrig", "relays", String(port), "sessions.json")
 }
 
 export class SessionCatalog {
@@ -36,7 +36,7 @@ export class SessionCatalog {
       text = await fs.readFile(this.filePath, "utf8")
     } catch (error) {
       if (isNodeError(error) && error.code === "ENOENT") return []
-      throw new Error(`Could not read Browser Control session catalog at ${this.filePath}`, { cause: error })
+      throw new Error(`Could not read BrowserRig session catalog at ${this.filePath}`, { cause: error })
     }
     try {
       const sessions = Schema.decodeUnknownSync(Catalog)(JSON.parse(text)).sessions
@@ -45,7 +45,7 @@ export class SessionCatalog {
       return sessions
     } catch (error) {
       const detail = error instanceof Error && error.message ? `: ${error.message}` : ""
-      throw new Error(`Could not decode Browser Control session catalog at ${this.filePath}${detail}`, { cause: error })
+      throw new Error(`Could not decode BrowserRig session catalog at ${this.filePath}${detail}`, { cause: error })
     }
   }
 
@@ -81,7 +81,7 @@ export class SessionCatalog {
         await temporaryFile?.close()
         await fs.rm(temporaryPath, { force: true })
       } catch {}
-      throw new Error(`Could not write Browser Control session catalog at ${this.filePath}`, { cause: error })
+      throw new Error(`Could not write BrowserRig session catalog at ${this.filePath}`, { cause: error })
     }
   }
 }

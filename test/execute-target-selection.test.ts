@@ -102,7 +102,7 @@ describe("target selection", () => {
     registry.addRootTarget({
       tabId: 1,
       sessionId: "bc-tab-1",
-      browserControlSessionId: "adopted-session",
+      browserRigSessionId: "adopted-session",
       owner: "relay",
       targetInfo: {
         targetId: "target-1",
@@ -117,7 +117,7 @@ describe("target selection", () => {
     const change = registry.releaseTargetOwnership("target-1", "adopted-session")
 
     expect(change.tabIds).toEqual([1])
-    expect(registry.listRootTargets()[0]?.browserControlSessionId).toBeUndefined()
+    expect(registry.listRootTargets()[0]?.browserRigSessionId).toBeUndefined()
     expect(registry.getRootTargetBySessionId("adopted-session")?.targetInfo.targetId).toBeUndefined()
   })
 
@@ -126,7 +126,7 @@ describe("target selection", () => {
     registry.addRootTarget({
       tabId: 1,
       sessionId: "bc-tab-1",
-      browserControlSessionId: "relay-session",
+      browserRigSessionId: "relay-session",
       owner: "relay",
       targetInfo: {
         targetId: "relay-created-target",
@@ -140,7 +140,7 @@ describe("target selection", () => {
 
     registry.releaseTargetOwnership("not-the-adopted-target", "relay-session")
 
-    expect(registry.listRootTargets()[0]?.browserControlSessionId).toBe("relay-session")
+    expect(registry.listRootTargets()[0]?.browserRigSessionId).toBe("relay-session")
     expect(registry.getRootTargetBySessionId("relay-session")?.targetInfo.targetId).toBe("relay-created-target")
   })
 
@@ -197,6 +197,6 @@ describe("target selection", () => {
 
     expect(registry.rollbackTargetOwnership(reservation)).toEqual({ targetIds: [], tabIds: [] })
     expect(registry.targetsByTargetId.get("user-target")?.sessionId).toBe("bc-tab-new")
-    expect(registry.targetsByTargetId.get("user-target")?.browserControlSessionId).toBeUndefined()
+    expect(registry.targetsByTargetId.get("user-target")?.browserRigSessionId).toBeUndefined()
   })
 })

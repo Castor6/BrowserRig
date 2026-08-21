@@ -18,19 +18,19 @@ const stateLabels = {
 } as const
 
 const stateTitles = {
-  attached: "Browser Control is attached",
-  running: "Browser Control is running a script",
-  waiting: "Browser Control is waiting for you",
+  attached: "BrowserRig is attached",
+  running: "BrowserRig is running a script",
+  waiting: "BrowserRig is waiting for you",
 } as const
 
 export function pageStatusView(status: PageStatus): PageStatusView {
   const label = status.state === "waiting"
-    ? `BC · ${stateLabels.waiting}`
+    ? `BR · ${stateLabels.waiting}`
     : status.readOnly
-    ? "BC · RO"
+    ? "BR · RO"
     : status.state === "running"
-    ? `BC · ${stateLabels.running}`
-    : "BC"
+    ? `BR · ${stateLabels.running}`
+    : "BR"
 
   const details = [
     stateTitles[status.state],

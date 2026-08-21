@@ -44,7 +44,7 @@ import {
  * the relay's own error message as the top-level message.
  */
 
-export const portConfig = Config.int("BROWSER_CONTROL_PORT").pipe(Config.withDefault(19989))
+export const portConfig = Config.int("BROWSERRIG_PORT").pipe(Config.withDefault(19990))
 
 export const endpointForPort = (port: number): string => `http://127.0.0.1:${port}`
 
@@ -122,7 +122,7 @@ export interface Interface {
   readonly recordingCancel: (target: RecordingTargetRequest) => Effect.Effect<RecordingCancelResponse, RelayClientError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("browser-control/RelayClient") {}
+export class Service extends Context.Service<Service, Interface>()("browserrig/RelayClient") {}
 
 const decodeErrorEnvelope = Schema.decodeUnknownOption(ErrorEnvelope)
 const decodeErrorMessage = Schema.decodeUnknownOption(Schema.Struct({ error: Schema.String }))
@@ -130,7 +130,7 @@ const decodeErrorMessage = Schema.decodeUnknownOption(Schema.Struct({ error: Sch
 export const make = Effect.fn("RelayClient.make")(function* (options?: { readonly endpoint?: string }) {
   const port = yield* portConfig.pipe(
     Effect.mapError((cause) => new RelayConfigInvalid({
-      message: `Invalid BROWSER_CONTROL_PORT configuration: ${cause.message}`,
+      message: `Invalid BROWSERRIG_PORT configuration: ${cause.message}`,
       cause,
     })),
   )
@@ -184,7 +184,7 @@ export const make = Effect.fn("RelayClient.make")(function* (options?: { readonl
 
   const transportError = (path: string) => (cause: unknown) =>
     new RelayUnreachable({
-      message: `Browser Control relay is not reachable at ${endpoint}. Relay-backed CLI commands start it automatically; use \`browser-control serve\` only for foreground debugging.`,
+      message: `BrowserRig relay is not reachable at ${endpoint}. Relay-backed CLI commands start it automatically; use \`browserrig serve\` only for foreground debugging.`,
       endpoint,
       path,
       cause,
@@ -252,7 +252,8 @@ export const make = Effect.fn("RelayClient.make")(function* (options?: { readonl
       postJson("/cli/session/adopt", {
         ...(request.sessionId ? { sessionId: request.sessionId } : {}),
         createIfMissing: request.createIfMissing,
-        targetSelection: request.targetSelection,
+        ...(request.targetSelection ? { targetSelection: request.targetSelection } : {}),
+        ...(request.active === true ? { active: true } : {}),
       }, SessionAdoptResponse),
     sessionDelete: (id) => postJson("/cli/session/delete", { id }, SessionDeleted),
     execute: (request) =>

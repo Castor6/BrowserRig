@@ -11,12 +11,12 @@ importers:
       '@effect/platform-node':
         specifier: 4.0.0-beta.97
         version: 4.0.0-beta.97(effect@4.0.0-beta.97)(ioredis@5.11.1)
+      '@effect/platform-node-shared':
+        specifier: 4.0.0-beta.97
+        version: 4.0.0-beta.97(effect@4.0.0-beta.97)
       acorn:
         specifier: ^8.17.0
         version: 8.17.0
-      effect:
-        specifier: 4.0.0-beta.97
-        version: 4.0.0-beta.97
       playwright-core:
         specifier: ^1.57.0
         version: 1.61.1
@@ -36,6 +36,9 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      effect:
+        specifier: 4.0.0-beta.97
+        version: 4.0.0-beta.97
       esbuild:
         specifier: ^0.27.2
         version: 0.27.7

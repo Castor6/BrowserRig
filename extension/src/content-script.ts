@@ -1,7 +1,7 @@
 import type { PageStatus } from "../../src/protocol.ts"
 import { pageStatusView } from "./page-status.ts"
 
-const hostId = "__browser_control_page_status__"
+const hostId = "__browserrig_page_status__"
 let currentStatus: PageStatus | undefined
 let observer: MutationObserver | undefined
 let completingHandoffId: string | undefined
@@ -103,8 +103,8 @@ function renderStatus(): void {
       :host([data-anchor="cursor"]) #status[data-tone="waiting"] {
         right: auto;
         bottom: auto;
-        left: var(--bc-prompt-left);
-        top: var(--bc-prompt-top);
+        left: var(--browserrig-prompt-left);
+        top: var(--browserrig-prompt-top);
         transform-origin: 18px 0;
       }
       #vignette {
@@ -197,7 +197,7 @@ function renderStatus(): void {
 }
 
 function positionWaitingStatus(host: HTMLElement, statusElement: HTMLElement): void {
-  const cursor = document.getElementById("__browser_control_ghost_cursor__")
+  const cursor = document.getElementById("__browserrig_ghost_cursor__")
   const x = Number(cursor?.dataset.targetX)
   const y = Number(cursor?.dataset.targetY)
   if (!cursor || !Number.isFinite(x) || !Number.isFinite(y)) {
@@ -210,8 +210,8 @@ function positionWaitingStatus(host: HTMLElement, statusElement: HTMLElement): v
   const left = Math.max(10, Math.min(x + 18, window.innerWidth - width - 10))
   const below = y + 28 + estimatedHeight <= window.innerHeight
   const top = below ? y + 28 : Math.max(10, y - estimatedHeight - 22)
-  host.style.setProperty("--bc-prompt-left", `${left}px`)
-  host.style.setProperty("--bc-prompt-top", `${top}px`)
+  host.style.setProperty("--browserrig-prompt-left", `${left}px`)
+  host.style.setProperty("--browserrig-prompt-top", `${top}px`)
   host.dataset.anchor = "cursor"
 }
 

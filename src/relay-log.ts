@@ -6,7 +6,7 @@ const maxLogBytes = 1_000_000
 const maxEntryCharacters = 64_000
 
 export function managedRelayLogPath(home = os.homedir()): string {
-  return path.join(home, ".browser-control", "relay.log")
+  return path.join(home, ".browserrig", "relay.log")
 }
 
 export function appendManagedRelayProcessLog(message: string, home = os.homedir()): void {

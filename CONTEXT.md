@@ -1,39 +1,46 @@
 ---
-title: Browser Control Context
-description: Domain language for the standalone browser-control project.
+title: BrowserRig Context
+description: Domain language for the standalone BrowserRig project.
 prompt: |
-  Create a planning folder for a standalone browser-control project. Capture
+  Create a planning folder for the standalone BrowserRig project. Capture
   the decisions from a design discussion where the product is a trusted driver
   for agents to control the user's already-running Chromium-family browser via
   a Chrome extension, loose attached-tab semantics, code-first execution,
   persistent sandboxes, stock Playwright for v1, and no built-in LLM agent.
 ---
 
-# Browser Control
+# BrowserRig
 
-Browser Control is a local browser driver for agents. It lets trusted agents
+BrowserRig is a local browser driver for agents. It lets trusted agents
 operate the user's visible Chromium-family browser through an installed
 extension and a local driver daemon.
 
 ## Language
 
+**Product Identity**:
+`BrowserRig` is the visible product and Store name; `browserrig` is the npm
+package, repository slug, CLI, and skill name; `browserrig-mcp` is the MCP
+executable. Environment variables use `BROWSERRIG_*`, local state lives under
+`~/.browserrig`, and the default loopback relay endpoint is `127.0.0.1:19990`.
+_Avoid_: Browser Control, browser-control, BC
+
 **Driver**:
-A deterministic browser-control layer that executes requests from an external
+A deterministic BrowserRig layer that executes requests from an external
 agent without planning or calling a model.
 _Avoid_: Agent, autonomous agent, LLM runner
 
 **Agent**:
-An external client that decides what browser work to perform and calls Browser
-Control to execute it.
+An external client that decides what browser work to perform and calls
+BrowserRig to execute it.
 _Avoid_: Driver
 
 **User Browser**:
-The user's already-running Chromium-family browser with the Browser Control
+The user's already-running Chromium-family browser with the BrowserRig
 extension installed.
 _Avoid_: Chrome-only, managed browser
 
 **Local Driver Daemon**:
-The persistent Node process that owns Playwright execution, Browser Control
+The persistent Node process that owns Playwright execution, BrowserRig
 sessions, target ownership, cross-process serialization, artifacts, and the
 transport to the browser extension. It is a deep module, not a pass-through
 message relay.
@@ -44,6 +51,29 @@ The compatibility version reported by the extension when it connects to the
 Local Driver Daemon. Store and npm release versions may differ while this
 protocol remains compatible.
 _Avoid_: Extension package version, relay build id
+
+**Browser-Wide Remote Debugging**:
+Chrome's browser-level debugging endpoint, enabled or approved separately from
+an extension. BrowserRig does not use it; this is the source of Chrome's
+blocking **Allow remote debugging?** approval flow discussed in product
+comparisons.
+_Avoid_: CDP, Extension Attachment
+
+**Extension Attachment**:
+A tab-scoped `chrome.debugger` connection initiated by the installed extension.
+It carries CDP commands without a browser-wide remote-debugging connection.
+Chrome may show a non-blocking debugging infobar while the connection is active.
+_Avoid_: CDP-free control, Browser-Wide Remote Debugging
+
+**Active-Tab Attach**:
+One extension-protocol command that captures the active tab id in the
+last-focused browser window and immediately requests Extension Attachment for
+that fixed id. Every initialization command remains bound to that same
+extension connection generation; a profile or extension replacement fails
+closed. The relay then verifies the target generation and performs the normal
+Adoption Transaction. It removes the toolbar-click prerequisite but is not an
+atomic Chrome/relay/Playwright transaction.
+_Avoid_: Toolbar Control, active-tab navigation, browser-wide attach
 
 **Attached Tab**:
 A browser tab whose debugger connection is active and therefore visible and
@@ -56,13 +86,13 @@ are shared; session-owned targets are visible only to their owning session.
 _Avoid_: Workspace, isolated browser context, globally shared target list
 
 **Target Ownership**:
-The exclusive Browser Control session assignment stored by the Target Registry
+The exclusive BrowserRig session assignment stored by the Target Registry
 for a root target. It governs CDP visibility, grouping, and page status.
 _Avoid_: Adopted-page pointer, current session
 
 **Root Target Generation**:
 One CDP target/session identity for a physical attached tab. Chrome may replace
-that identity while preserving the tab; Browser Control transfers committed
+that identity while preserving the tab; BrowserRig transfers committed
 ownership, handoffs, and the default-page pointer to the new generation only
 after its CDP setup succeeds.
 _Avoid_: New tab, navigation, detach
@@ -78,12 +108,26 @@ tab.
 _Avoid_: Close, delete, revoke session
 
 **Toolbar Control**:
-The browser extension action surface used to attach, detach, and display status
-for the active tab.
+The optional browser extension action surface used to manually attach, detach,
+and display status for a tab. Active-Tab Attach is the no-click default for the
+currently viewed tab.
 _Avoid_: Side panel, chat panel
 
+**Tab-Capture Grant**:
+Chrome's temporary `activeTab` authority created only when the user invokes the
+extension on a tab. Extension Attachment does not create this grant. Automatic
+recording may fall back to CDP when a no-click adopted tab lacks it; audio and
+explicit tab-capture recording require the user invocation.
+_Avoid_: Debugger permission, Extension Attachment, browser-wide approval
+
+**Store Origin Pin**:
+The exact `chrome-extension://<item-id>` origin accepted by a production Local
+Driver Daemon. The independent Store draft supplies this Item ID; development
+exceptions for unpacked extensions must never broaden the release allowlist.
+_Avoid_: Extension Protocol, arbitrary extension origin, publisher private key
+
 **Control Group**:
-The purple browser tab group named `control` that makes session-owned tabs,
+The purple browser tab group named `BrowserRig` that makes session-owned tabs,
 including adopted user tabs, visible in the browser tab strip.
 _Avoid_: Workspace, ownership boundary
 
@@ -133,7 +177,7 @@ than reading values directly.
 _Avoid_: HAR credentials, generated-source secrets
 
 **Stable Secret Reference**:
-An environment-variable name such as `BC_SECRET_1` that retains its identity
+An environment-variable name such as `BROWSERRIG_SECRET_1` that retains its identity
 when a Secret Profile is refreshed from the same request source.
 _Avoid_: Token value, hardcoded credential
 
@@ -156,13 +200,20 @@ _Avoid_: Secret Profile, encrypted response
 
 - A **Driver** serves one or more external **Agents**.
 - A **User Browser** contains zero or more **Attached Tabs**.
+- **Active-Tab Attach** creates an **Extension Attachment** without using
+  **Browser-Wide Remote Debugging**.
 - Unowned members of the **Attached-Tab Pool** are shared across sessions.
 - **Target Ownership** scopes a target to exactly one session.
 - A replacement **Root Target Generation** preserves the physical tab and its
   committed **Target Ownership**.
 - An **Adoption Transaction** changes **Target Ownership** and the session's
   default-page pointer together.
-- A **Toolbar Control** attaches or detaches the active tab.
+- A **Toolbar Control** manually attaches or detaches a tab when explicit pool
+  curation is useful.
+- A **Tab-Capture Grant** is separate from **Extension Attachment** and is needed
+  only for Chrome tab/audio capture, not ordinary page control.
+- A production **Local Driver Daemon** accepts its extension through one
+  independent **Store Origin Pin**.
 - A **Control Group** makes session-owned tabs visible to the user.
 - An **Agent** controls the browser by running code in an **Execute Sandbox**.
 - An **Execute Sandbox** owns **Persistent State**; the Target Registry owns
@@ -192,7 +243,7 @@ _Avoid_: Secret Profile, encrypted response
 ## Flagged Ambiguities
 
 - "Chrome" means **User Browser** unless browser-specific behavior is being
-  discussed. Browser Control should support Chromium-family browsers such as
+  discussed. BrowserRig should support Chromium-family browsers such as
   Brave, Chrome, Edge, Chromium, and Vivaldi.
 - "Sandbox" means **Execute Sandbox** for persistence and convenience; it is
   not a hard security boundary against untrusted code.

@@ -515,7 +515,7 @@ function finishCapture(
       yield* writeArtifact(options.outputPath, {
         log: {
           version: "1.2",
-          creator: { name: "Browser Control", version: "1" },
+          creator: { name: "BrowserRig", version: "1" },
           entries: (protectedEntries ?? []).map(toHarEntry),
         },
       })
@@ -710,7 +710,7 @@ function toHarEntry(entry: CapturedEntry): Record<string, unknown> {
     } : { status: 0, statusText: entry.failure ?? "No response", httpVersion: "", cookies: [], headers: [], content: { size: 0, mimeType: "application/octet-stream" }, redirectURL: "", headersSize: -1, bodySize: 0 },
     cache: {},
     timings: { send: 0, wait: entry.durationMs, receive: 0 },
-    _browserControl: {
+    _browserRig: {
       id: entry.id,
       resourceType: entry.request.resourceType,
       ...(entry.request.redirectedFrom ? { redirectedFrom: entry.request.redirectedFrom } : {}),

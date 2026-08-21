@@ -17,10 +17,10 @@ describe("AuthProfile", () => {
     const result = await Effect.runPromise(AuthProfile.write({
       name: "uber",
       baseDir,
-      slots: [{ ref: "BC_SECRET_1", value: "token-value", sources: ["request.header.authorization"] }],
+      slots: [{ ref: "BROWSERRIG_SECRET_1", value: "token-value", sources: ["request.header.authorization"] }],
     }))
 
-    expect(result).toMatchObject({ name: "uber", slotCount: 1, slots: [{ ref: "BC_SECRET_1", expired: false }] })
+    expect(result).toMatchObject({ name: "uber", slotCount: 1, slots: [{ ref: "BROWSERRIG_SECRET_1", expired: false }] })
     expect(JSON.stringify(result)).not.toContain("token-value")
     const stat = await fs.stat(path.join(baseDir, "uber.json"))
     expect(stat.mode & 0o777).toBe(0o600)
@@ -31,16 +31,16 @@ describe("AuthProfile", () => {
     await Effect.runPromise(AuthProfile.write({
       name: "uber",
       baseDir,
-      slots: [{ ref: "BC_SECRET_1", value: "token-value", sources: ["request.header.authorization"] }],
+      slots: [{ ref: "BROWSERRIG_SECRET_1", value: "token-value", sources: ["request.header.authorization"] }],
     }))
 
     const result = await Effect.runPromise(AuthProfile.run({
       name: "uber",
       baseDir,
       command: process.execPath,
-      args: ["-e", "process.stdout.write(process.env.BC_SECRET_1 || '')"],
+      args: ["-e", "process.stdout.write(process.env.BROWSERRIG_SECRET_1 || '')"],
     }))
-    expect(result).toMatchObject({ exitCode: 0, stdout: "${BC_SECRET_1}", stderr: "" })
+    expect(result).toMatchObject({ exitCode: 0, stdout: "${BROWSERRIG_SECRET_1}", stderr: "" })
   })
 
   it("does not leak a credential cut by the output budget", async () => {
@@ -48,7 +48,7 @@ describe("AuthProfile", () => {
     await Effect.runPromise(AuthProfile.write({
       name: "uber",
       baseDir,
-      slots: [{ ref: "BC_SECRET_1", value: "long-token-value", sources: ["request.header.authorization"] }],
+      slots: [{ ref: "BROWSERRIG_SECRET_1", value: "long-token-value", sources: ["request.header.authorization"] }],
     }))
 
     const result = await Effect.runPromise(AuthProfile.run({
@@ -56,7 +56,7 @@ describe("AuthProfile", () => {
       baseDir,
       maxOutputBytes: 8,
       command: process.execPath,
-      args: ["-e", "process.stdout.write(process.env.BC_SECRET_1 || '')"],
+      args: ["-e", "process.stdout.write(process.env.BROWSERRIG_SECRET_1 || '')"],
     }))
     expect(result.stdout).toBe("")
     expect(result.stdoutTruncated).toBe(true)
@@ -67,13 +67,13 @@ describe("AuthProfile", () => {
     await Effect.runPromise(AuthProfile.write({
       name: "uber",
       baseDir,
-      slots: [{ ref: "BC_SECRET_1", value: "old", sources: ["request.header.authorization"] }],
+      slots: [{ ref: "BROWSERRIG_SECRET_1", value: "old", sources: ["request.header.authorization"] }],
     }))
     const before = await Effect.runPromise(AuthProfile.read("uber", { baseDir }))
     await Effect.runPromise(AuthProfile.write({
       name: "uber",
       baseDir,
-      slots: [{ ref: "BC_SECRET_1", value: "new", sources: ["request.header.authorization"] }],
+      slots: [{ ref: "BROWSERRIG_SECRET_1", value: "new", sources: ["request.header.authorization"] }],
     }))
     const after = await Effect.runPromise(AuthProfile.read("uber", { baseDir }))
 
@@ -89,7 +89,7 @@ describe("AuthProfile", () => {
     await expect(Effect.runPromise(AuthProfile.write({
       name: "uber",
       baseDir,
-      slots: [{ ref: "BC_SECRET_1", value: "new", sources: ["request.header.authorization"] }],
+      slots: [{ ref: "BROWSERRIG_SECRET_1", value: "new", sources: ["request.header.authorization"] }],
     }))).rejects.toMatchObject({ _tag: "AuthProfile.Error", reason: "invalid-json" })
     await expect(fs.readFile(filePath, "utf8")).resolves.toBe("not-json")
   })
@@ -99,7 +99,7 @@ describe("AuthProfile", () => {
     await Effect.runPromise(AuthProfile.write({
       name: "uber",
       baseDir,
-      slots: [{ ref: "BC_SECRET_1", value: "token-value", sources: ["request.header.authorization"] }],
+      slots: [{ ref: "BROWSERRIG_SECRET_1", value: "token-value", sources: ["request.header.authorization"] }],
     }))
 
     const result = await Effect.runPromise(AuthProfile.run({
@@ -113,24 +113,24 @@ describe("AuthProfile", () => {
     expect(result.signal).toMatch(/SIGTERM|SIGKILL/)
   })
 
-  it("does not pass inherited Browser Control secret slots to the child", async () => {
+  it("does not pass inherited BrowserRig secret slots to the child", async () => {
     const baseDir = await temporaryDirectory()
     await Effect.runPromise(AuthProfile.write({
       name: "uber",
       baseDir,
-      slots: [{ ref: "BC_SECRET_1", value: "profile-token", sources: ["request.header.authorization"] }],
+      slots: [{ ref: "BROWSERRIG_SECRET_1", value: "profile-token", sources: ["request.header.authorization"] }],
     }))
-    process.env.BC_SECRET_999 = "inherited-token"
+    process.env.BROWSERRIG_SECRET_999 = "inherited-token"
     try {
       const result = await Effect.runPromise(AuthProfile.run({
         name: "uber",
         baseDir,
         command: process.execPath,
-        args: ["-e", "process.stdout.write(process.env.BC_SECRET_999 || '')"],
+        args: ["-e", "process.stdout.write(process.env.BROWSERRIG_SECRET_999 || '')"],
       }))
       expect(result.stdout).toBe("")
     } finally {
-      delete process.env.BC_SECRET_999
+      delete process.env.BROWSERRIG_SECRET_999
     }
   })
 
@@ -152,7 +152,7 @@ describe("AuthProfile", () => {
 })
 
 async function temporaryDirectory(): Promise<string> {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-auth-"))
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-auth-"))
   temporaryDirectories.push(directory)
   return directory
 }

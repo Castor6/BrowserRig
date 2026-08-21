@@ -12,7 +12,7 @@ afterEach(() => {
 
 describe("managed relay process log", () => {
   it("repairs permissions and bounds retained process-fault diagnostics", () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "browser-control-relay-log-"))
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "browserrig-relay-log-"))
     temporaryDirectories.push(home)
     const logPath = managedRelayLogPath(home)
     fs.mkdirSync(path.dirname(logPath), { recursive: true, mode: 0o755 })

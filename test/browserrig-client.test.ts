@@ -1,8 +1,8 @@
 import http from "node:http"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { Effect, Schema } from "effect"
-import * as BrowserControlClient from "../src/browser-control-client.ts"
-import { browserControlBuildId, browserControlVersion } from "../src/version.ts"
+import * as BrowserRigClient from "../src/browserrig-client.ts"
+import { browserRigBuildId, browserRigVersion } from "../src/version.ts"
 
 let server: http.Server
 let endpoint: string
@@ -22,7 +22,7 @@ beforeAll(async () => {
     const path = new URL(request.url ?? "/", "http://localhost").pathname
     response.setHeader("content-type", "application/json")
     if (path === "/version") {
-      response.end(JSON.stringify({ version: browserControlVersion, buildId: browserControlBuildId }))
+      response.end(JSON.stringify({ version: browserRigVersion, buildId: browserRigBuildId }))
       return
     }
     if (path === "/extension/status") {
@@ -59,7 +59,7 @@ afterAll(async () => {
 })
 
 const makeOrigin = Effect.gen(function* () {
-  const client = yield* BrowserControlClient.make({ endpoint })
+  const client = yield* BrowserRigClient.make({ endpoint })
   const liveSession = yield* client.ensureSession({ id: session.id })
   return yield* liveSession.authenticatedOrigin({
     origin: "https://studio.x.com",
@@ -67,10 +67,10 @@ const makeOrigin = Effect.gen(function* () {
   })
 })
 
-describe("BrowserControlClient", () => {
+describe("BrowserRigClient", () => {
   it("resets a named session", async () => {
     const result = await Effect.runPromise(Effect.gen(function* () {
-      const client = yield* BrowserControlClient.make({ endpoint })
+      const client = yield* BrowserRigClient.make({ endpoint })
       return yield* client.resetSession(session.id)
     }))
     expect(result.id).toBe(session.id)
@@ -103,7 +103,7 @@ describe("BrowserControlClient", () => {
       })
     }))
     expect(String(redacted)).not.toContain(token)
-    expect(BrowserControlClient.reveal(redacted)).toEqual({ accessToken: token })
+    expect(BrowserRigClient.reveal(redacted)).toEqual({ accessToken: token })
 
     authenticatedOutcome = { _tag: "Success", status: 200, value: { accessToken: token } }
     const error = await Effect.runPromise(Effect.gen(function* () {
@@ -129,6 +129,6 @@ describe("BrowserControlClient", () => {
         response: Schema.Unknown,
       })
     }).pipe(Effect.flip))
-    expect(error).toBeInstanceOf(BrowserControlClient.RequestOutcomeUnknown)
+    expect(error).toBeInstanceOf(BrowserRigClient.RequestOutcomeUnknown)
   })
 })

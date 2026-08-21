@@ -1,16 +1,23 @@
-name: Release
+name: Prepare release candidate
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      confirm_package:
+        description: Type BrowserRig to build release artifacts from main
+        required: true
+        type: string
 
 permissions:
-  contents: write
-  id-token: write
-  pull-requests: write
+  contents: read
+
+concurrency:
+  group: browserrig-release-candidate
+  cancel-in-progress: false
 
 jobs:
-  release:
+  package:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_package == 'BrowserRig' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -27,8 +34,12 @@ jobs:
       - run: npm install --global npm@latest
       - run: pnpm install --frozen-lockfile
       - run: pnpm run ci
-      - uses: changesets/action@v1
+      - run: pnpm package:npm
+      - uses: actions/upload-artifact@v7
         with:
-          publish: pnpm release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: browserrig-release-candidate-${{ github.sha }}
+          path: |
+            artifacts/browserrig-*.tgz
+            artifacts/browserrig-extension-*.zip
+          if-no-files-found: error
+          retention-days: 14

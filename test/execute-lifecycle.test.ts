@@ -1,8 +1,60 @@
+import type { Browser, BrowserContext, Page } from "playwright-core"
 import { describe, expect, it } from "vitest"
 import { Effect } from "effect"
-import { recoverSessionPage, runPlaywrightOperation, waitForPageContext } from "../src/execute.ts"
+import {
+  defaultPageClosedWarning,
+  ExecuteSandbox,
+  recoverSessionPage,
+  runPlaywrightOperation,
+  waitForPageContext,
+} from "../src/execute.ts"
+import { BrowserRigSessions } from "../src/session-manager.ts"
 
 describe("execute lifecycle", () => {
+  it("does not report fallback-page recovery after a detached tab is successfully re-adopted", async () => {
+    const targetId = "target-re-adopted"
+    const targetUrl = "https://example.test/re-adopted"
+    const browserFixture = makeAdoptedBrowserFixture({ targetId, targetUrl })
+    let sessions!: BrowserRigSessions
+    const sandbox = new ExecuteSandbox({
+      endpointUrl: "http://127.0.0.1:0",
+      sessionId: "alpha",
+      onDefaultTargetChange: (target) => sessions.updateTarget("alpha", target),
+    })
+    Object.assign(sandbox, { browser: browserFixture.browser })
+    sessions = new BrowserRigSessions(
+      "http://127.0.0.1:0",
+      () => sandbox,
+      { getUserAttachedPageUrls: () => [targetUrl] },
+    )
+    sessions.createNew("alpha")
+
+    await Effect.runPromise(sessions.adopt({
+      sessionId: "alpha",
+      createIfMissing: false,
+      targetId,
+      targetUrl,
+    }))
+    expect(sessions.markTargetDetached(targetId)).toEqual(["alpha"])
+    await Effect.runPromise(sessions.adopt({
+      sessionId: "alpha",
+      createIfMissing: false,
+      targetId,
+      targetUrl,
+    }))
+
+    const { result } = await Effect.runPromise(sessions.execute({
+      sessionId: "alpha",
+      createIfMissing: false,
+      code: "return page.url()",
+    }))
+
+    expect(result.value).toBe(targetUrl)
+    expect(result.warnings).not.toContain(defaultPageClosedWarning)
+    expect(result.warnings.some((warning) => warning.startsWith("Tip: an attached tab is open"))).toBe(false)
+    expect(browserFixture.newPageCalls()).toBe(0)
+  })
+
   it("bounds a Playwright operation that never settles", async () => {
     const error = await Effect.runPromise(runPlaywrightOperation({
       label: "Close test page",
@@ -131,3 +183,40 @@ describe("execute lifecycle", () => {
     expect(Date.now() - startedAt).toBeLessThan(100)
   })
 })
+
+function makeAdoptedBrowserFixture(options: {
+  readonly targetId: string
+  readonly targetUrl: string
+}): { readonly browser: Browser; readonly newPageCalls: () => number } {
+  let newPageCalls = 0
+  let context!: BrowserContext
+  let page!: Page
+  const mainFrame = { url: () => options.targetUrl }
+  page = {
+    context: () => context,
+    isClosed: () => false,
+    mainFrame: () => mainFrame,
+    off: () => page,
+    on: () => page,
+    once: () => page,
+    url: () => options.targetUrl,
+    waitForEvent: () => new Promise(() => {}),
+  } as unknown as Page
+  context = {
+    newCDPSession: async () => ({
+      detach: async () => {},
+      send: async () => ({ targetInfo: { targetId: options.targetId } }),
+    }),
+    newPage: async () => {
+      newPageCalls += 1
+      return page
+    },
+    on: () => context,
+    pages: () => [page],
+  } as unknown as BrowserContext
+  const browser = {
+    contexts: () => [context],
+    isConnected: () => true,
+  } as unknown as Browser
+  return { browser, newPageCalls: () => newPageCalls }
+}

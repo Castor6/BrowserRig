@@ -16,6 +16,11 @@ describe("protocol validation", () => {
       method: "debugger.sendCommand",
       params: { tabId: 7, method: "Runtime.evaluate" },
     }))).toMatchObject({ id: 1, method: "debugger.sendCommand" })
+    expect(parseExtensionCommand(JSON.stringify({
+      id: 2,
+      method: "tabs.attachActive",
+      params: {},
+    }))).toMatchObject({ id: 2, method: "tabs.attachActive" })
   })
 
   it("rejects unknown extension commands and invalid params", () => {

@@ -1,4 +1,4 @@
-export const reconnectAlarmName = "browser-control-reconnect"
+export const reconnectAlarmName = "browserrig-reconnect"
 const reconnectAlarmPeriodMinutes = 0.5
 const socketKeepAliveIntervalMs = 20_000
 

@@ -1,6 +1,6 @@
-# Browser Control
+# BrowserRig
 
-Browser Control is a local browser driver for trusted agents. It controls the
+BrowserRig is a local browser driver for trusted agents. It controls the
 user's existing Chromium-family browser through a small MV3 extension shim and a
 local Node relay.
 
@@ -9,19 +9,19 @@ local Node relay.
 - Keep `PLAN.md` updated when architecture, scope, install flow, or product
   preferences change.
 - Keep `CONTEXT.md` updated when domain language changes.
-- Keep `skills/browser-control/SKILL.md` updated when the agent-facing workflow,
+- Keep `skills/browserrig/SKILL.md` updated when the agent-facing workflow,
   commands, setup steps, or troubleshooting behavior changes.
 - Keep the installed OpenCode skill at
-  `~/.config/opencode/skills/browser-control/skill.md` synced with
-  `skills/browser-control/SKILL.md` after agent-facing workflow changes.
-- If a code change affects how agents should use Browser Control, update the
+  `~/.config/opencode/skills/browserrig/skill.md` synced with
+  `skills/browserrig/SKILL.md` after agent-facing workflow changes.
+- If a code change affects how agents should use BrowserRig, update the
   skill in the same change.
-- `browser-control skill` must print the current `skills/browser-control/SKILL.md`
+- `browserrig skill` must print the current `skills/browserrig/SKILL.md`
   text so another agent can fetch the installed workflow instructions.
 
 ## Architecture Preferences
 
-- Browser Control is a driver, not an LLM agent.
+- BrowserRig is a driver, not an LLM agent.
 - Use the user's already-running Chromium-family browser first.
 - Keep tabs in a loose attached-tab pool for v1.
 - Prefer a code-first `execute(code)` interface over many tiny action tools.
@@ -33,7 +33,7 @@ local Node relay.
   path. MCP uses the same detached relay lifecycle instead of owning an
   in-process relay, so an MCP restart cannot interrupt CLI handoffs. The first
   session is created atomically in the execute request.
-- Each Browser Control session owns one default page and persistent JavaScript
+- Each BrowserRig session owns one default page and persistent JavaScript
   `state`; do not default to arbitrary shared tabs for normal execute calls.
 - Use stock `playwright-core` for v1.
 - Use Effect v4 / `effect-smol` for Node-side code. Treat
@@ -64,11 +64,11 @@ local Node relay.
   fetch/node:http calls. Failures are tagged errors that keep the relay's own
   error message as the top-level message.
 - Human session-management commands keep an endpoint-scoped current id in
-  `~/.browser-control/session.json`; execute and adopt never use it implicitly.
+  `~/.browserrig/session.json`; execute and adopt never use it implicitly.
   Invalid persisted session JSON is reported and preserved, never treated as an
   empty store that a later write may overwrite.
 - Relay session descriptors persist per port under
-  `~/.browser-control/relays/<port>/sessions.json`. After a relay restart,
+  `~/.browserrig/relays/<port>/sessions.json`. After a relay restart,
   restore session ids, read-only mode, and exact target ownership when that tab
   reappears; JavaScript `state` and snapshot refs intentionally reset and warn.
   Win the endpoint port before loading or writing this catalog. Successful
@@ -76,6 +76,10 @@ local Node relay.
   sync. Corrupt catalogs fail relay startup and are never overwritten.
 - An extension RPC timeout fails only that command; the extension socket is
   closed only when a websocket-level ping probe also fails.
+- Active-tab attachment binds every initialization and presentation RPC to the
+  extension connection generation that selected the tab. If the extension or
+  browser profile changes before completion, fail closed without sending the
+  old tab id to the replacement connection or committing its target.
 - CDP guardrails are pure logic in `src/cdp-guardrails.ts`, enforced at the top
   of `routeCdpCommand`. Destructive browser-state methods are always blocked;
   read-only sessions additionally reject `Input.*`.
@@ -101,7 +105,7 @@ local Node relay.
   overwrites. Preserve committed ownership, roll back provisional adoption
   ownership, detach the old generation before announcing the new one, rebind
   pending handoffs, and make the owning sandbox reacquire the exact new target.
-- Adopted targets are exclusive to one Browser Control session. Serialize
+- Adopted targets are exclusive to one BrowserRig session. Serialize
   adopts, reject competing owners, and release ownership on detach, reset, or
   delete. If adoption times out, roll back visibility immediately but retain
   the execute and adopt permits until uncancellable Playwright work settles.
@@ -130,18 +134,18 @@ local Node relay.
   execute interface with many action commands.
 - Authenticated network capture is owned by the persistent Execute Sandbox and
   records normalized exchanges; HAR is only an export adapter. Written
-  artifacts always use route-scoped stable `BC_SECRET_N` references. Lossless
+  artifacts always use route-scoped stable `BROWSERRIG_SECRET_N` references. Lossless
   values live in restrictive secret profiles and enter generated clients only
   through `secrets run`. Keep recorder transitions serialized, body retention
   bounded per body and in aggregate, profile updates locked across relay
   processes, and credential values out of normal outputs, diagnostics, and
   journals.
-- With `BROWSER_CONTROL_DEBUG=1`, `[bc:ctx]` lines trace bounded metadata for
+- With `BROWSERRIG_DEBUG=1`, `[browserrig:ctx]` lines trace bounded metadata for
   target ownership/browser-context identity, main-frame loaders, Runtime context
   lifecycle/reset attempts, and failed evaluates. Never add expressions,
   arguments/results, headers, cookies, or form values to this trace.
 - The session journal (`src/session-journal.ts`) appends one JSON line per
-  execute under `~/.browser-control/sessions/<id>/journal.jsonl`; writes are
+  execute under `~/.browserrig/sessions/<id>/journal.jsonl`; writes are
   best-effort and must never fail the execute call.
 - Relay-owned recording uses `Page.startScreencast`, immediately acknowledges
   compositor frames, activates the target to avoid background-tab throttling,
@@ -162,7 +166,7 @@ local Node relay.
   rebuild; never hardcode version literals.
 - Relay version metadata includes an instance id, start time, and PID. Bounded
   managed-relay process-fault diagnostics are retained with mode `0600` in
-  `~/.browser-control/relay.log` so same-build restarts and session loss are
+  `~/.browserrig/relay.log` so same-build restarts and session loss are
   diagnosable instead of appearing as eviction.
 - `dist/mcp.js` self-runs via the dedicated `src/mcp-main.ts` entrypoint. Do not
   add `process.argv[1] === import.meta.url` self-run guards to modules that get
@@ -181,7 +185,7 @@ local Node relay.
 - `session adopt` makes a user-attached tab the session's default page. Adopted
   tabs are never closed by session reset/delete — only released. Adopting
   closes the session's previously relay-created page.
-- Relay-created tabs should persist across short-lived `browser-control execute`
+- Relay-created tabs should persist across short-lived `browserrig execute`
   commands so shell-based agents do not create and delete a visible tab for every
   probe.
 - Root page targets must be stored before applying `Target.setAutoAttach`, because
@@ -204,7 +208,7 @@ local Node relay.
   store/manager, extension-rpc, or execute auto-return logic. Unit tests live in
   `test/` and must not require a browser.
 - Run `pnpm build:cli` after CLI or relay source changes that should affect the
-  linked `browser-control` binary.
+  linked `browserrig` binary.
 - Run `pnpm build:extension` after extension changes.
 - Extension shim changes require reloading the unpacked extension once in Brave.
 - Relay-only changes should not require reloading the extension.
@@ -216,7 +220,7 @@ local Node relay.
   session's clients; unowned tabs stay visible to everyone. Do not reintroduce
   broadcast-to-all: it double-initializes pages across clients and hangs
   `newPage`/`setContent`/`evaluate` (regression case: `multi-client` smoke).
-- Run the relay with `BROWSER_CONTROL_DEBUG=1` to log per-client CDP requests,
+- Run the relay with `BROWSERRIG_DEBUG=1` to log per-client CDP requests,
   responses, and extension debugger events when diagnosing protocol issues.
 
 ## Commands
@@ -227,22 +231,22 @@ pnpm test
 pnpm build:cli
 pnpm build:extension
 SMOKE_CASE=oopif-reconnect pnpm smoke
-browser-control serve
-browser-control status
-browser-control session new
-browser-control session new inspect --read-only
-browser-control session list
-browser-control execute 'return { url: page.url(), title: await page.title() }'
-browser-control execute --json 'page.url()'
-browser-control journal
-browser-control skill
+browserrig serve
+browserrig status
+browserrig session new
+browserrig session new inspect --read-only
+browserrig session list
+browserrig execute 'return { url: page.url(), title: await page.title() }'
+browserrig execute --json 'page.url()'
+browserrig journal
+browserrig skill
 ```
 
 ## Extension
 
 - Load `extension/dist` as the unpacked extension.
-- The relay listens on `127.0.0.1:19989` by default.
-- Current shim version is `0.0.23` and extension protocol version is `2`.
+- The relay listens on `127.0.0.1:19990` by default.
+- Current bootstrap shim version is `0.0.1` and extension protocol version is `3`.
 - Store and npm versions may differ while their extension protocol versions remain compatible.
 - On socket open the shim sends `hello` and then re-announces every tab it still
   has `chrome.debugger` attached to (`debugger.attached` events), so a restarted
@@ -258,8 +262,8 @@ browser-control skill
 - The relay installs scoped `uncaughtException`/`unhandledRejection` guards for
   its lifetime; in-process playwright event dispatch errors are logged, not
   fatal.
-- Session-owned tabs, including adopted user tabs, share a purple `control`
+- Session-owned tabs, including adopted user tabs, share a purple `BrowserRig`
   group within each browser window. Merely attached tabs remain in their
-  existing location. Releasing an adopted tab removes it from `control` without
+  existing location. Releasing an adopted tab removes it from `BrowserRig` without
   closing it. The shim also recognizes legacy `browser-control`, `bc:*`, and
   `bc · *` groups for cleanup.

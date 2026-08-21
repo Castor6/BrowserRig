@@ -85,11 +85,12 @@ describe("relay-schema", () => {
       sessionId: "rapid-otter-633",
       createIfMissing: true,
       targetSelection: { urlIncludes: "example.com" },
-    }).targetSelection.urlIncludes).toBe("example.com")
+    }).targetSelection?.urlIncludes).toBe("example.com")
     expect(decodeAdoptRequest({
       createIfMissing: true,
       targetSelection: { index: 0 },
     }).sessionId).toBeUndefined()
+    expect(decodeAdoptRequest({ createIfMissing: true, active: true })).toMatchObject({ active: true })
     const response = { session: { ...session, created: true }, adoptedUrl: "https://example.com/", adoptedTargetId: "target-2" }
     expect(encodeAdoptResponse(decodeAdoptResponse(response))).toEqual(response)
   })
@@ -100,6 +101,9 @@ describe("relay-schema", () => {
     expect(() => decodeAdoptRequest({ createIfMissing: true, targetSelection: { urlIncludes: "example.com", index: 0 } })).toThrow()
     expect(() => decodeAdoptRequest({ createIfMissing: true, targetSelection: { index: -1 } })).toThrow()
     expect(() => decodeAdoptRequest({ createIfMissing: true, targetSelection: { index: 1.5 } })).toThrow()
+    expect(() => decodeAdoptRequest({ createIfMissing: true })).toThrow()
+    expect(() => decodeAdoptRequest({ createIfMissing: true, active: false })).toThrow()
+    expect(() => decodeAdoptRequest({ createIfMissing: true, active: true, targetSelection: { index: 0 } })).toThrow()
     expect(decodeAdoptRequest({ createIfMissing: true, targetSelection: { urlIncludes: "example.com" } }).targetSelection).toEqual({ urlIncludes: "example.com" })
     expect(decodeAdoptRequest({ createIfMissing: true, targetSelection: { index: 0 } }).targetSelection).toEqual({ index: 0 })
   })
@@ -248,7 +252,7 @@ describe("relay-schema", () => {
     const full = decodeExtensionStatus({
       connected: true,
       version: "0.0.5",
-      protocolVersion: 2,
+      protocolVersion: 3,
       protocolCompatible: true,
       protocolLegacy: false,
       activeTargets: 2,
@@ -277,7 +281,7 @@ describe("relay-schema", () => {
         url: "https://example.com",
         tabId: 7,
         sessionId: "bc-tab-1",
-        browserControlSessionId: "rapid-otter-633",
+        browserRigSessionId: "rapid-otter-633",
         owner: "relay",
         crashed: true,
       },
@@ -329,9 +333,9 @@ describe("relay-schema", () => {
       capturedBodyBytes: 100,
       truncatedBodyCount: 0,
       droppedEntryCount: 0,
-      updatedSecretRefs: ["BC_SECRET_1"],
-      observedSecretRefs: ["BC_SECRET_1"],
-    }).observedSecretRefs).toEqual(["BC_SECRET_1"])
+      updatedSecretRefs: ["BROWSERRIG_SECRET_1"],
+      observedSecretRefs: ["BROWSERRIG_SECRET_1"],
+    }).observedSecretRefs).toEqual(["BROWSERRIG_SECRET_1"])
   })
 
   it("decodes current coded and legacy relay error envelopes", () => {

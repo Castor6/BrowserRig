@@ -106,7 +106,7 @@ async function main(): Promise<void> {
   const version = await extensionVersion(dist)
   const archive = await makeExtensionArchive(dist)
   const artifactDirectory = path.join(root, "artifacts")
-  const artifactPath = path.join(artifactDirectory, `browser-control-extension-${version}.zip`)
+  const artifactPath = path.join(artifactDirectory, `browserrig-extension-${version}.zip`)
   await fs.mkdir(artifactDirectory, { recursive: true })
   await fs.writeFile(artifactPath, archive)
   const digest = createHash("sha256").update(archive).digest("hex")

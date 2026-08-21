@@ -1,11 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Browser Control",
-  "version": "0.0.23",
-  "description": "Connect browser tabs to the local Browser Control driver.",
+  "name": "BrowserRig",
+  "version": "0.0.1",
+  "description": "Connect browser tabs to the local BrowserRig driver.",
   "minimum_chrome_version": "120",
   "permissions": ["activeTab", "alarms", "debugger", "offscreen", "tabCapture", "tabGroups"],
-  "homepage_url": "https://github.com/anomalyco/browser-control",
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -24,7 +23,7 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Attach tab to Browser Control",
+    "default_title": "Attach tab to BrowserRig",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png"

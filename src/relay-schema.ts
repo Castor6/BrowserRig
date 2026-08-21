@@ -69,8 +69,13 @@ export interface ExecuteRequest extends Schema.Schema.Type<typeof ExecuteRequest
 export const SessionAdoptRequest = Schema.Struct({
   sessionId: Schema.optionalKey(Schema.String),
   createIfMissing: Schema.Boolean,
-  targetSelection: TargetSelection,
-})
+  targetSelection: Schema.optionalKey(TargetSelection),
+  active: Schema.optionalKey(Schema.Literal(true)),
+}).check(Schema.makeFilter((request) => {
+  const hasSelection = request.targetSelection !== undefined
+  const hasActive = request.active === true
+  return hasSelection !== hasActive ? undefined : "session adopt must select exactly one target or the active tab"
+}))
 
 export interface SessionAdoptRequest extends Schema.Schema.Type<typeof SessionAdoptRequest> {}
 
@@ -227,7 +232,7 @@ export const TargetSummary = Schema.Struct({
   url: Schema.String,
   tabId: Schema.optionalKey(Schema.Number),
   sessionId: Schema.optionalKey(Schema.String),
-  browserControlSessionId: Schema.optionalKey(Schema.String),
+  browserRigSessionId: Schema.optionalKey(Schema.String),
   owner: Schema.optionalKey(Schema.Literals(["relay", "user"])),
   crashed: Schema.optionalKey(Schema.Boolean),
 })

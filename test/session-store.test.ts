@@ -11,7 +11,7 @@ const fsLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)
 let dir: string
 
 beforeEach(async () => {
-  dir = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-test-"))
+  dir = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-test-"))
 })
 
 afterEach(async () => {
@@ -29,7 +29,7 @@ const runStore = <A>(
     ),
   )
 
-const defaultEndpoint = "http://127.0.0.1:19989"
+const defaultEndpoint = "http://127.0.0.1:19990"
 const otherEndpoint = "http://127.0.0.1:29989"
 
 describe("SessionStore", () => {

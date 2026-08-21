@@ -134,11 +134,11 @@ export class ExtensionRpc {
     return Effect.callback<JsonObject, Error>((resume) => {
       const socket = this.socket
       if (this.protocolCompatible === false) {
-        resume(Effect.fail(new Error(`Browser Control extension protocol ${this.protocolVersion ?? "unknown"} is incompatible`)))
+        resume(Effect.fail(new Error(`BrowserRig extension protocol ${this.protocolVersion ?? "unknown"} is incompatible`)))
         return Effect.void
       }
       if (!socket || socket.readyState !== WebSocket.OPEN || !this.acceptsEvents) {
-        resume(Effect.fail(new Error("Browser Control extension is not connected")))
+        resume(Effect.fail(new Error("BrowserRig extension is not connected")))
         return Effect.void
       }
 

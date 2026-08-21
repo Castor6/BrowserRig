@@ -13,13 +13,13 @@ import type { ExecuteAftermath, ExecuteLogEntry, ExecuteResponse, NetworkStatusR
 import { startRelay } from "./relay.ts"
 import { defaultJournalBaseDir, formatJournalEntry, readJournalEntries } from "./session-journal.ts"
 import * as SessionStore from "./session-store.ts"
-import { browserControlVersion } from "./version.ts"
+import { browserRigVersion } from "./version.ts"
 import { resolveExplicitSessionSelector } from "./cli-session-selector.ts"
 
 const packageRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-const sessionIdConfig = Config.option(Config.string("BROWSER_CONTROL_SESSION"))
-const targetUrlConfig = Config.option(Config.string("BROWSER_CONTROL_TARGET_URL"))
-const targetIndexConfig = Config.option(Config.int("BROWSER_CONTROL_TARGET_INDEX"))
+const sessionIdConfig = Config.option(Config.string("BROWSERRIG_SESSION"))
+const targetUrlConfig = Config.option(Config.string("BROWSERRIG_TARGET_URL"))
+const targetIndexConfig = Config.option(Config.int("BROWSERRIG_TARGET_INDEX"))
 const encodedCliOperandsMarker = "bc-cli-operands:v1"
 const encodedCliOperandPrefix = "bc-cli-operand:"
 
@@ -53,7 +53,7 @@ const ensureCliRelay = Effect.fnUntraced(function* () {
   const relay = yield* RelayClient.Service
   const readiness = yield* RelayLifecycle.ensureRelay({ relay })
   if (readiness.started) {
-    yield* Console.error(`Started Browser Control relay at ${relay.endpoint}`)
+    yield* Console.error(`Started BrowserRig relay at ${relay.endpoint}`)
   }
   if (readiness.buildProblem) {
     return yield* Effect.fail(new Error(readiness.buildProblem))
@@ -71,7 +71,7 @@ const resolveExistingSessionId = Effect.fnUntraced(function* (explicitSessionId:
   const store = yield* SessionStore.Service
   const sessionId = explicitSessionId ?? (yield* store.read)
   if (!sessionId) {
-    return yield* Effect.fail(new Error("No session provided and no current Browser Control session exists"))
+    return yield* Effect.fail(new Error("No session provided and no current BrowserRig session exists"))
   }
   yield* ensureSessionExists(sessionId)
   return sessionId
@@ -199,20 +199,20 @@ const serve = Command.make(
     yield* Effect.scoped(
       Effect.gen(function* () {
         const relay = yield* startRelay({ port })
-        yield* Console.log(`browser-control relay listening at ${relay.url}`)
-        yield* Console.log("Load extension/dist as an unpacked extension and click the toolbar button to attach a tab.")
+        yield* Console.log(`browserrig relay listening at ${relay.url}`)
+        yield* Console.log("Load extension/dist as an unpacked extension, then run session adopt --active or execute from another terminal.")
         yield* Effect.never
       }),
     )
   }),
-).pipe(Command.withDescription("Start the local Browser Control relay"))
+).pipe(Command.withDescription("Start the local BrowserRig relay"))
 
 const execute = Command.make(
   "execute",
   {
     code: Argument.string("code").pipe(Argument.variadic({ min: 0 })),
     file: Flag.string("file").pipe(Flag.optional, Flag.withDescription("Read execute code from a file")),
-    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Continue an existing Browser Control session; omit to create a fresh one")),
+    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Continue an existing BrowserRig session; omit to create a fresh one")),
     targetUrl: Flag.string("target-url").pipe(Flag.optional, Flag.withDescription("Use the attached page whose URL contains this text")),
     targetIndex: Flag.integer("target-index").pipe(Flag.optional, Flag.withDescription("Use the attached page at this zero-based index")),
     json: Flag.boolean("json").pipe(Flag.withDescription("Print a machine-readable result envelope: { ok, isError, text, value, valueUnavailable, error?, logs, warnings, diagnostic?, aftermath, session }")),
@@ -236,7 +236,7 @@ const execute = Command.make(
         return yield* Effect.fail(new Error("Target index must be a non-negative integer"))
       }
       if (targetUrlValue && targetIndexValue !== undefined) {
-        return yield* Effect.fail(new Error("Use only one target selector: --target-url/BROWSER_CONTROL_TARGET_URL or --target-index/BROWSER_CONTROL_TARGET_INDEX"))
+        return yield* Effect.fail(new Error("Use only one target selector: --target-url/BROWSERRIG_TARGET_URL or --target-index/BROWSERRIG_TARGET_INDEX"))
       }
       const result = yield* relay.execute({
         ...(explicitSessionId ? { sessionId: explicitSessionId } : {}),
@@ -313,7 +313,7 @@ const sessionNew = Command.make(
     yield* store.write(result.id)
     yield* Console.log(result.id)
   }),
-).pipe(Command.withDescription("Create a Browser Control session and make it current"))
+).pipe(Command.withDescription("Create a BrowserRig session and make it current"))
 
 const sessionList = Command.make(
   "list",
@@ -342,7 +342,7 @@ const sessionList = Command.make(
       return Console.log(`${marker} ${item.id} ${page}${keys}${readOnly}`)
     })
   }),
-).pipe(Command.withDescription("List Browser Control sessions"))
+).pipe(Command.withDescription("List BrowserRig sessions"))
 
 const sessionCurrent = Command.make(
   "current",
@@ -371,7 +371,7 @@ const sessionReset = Command.make(
   "reset",
   {
     id: Argument.string("id").pipe(Argument.optional),
-    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Reset this Browser Control session id")),
+    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Reset this BrowserRig session id")),
   },
   Effect.fn("Cli.sessionReset")(function* ({ id, session }) {
     const relay = yield* RelayClient.Service
@@ -383,50 +383,56 @@ const sessionReset = Command.make(
     const resetSession = yield* relay.sessionReset(sessionId)
     yield* Console.log(resetSession.id)
   }),
-).pipe(Command.withDescription("Reset a Browser Control session state and page"))
+).pipe(Command.withDescription("Reset a BrowserRig session state and page"))
 
 const sessionAdopt = Command.make(
   "adopt",
   {
-    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Adopt into an existing Browser Control session; omit to create a fresh one")),
+    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Adopt into an existing BrowserRig session; omit to create a fresh one")),
+    active: Flag.boolean("active").pipe(Flag.withDescription("Attach and adopt the active tab in the last focused browser window")),
     targetUrl: Flag.string("target-url").pipe(Flag.optional, Flag.withDescription("Adopt the attached page whose URL contains this text")),
     targetIndex: Flag.integer("target-index").pipe(Flag.optional, Flag.withDescription("Adopt the attached page at this zero-based target index")),
   },
-  Effect.fn("Cli.sessionAdopt")(function* ({ session, targetUrl, targetIndex }) {
+  Effect.fn("Cli.sessionAdopt")(function* ({ session, active, targetUrl, targetIndex }) {
     const relay = yield* RelayClient.Service
     yield* ensureCliRelayAndExtension()
     const explicitSessionId = optionString(session) ?? Option.getOrUndefined(yield* sessionIdConfig)
     const targetUrlValue = optionString(targetUrl)
     const targetIndexValue = optionNumber(targetIndex)
-    if (!targetUrlValue && targetIndexValue === undefined) {
-      return yield* Effect.fail(new Error("session adopt requires --target-url or --target-index"))
+    if (!active && !targetUrlValue && targetIndexValue === undefined) {
+      return yield* Effect.fail(new Error("session adopt requires --active, --target-url, or --target-index"))
     }
     if (targetIndexValue !== undefined && targetIndexValue < 0) {
       return yield* Effect.fail(new Error("Target index must be a non-negative integer"))
     }
-    if (targetUrlValue && targetIndexValue !== undefined) {
-      return yield* Effect.fail(new Error("Use only one target selector: --target-url or --target-index"))
+    const selectorCount = Number(active) + Number(targetUrlValue !== undefined) + Number(targetIndexValue !== undefined)
+    if (selectorCount !== 1) {
+      return yield* Effect.fail(new Error("Use only one target selector: --active, --target-url, or --target-index"))
     }
     const result = yield* relay.sessionAdopt({
       ...(explicitSessionId ? { sessionId: explicitSessionId } : {}),
       createIfMissing: !explicitSessionId,
-      targetSelection: {
-        ...(targetUrlValue ? { urlIncludes: targetUrlValue } : {}),
-        ...(targetIndexValue !== undefined ? { index: targetIndexValue } : {}),
-      },
+      ...(active
+        ? { active: true }
+        : {
+            targetSelection: {
+              ...(targetUrlValue ? { urlIncludes: targetUrlValue } : {}),
+              ...(targetIndexValue !== undefined ? { index: targetIndexValue } : {}),
+            },
+          }),
     })
     yield* Console.log(`${result.session.created ? "Created and adopted" : "Adopted"} session '${result.session.id}' default page: ${result.adoptedUrl}`)
     if (result.session.created) {
       yield* Console.error(formatSessionContinuation(result.session.id))
     }
   }),
-).pipe(Command.withDescription("Make an attached tab the session's default page"))
+).pipe(Command.withDescription("Attach or select a browser tab and make it the session's default page"))
 
 const sessionDelete = Command.make(
   "delete",
   {
     id: Argument.string("id").pipe(Argument.optional),
-    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Delete this Browser Control session id")),
+    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Delete this BrowserRig session id")),
   },
   Effect.fn("Cli.sessionDelete")(function* ({ id, session }) {
     const relay = yield* RelayClient.Service
@@ -443,10 +449,10 @@ const sessionDelete = Command.make(
     }
     yield* Console.log(sessionId)
   }),
-).pipe(Command.withDescription("Delete a Browser Control session"))
+).pipe(Command.withDescription("Delete a BrowserRig session"))
 
 const session = Command.make("session").pipe(
-  Command.withDescription("Manage Browser Control sessions"),
+  Command.withDescription("Manage BrowserRig sessions"),
   Command.withSubcommands([sessionNew, sessionList, sessionCurrent, sessionUse, sessionReset, sessionAdopt, sessionDelete]),
 )
 
@@ -482,7 +488,7 @@ const status = Command.make(
         yield* Console.log(JSON.stringify(stopped, null, 2))
       } else {
         yield* Console.log(`Relay: stopped (${relay.endpoint})`)
-        yield* Console.log("Run browser-control execute to start it automatically.")
+        yield* Console.log("Run browserrig execute to start it automatically.")
       }
       yield* Effect.sync(() => {
         process.exitCode = 1
@@ -545,10 +551,10 @@ const status = Command.make(
       yield* Console.log("Targets:")
       yield* Effect.forEach(targets, (target, index) => {
         const tab = target.tabId === undefined ? "" : ` tab=${target.tabId}`
-        const browserControlSession = target.browserControlSessionId ? ` session=${target.browserControlSessionId}` : ""
+        const browserRigSession = target.browserRigSessionId ? ` session=${target.browserRigSessionId}` : ""
         const owner = target.owner ? ` owner=${target.owner}` : ""
         const health = target.crashed ? " crashed=true" : ""
-        return Console.log(`- [${index}] ${target.type} ${target.id}${tab}${browserControlSession}${owner}${health} ${target.url || "about:blank"}`)
+        return Console.log(`- [${index}] ${target.type} ${target.id}${tab}${browserRigSession}${owner}${health} ${target.url || "about:blank"}`)
       })
     }
     if (buildProblem) {
@@ -563,7 +569,7 @@ const recordingStart = Command.make(
   "start",
   {
     outputPath: Argument.string("output-path").pipe(Argument.withDescription("Path to write the recording artifact; tabCapture requires .webm, CDP accepts .webm or .mp4")),
-    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Record the page for this Browser Control or CDP session id")),
+    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Record the page for this BrowserRig or CDP session id")),
     tabId: Flag.integer("tab-id").pipe(Flag.optional, Flag.withDescription("Record this attached Chrome tab id")),
     mode: Flag.string("mode").pipe(Flag.optional, Flag.withDescription("Recording mode: auto, tab-capture, or cdp. auto uses CDP for relay-owned tabs and tabCapture for user-owned tabs")),
     audio: Flag.boolean("audio").pipe(Flag.withDescription("Include tab audio")),
@@ -684,7 +690,7 @@ function formatNetworkResult(result: NetworkStopResponse): string {
 const networkStart = Command.make(
   "start",
   {
-    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Capture the default page for this Browser Control session")),
+    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Capture the default page for this BrowserRig session")),
     urlFilter: Flag.string("url").pipe(Flag.optional, Flag.withDescription("Capture only requests whose URL contains this text")),
     resourceTypes: Flag.string("resource-type").pipe(Flag.atMost(50), Flag.withDescription("Capture this Playwright resource type; repeat for multiple types")),
     content: Flag.string("content").pipe(Flag.optional, Flag.withDescription("Response and request body mode: embed (default) or omit")),
@@ -839,11 +845,11 @@ const secretsRun = Command.make(
     yield* Effect.sync(() => {
       if (result.stdout) process.stdout.write(result.stdout)
       if (result.stderr) process.stderr.write(result.stderr)
-      if (result.stdoutTruncated || result.stderrTruncated) process.stderr.write("\nBrowser Control truncated child output.\n")
+      if (result.stdoutTruncated || result.stderrTruncated) process.stderr.write("\nBrowserRig truncated child output.\n")
       if (result.exitCode !== 0) process.exitCode = result.exitCode
     })
   }),
-).pipe(Command.withDescription("Run a command with profile values injected as BC_SECRET_* environment variables"))
+).pipe(Command.withDescription("Run a command with profile values injected as BROWSERRIG_SECRET_* environment variables"))
 
 const secrets = Command.make("secrets").pipe(
   Command.withDescription("Inspect, refresh, and use captured credentials without revealing their values"),
@@ -853,7 +859,7 @@ const secrets = Command.make("secrets").pipe(
 const journal = Command.make(
   "journal",
   {
-    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Show the journal for this Browser Control session id")),
+    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Show the journal for this BrowserRig session id")),
     limit: Flag.integer("limit").pipe(Flag.optional, Flag.withDescription("Number of most recent entries to show, defaults to 20")),
     json: Flag.boolean("json").pipe(Flag.withDescription("Print machine-readable JSON")),
   },
@@ -861,7 +867,7 @@ const journal = Command.make(
     const store = yield* SessionStore.Service
     const sessionId = optionString(session) ?? Option.getOrUndefined(yield* sessionIdConfig) ?? (yield* store.read)
     if (!sessionId) {
-      return yield* Effect.fail(new Error("No session provided and no current Browser Control session exists"))
+      return yield* Effect.fail(new Error("No session provided and no current BrowserRig session exists"))
     }
     const entries = yield* Effect.tryPromise({
       try: () => readJournalEntries({ baseDir: defaultJournalBaseDir(), sessionId, limit: optionNumber(limit) ?? 20 }),
@@ -880,7 +886,7 @@ const journal = Command.make(
       return Console.log(formatJournalEntry(entry))
     })
   }),
-).pipe(Command.withDescription("Show what agents did in a Browser Control session"))
+).pipe(Command.withDescription("Show what agents did in a BrowserRig session"))
 
 const doctor = Command.make(
   "doctor",
@@ -900,19 +906,19 @@ const doctor = Command.make(
       })
     }
   }),
-).pipe(Command.withDescription("Diagnose the local Browser Control install and runtime"))
+).pipe(Command.withDescription("Diagnose the local BrowserRig install and runtime"))
 
 const skill = Command.make(
   "skill",
   {},
   Effect.fn("Cli.skill")(function* () {
     const fs = yield* FileSystem.FileSystem
-    const text = yield* fs.readFileString(path.join(packageRoot, "skills", "browser-control", "SKILL.md")).pipe(
-      Effect.mapError((cause) => new Error("read browser-control skill", { cause })),
+    const text = yield* fs.readFileString(path.join(packageRoot, "skills", "browserrig", "SKILL.md")).pipe(
+      Effect.mapError((cause) => new Error("read browserrig skill", { cause })),
     )
     yield* Console.log(text.trimEnd())
   }),
-).pipe(Command.withDescription("Print the Browser Control agent skill text"))
+).pipe(Command.withDescription("Print the BrowserRig agent skill text"))
 
 const mcp = Command.make(
   "mcp",
@@ -920,10 +926,10 @@ const mcp = Command.make(
   Effect.fn("Cli.mcp")(function* () {
     yield* runMcpServer
   }),
-).pipe(Command.withDescription("Run the Browser Control MCP server over stdio"))
+).pipe(Command.withDescription("Run the BrowserRig MCP server over stdio"))
 
-const browserControl = Command.make("browser-control").pipe(
-  Command.withDescription("Control the user's existing browser through the Browser Control extension"),
+const browserRig = Command.make("browserrig").pipe(
+  Command.withDescription("Control the user's existing browser through the BrowserRig extension"),
   Command.withSubcommands([serve, execute, session, status, network, secrets, recording, journal, doctor, skill, mcp]),
 )
 
@@ -933,7 +939,7 @@ const mainLayer = Layer.mergeAll(RelayClient.layerFetch, SessionStore.layer).pip
   Layer.provideMerge(NodeServices.layer),
 )
 
-Command.runWith(browserControl, { version: browserControlVersion })(normalizeCliArguments(process.argv.slice(2))).pipe(
+Command.runWith(browserRig, { version: browserRigVersion })(normalizeCliArguments(process.argv.slice(2))).pipe(
   Effect.provide(mainLayer),
   NodeRuntime.runMain,
 )

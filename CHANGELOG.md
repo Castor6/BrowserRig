@@ -1,4 +1,40 @@
-# @opencode-ai/browser-control
+# BrowserRig
+
+BrowserRig is an independent, MIT-licensed fork of
+`@opencode-ai/browser-control`. The upstream changelog is retained below as
+project lineage; those entries describe upstream releases, not BrowserRig
+release claims.
+
+## 0.1.0
+
+### Minor Changes
+
+- Establish the independent BrowserRig package, CLI, MCP command, extension
+  artifact, local state namespace, and agent skill.
+- Attach and adopt the active tab in the user's last-focused Chrome window
+  without a toolbar click or Chrome's browser-wide remote-debugging approval
+  dialog, while retaining manual multi-tab attachment and the complete driver.
+
+### Patch Changes
+
+- Fall back from automatic tab capture to CDP for silent recordings when a
+  no-click adopted tab lacks Chrome's temporary capture grant. Explicit tab
+  capture and audio requests still require the user gesture.
+- Re-adopt a detached user tab without replacing the session's default page or
+  surfacing a stale page-recovery warning.
+- Fail closed when a positional snapshot ref drifts to a different same-role
+  element after DOM insertion.
+- Ship npm dual-use metadata and a concrete disclosure, with release candidates
+  prepared for maintainer-reviewed 2FA publishing instead of direct OIDC.
+- Pin the Effect runtime and its Node adapter to one compatible prerelease line,
+  and declare the Node.js versions required by their dependency graph so clean
+  npm installs cannot silently mix incompatible Effect releases.
+- Derive packaged CLI build IDs from release inputs instead of wall-clock time,
+  making repeated npm packs byte-for-byte reproducible.
+
+---
+
+# Upstream history: @opencode-ai/browser-control
 
 ## 0.4.0
 

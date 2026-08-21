@@ -19,7 +19,7 @@ function relay(options: {
   readonly extensionStatus?: RelayClient.Interface["extensionStatus"]
 }): RelayClient.Interface {
   return {
-    endpoint: "http://127.0.0.1:19989",
+    endpoint: "http://127.0.0.1:19990",
     version: options.version,
     extensionStatus: options.extensionStatus ?? Effect.succeed({ connected: true, version: "0.0.11", activeTargets: 0 }),
   } as RelayClient.Interface
@@ -27,7 +27,7 @@ function relay(options: {
 
 function starting(): RelayClient.RelayRejected {
   return new RelayClient.RelayRejected({
-    message: "Browser Control relay is starting",
+    message: "BrowserRig relay is starting",
     status: 503,
     path: "/version",
     code: "relay-starting",
@@ -37,7 +37,7 @@ function starting(): RelayClient.RelayRejected {
 function unreachable(): RelayClient.RelayUnreachable {
   return new RelayClient.RelayUnreachable({
     message: "unreachable",
-    endpoint: "http://127.0.0.1:19989",
+    endpoint: "http://127.0.0.1:19990",
     path: "/version",
     cause: new Error("connection refused"),
   })
@@ -179,8 +179,8 @@ describe("relay lifecycle", () => {
   })
 
   it("formats stopped and consolidated status without extra relay requests", () => {
-    expect(stoppedRelayStatus("http://127.0.0.1:19989")).toEqual({
-      endpoint: "http://127.0.0.1:19989",
+    expect(stoppedRelayStatus("http://127.0.0.1:19990")).toEqual({
+      endpoint: "http://127.0.0.1:19990",
       relay: { running: false },
       extension: null,
       sessions: [],
@@ -201,9 +201,9 @@ describe("relay lifecycle", () => {
     expect(managedRelayEntrypoint("/package/dist/mcp.js")).toBe("/package/dist/cli.js")
     expect(managedRelayEntrypoint("/package/src/mcp-main.ts")).toBe("/package/src/cli.ts")
     expect(managedRelayEntrypoint("/package/dist/index.js")).toBe("/package/dist/cli.js")
-    expect(managedRelayEntrypoint("/package/src/browser-control-client.ts")).toBe("/package/src/cli.ts")
+    expect(managedRelayEntrypoint("/package/src/browserrig-client.ts")).toBe("/package/src/cli.ts")
     expect(managedRelayEntrypoint("/package/dist/cli.js")).toBe("/package/dist/cli.js")
-    expect(managedRelayEntrypoint("/package/bin/browser-control-mcp")).toBe("/package/bin/browser-control")
+    expect(managedRelayEntrypoint("/package/bin/browserrig-mcp")).toBe("/package/bin/browserrig")
   })
 
   it("can launch the Node relay independently of a Bun consumer runtime", () => {

@@ -21,7 +21,7 @@ async function freePort(): Promise<number> {
 }
 
 async function openSocket(url: string): Promise<WebSocket> {
-  const socket = new WebSocket(url, { origin: "chrome-extension://browser-control-test" })
+  const socket = new WebSocket(url, { origin: "chrome-extension://browserrig-test" })
   await new Promise<void>((resolve, reject) => {
     socket.once("open", resolve)
     socket.once("error", reject)
@@ -61,7 +61,7 @@ describe("relay child target announce dedupe", () => {
             : {}
           extension.send(JSON.stringify({ id: command.id, result }))
         })
-        extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 2 } }))
+        extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 3 } }))
         extension.send(JSON.stringify({ method: "toolbar.clicked", params: { tabId: 1 } }))
         await waitFor(() => extensionCommands.some((command) => command.method === "action.setAttached"))
 
@@ -201,7 +201,7 @@ describe("relay child target announce dedupe", () => {
             : {}
           extension.send(JSON.stringify({ id: command.id, result }))
         })
-        extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 2 } }))
+        extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 3 } }))
         extension.send(JSON.stringify({ method: "toolbar.clicked", params: { tabId: 1 } }))
         await waitFor(() => extensionCommands.some((command) => command.method === "action.setAttached"))
 
@@ -264,7 +264,7 @@ describe("relay child target announce dedupe", () => {
             : {}
           extension.send(JSON.stringify({ id: command.id, result }))
         })
-        extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 2 } }))
+        extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 3 } }))
         extension.send(JSON.stringify({ method: "toolbar.clicked", params: { tabId: 1 } }))
         await waitFor(() => extensionCommands.some((command) => command.method === "action.setAttached"))
 
@@ -394,7 +394,7 @@ describe("relay child target announce dedupe", () => {
             : {}
           extension.send(JSON.stringify({ id: command.id, result }))
         })
-        extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 2 } }))
+        extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 3 } }))
         extension.send(JSON.stringify({ method: "toolbar.clicked", params: { tabId: 1 } }))
         await waitFor(() => extensionCommands.includes("action.setAttached"))
 

@@ -30,7 +30,7 @@ const playwrightConnectTimeoutMs = 15_000
 const sessionPageHealthCheckTimeoutMs = 3_000
 const sessionPageHealthRetryDelayMs = 100
 const timedOut = Symbol("timed-out")
-export const downloadCapabilityErrorMessage = "Downloads are unavailable in Browser Control extension-backed tabs: Chromium blocks Browser.setDownloadBehavior and Page.setDownloadBehavior through chrome.debugger, so Playwright cannot retain an artifact for download.saveAs(). Fetch the response in the page and write the returned bytes with fs when the site exposes them."
+export const downloadCapabilityErrorMessage = "Downloads are unavailable in BrowserRig extension-backed tabs: Chromium blocks Browser.setDownloadBehavior and Page.setDownloadBehavior through chrome.debugger, so Playwright cannot retain an artifact for download.saveAs(). Fetch the response in the page and write the returned bytes with fs when the site exposes them."
 const downloadGuardedPages = new WeakSet<Page>()
 const downloadGuardedContexts = new WeakSet<BrowserContext>()
 
@@ -120,7 +120,7 @@ export const recoverSessionPage = Effect.fn("Execute.recoverSessionPage")(functi
   }
   if (!options.ownsPage) {
     return yield* Effect.fail(new SessionPageRecoveryError({
-      message: "The adopted session page is unresponsive and was not replaced. Release it with `browser-control session reset` or adopt another attached tab.",
+      message: "The adopted session page is unresponsive and was not replaced. Release it with `browserrig session reset` or adopt another attached tab.",
       reason: "adopted-unresponsive",
       cause: healthFailure,
     }))
@@ -137,7 +137,7 @@ export const recoverSessionPage = Effect.fn("Execute.recoverSessionPage")(functi
   )
   if (closeFailure) {
     return yield* Effect.fail(new SessionPageRecoveryError({
-      message: "The unhealthy relay-owned session page could not be closed. Run `browser-control session reset` before continuing.",
+      message: "The unhealthy relay-owned session page could not be closed. Run `browserrig session reset` before continuing.",
       reason: "close-failed",
       cause: closeFailure,
     }))
@@ -669,7 +669,7 @@ export class ExecuteSandbox {
           label: "Connect to the relay for session adoption",
           run: () => chromium.connectOverCDP(sandbox.options.endpointUrl, {
             timeout: playwrightConnectTimeoutMs,
-            ...(sandbox.options.sessionId ? { headers: { "Browser-Control-Session-Id": sandbox.options.sessionId } } : {}),
+            ...(sandbox.options.sessionId ? { headers: { "BrowserRig-Session-Id": sandbox.options.sessionId } } : {}),
           }),
         })
         sandbox.browser = browser
@@ -713,6 +713,7 @@ export class ExecuteSandbox {
       sandbox.pageHealthCheckRequired = false
       sandbox.pendingPageTarget = undefined
       sandbox.networkCapture.bindPage(selected)
+      sandbox.pendingWarnings = sandbox.pendingWarnings.filter((warning) => warning !== defaultPageClosedWarning)
       return selected.url()
     })
   }
@@ -730,7 +731,7 @@ export class ExecuteSandbox {
       }
       this.browser = await chromium.connectOverCDP(this.options.endpointUrl, {
         timeout: playwrightConnectTimeoutMs,
-        ...(this.options.sessionId ? { headers: { "Browser-Control-Session-Id": this.options.sessionId } } : {}),
+        ...(this.options.sessionId ? { headers: { "BrowserRig-Session-Id": this.options.sessionId } } : {}),
       })
       this.page = undefined
       if (this.defaultPageTargetId) {
@@ -760,7 +761,7 @@ export class ExecuteSandbox {
     const requestHandoff = this.options.requestHandoff
     const handoff = async (message?: string, options?: HandoffCallOptions) => {
       if (!requestHandoff) {
-        throw new Error("handoff is not available in this sandbox; it requires a relay-backed Browser Control session")
+        throw new Error("handoff is not available in this sandbox; it requires a relay-backed BrowserRig session")
       }
       const handoffMessage = message?.trim() || defaultHandoffMessage
       const timeoutMs = options?.timeoutMs ?? defaultHandoffTimeoutMs
@@ -1140,7 +1141,7 @@ export function selectTarget<T>({
     if (matches.length === 0) {
       throw new TargetSelectionError({
         reason: "not-found",
-        message: `No existing attached page URL includes ${selection.urlIncludes}. Target selectors do not navigate or open pages: use page.goto() in the session page, or attach the intended user tab with the Browser Control toolbar first.`,
+        message: `No existing attached page URL includes ${selection.urlIncludes}. Target selectors do not navigate or open pages: use page.goto() in the session page, or attach the intended user tab with the BrowserRig toolbar first.`,
       })
     }
     if (matches.length > 1) {
@@ -1704,7 +1705,7 @@ return (${capture.toString()})(rootOrSettings, locatorSettings)`,
         prefix: `${"  ".repeat(Math.max(0, resolvedDepth(entry) - depthOffset))}- ${entry.role} "${name}"`,
         ...(entry.details ? { details: entry.details } : {}),
         ...(entry.selector ? { selector: entry.selector, role: entry.role } : {}),
-        ...(entry.identityName ? { identityName: entry.identityName } : {}),
+        ...(entry.identityName !== undefined ? { identityName: entry.identityName } : {}),
       }
     })
     if (result.truncated) entries.push({ prefix: `- ... truncated after ${maxItems} items` })
@@ -1714,7 +1715,7 @@ return (${capture.toString()})(rootOrSettings, locatorSettings)`,
       registry.selectors.set(id, {
         selector: entry.selector,
         role: entry.role,
-        ...(entry.identityName ? { name: entry.identityName } : {}),
+        ...(entry.identityName !== undefined ? { name: entry.identityName } : {}),
       })
     }
 
@@ -1765,8 +1766,11 @@ return (${capture.toString()})(rootOrSettings, locatorSettings)`,
     }
     const locator = page.locator(snapshotRef.selector)
     const role = snapshotRefAriaRole(snapshotRef.role)
+    const requiresAccessibleIdentity = snapshotRef.selector.includes(":nth-of-type(")
     const resolved = role
-      ? locator.and(page.getByRole(role))
+      ? locator.and(requiresAccessibleIdentity && snapshotRef.name !== undefined
+        ? page.getByRole(role, { name: snapshotRef.name, exact: true })
+        : page.getByRole(role))
       : locator
     refRoots.set(resolved, snapshotRef)
     return resolved
@@ -1974,12 +1978,12 @@ async function showScreenshotLabels(page: Page): Promise<readonly ScreenshotLabe
       }
     }
 
-    const containerId = "__browser_control_screenshot_labels__"
-    const markerClass = "__browser_control_screenshot_label__"
-    const browserControlWindow = window as Window & { __browserControlScreenshotLabelsTimer?: number }
-    if (browserControlWindow.__browserControlScreenshotLabelsTimer) {
-      window.clearTimeout(browserControlWindow.__browserControlScreenshotLabelsTimer)
-      delete browserControlWindow.__browserControlScreenshotLabelsTimer
+    const containerId = "__browserrig_screenshot_labels__"
+    const markerClass = "__browserrig_screenshot_label__"
+    const browserRigWindow = window as Window & { __browserRigScreenshotLabelsTimer?: number }
+    if (browserRigWindow.__browserRigScreenshotLabelsTimer) {
+      window.clearTimeout(browserRigWindow.__browserRigScreenshotLabelsTimer)
+      delete browserRigWindow.__browserRigScreenshotLabelsTimer
     }
     document.getElementById(containerId)?.remove()
 
@@ -2205,9 +2209,9 @@ async function showScreenshotLabels(page: Page): Promise<readonly ScreenshotLabe
     container.append(...markers)
 
     document.documentElement.appendChild(container)
-    browserControlWindow.__browserControlScreenshotLabelsTimer = window.setTimeout(() => {
+    browserRigWindow.__browserRigScreenshotLabelsTimer = window.setTimeout(() => {
       document.getElementById(containerId)?.remove()
-      delete browserControlWindow.__browserControlScreenshotLabelsTimer
+      delete browserRigWindow.__browserRigScreenshotLabelsTimer
     }, 30_000)
     return labels
   })
@@ -2215,12 +2219,12 @@ async function showScreenshotLabels(page: Page): Promise<readonly ScreenshotLabe
 
 async function hideScreenshotLabels(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const browserControlWindow = window as Window & { __browserControlScreenshotLabelsTimer?: number }
-    if (browserControlWindow.__browserControlScreenshotLabelsTimer) {
-      window.clearTimeout(browserControlWindow.__browserControlScreenshotLabelsTimer)
-      delete browserControlWindow.__browserControlScreenshotLabelsTimer
+    const browserRigWindow = window as Window & { __browserRigScreenshotLabelsTimer?: number }
+    if (browserRigWindow.__browserRigScreenshotLabelsTimer) {
+      window.clearTimeout(browserRigWindow.__browserRigScreenshotLabelsTimer)
+      delete browserRigWindow.__browserRigScreenshotLabelsTimer
     }
-    document.getElementById("__browser_control_screenshot_labels__")?.remove()
+    document.getElementById("__browserrig_screenshot_labels__")?.remove()
   })
 }
 

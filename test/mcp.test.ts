@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { mcpErrorMessage, mcpToolRequiresRelayCompatibility, toolResultForValue } from "../src/mcp.ts"
+import { mcpErrorMessage, mcpToolRequiresRelayCompatibility, parseMcpAdoptArguments, toolResultForValue } from "../src/mcp.ts"
 
 describe("MCP tool results", () => {
   it("rechecks relay compatibility for operational tools", () => {
@@ -9,6 +9,17 @@ describe("MCP tool results", () => {
     expect(mcpToolRequiresRelayCompatibility("status")).toBe(false)
     expect(mcpToolRequiresRelayCompatibility("session_current")).toBe(false)
     expect(mcpToolRequiresRelayCompatibility("skill")).toBe(false)
+  })
+
+  it("accepts active-tab adoption as an exclusive target selector", () => {
+    expect(parseMcpAdoptArguments({ active: true, session: "github" })).toEqual({
+      active: true,
+      session: "github",
+    })
+    expect(parseMcpAdoptArguments({ targetUrl: "github.com" })).toEqual({ targetUrl: "github.com" })
+    expect(() => parseMcpAdoptArguments({})).toThrow("exactly one")
+    expect(() => parseMcpAdoptArguments({ active: false })).toThrow("exactly one")
+    expect(() => parseMcpAdoptArguments({ active: true, targetIndex: 0 })).toThrow("exactly one")
   })
 
   it("marks execute script failures as failed MCP tool calls", () => {
@@ -28,10 +39,10 @@ describe("MCP tool results", () => {
   })
 
   it("omits structured content for primitive tool results", () => {
-    const result = toolResultForValue("# Browser Control\n\nSkill instructions")
+    const result = toolResultForValue("# BrowserRig\n\nSkill instructions")
 
     expect(result.isError).toBe(false)
-    expect(result.content[0]).toMatchObject({ type: "text", text: "# Browser Control\n\nSkill instructions" })
+    expect(result.content[0]).toMatchObject({ type: "text", text: "# BrowserRig\n\nSkill instructions" })
     expect(result.structuredContent).toBeUndefined()
   })
 

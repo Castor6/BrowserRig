@@ -1,13 +1,18 @@
 ---
-name: browser-control
+name: browserrig
 description: Drive the user's existing Chromium-family browser with deterministic Playwright. Use when asked to inspect, automate, test, or interact with a visible browser tab; continue an authenticated browser workflow; handle 2FA, passkeys, CAPTCHAs, or payment confirmation; record browser behavior; or capture an authenticated network flow.
 ---
 
-# Browser Control
+# BrowserRig
 
-Browser Control is a **driver**, not an agent. The calling agent decides what to
-do; Browser Control runs deterministic Playwright code in the user's visible
+BrowserRig is a **driver**, not an agent. The calling agent decides what to
+do; BrowserRig runs deterministic Playwright code in the user's visible
 browser.
+
+It attaches through the browser extension, not Chrome's browser-wide remote
+debugging endpoint. Do not ask the user to approve an **Allow remote
+debugging?** dialog. The active tab can be attached directly from the CLI or MCP
+without clicking the extension toolbar.
 
 Use one loop throughout: **inspect, act, verify**. Inspect the real page before
 choosing locators, act through the narrowest stable control, then verify the
@@ -19,18 +24,20 @@ acknowledgment as proof that the task succeeded.
 ### 1. Run The Task Directly
 
 Start with the requested browser work. Relay-backed commands start the detached
-relay and wait for the extension; do not start `browser-control serve` first.
+relay and wait for the extension; do not start `browserrig serve` first.
+The local relay listens on `127.0.0.1:19990` by default; use
+`BROWSERRIG_PORT` only when the configured endpoint intentionally differs.
 
 ```bash
-browser-control execute 'return { url: page.url(), title: await page.title() }'
+browserrig execute 'return { url: page.url(), title: await page.title() }'
 ```
 
-Use `browser-control doctor` only when setup or runtime behavior is unclear.
+Use `browserrig doctor` only when setup or runtime behavior is unclear.
 `status` and `doctor` are observational and never start the relay.
 
 ```bash
-browser-control doctor
-browser-control status --json
+browserrig doctor
+browserrig status --json
 ```
 
 Completion: one execute returns a page result and a readable session id, or
@@ -40,32 +47,37 @@ Completion: one execute returns a page result and a readable session id, or
 
 A bare CLI execute creates a fresh session-owned page and prints the exact
 `--session <id>` continuation command. Every later CLI call must pass that id or
-set `BROWSER_CONTROL_SESSION`; bare execute never guesses from human-shell
+set `BROWSERRIG_SESSION`; bare execute never guesses from human-shell
 current state.
 
 ```bash
-browser-control execute 'return page.url()'
-browser-control execute --session cosmic-otter-866 'return page.url()'
+browserrig execute 'return page.url()'
+browserrig execute --session cosmic-otter-866 'return page.url()'
 ```
 
 MCP keeps one implicit process session. Omit `session` for that normal path, or
 call `session_new` and pass an explicit id when one MCP process needs multiple
 sessions.
 
-To control a tab already open in the user's browser, ask the user to click the
-Browser Control toolbar button on that tab. Select it for one execute or adopt
-it for sticky reuse:
+To control the tab the user is currently viewing, attach and adopt it directly:
 
 ```bash
-browser-control execute --target-url github.com 'return page.url()'
-browser-control session adopt --target-url github.com --session github
+browserrig session new github
+browserrig session adopt --active --session github
+browserrig execute --session github 'return page.url()'
 ```
 
-`targetUrl` and `targetIndex` select existing attached pages; they never
-navigate. A URL selector must match exactly one page, and URL and index selectors
-cannot be combined. Adoption makes that tab the session default, closes the
-session's previous relay-created page, and is exclusive to one Browser Control
-session. Reset or delete releases an adopted user tab without closing it.
+`--active` resolves the active tab in the last-focused browser window, attaches
+it through the extension, and adopts it without a toolbar click. In MCP, pass
+`active: true` to `session_adopt`.
+
+For a non-active tab, the toolbar remains the explicit way to add several tabs
+to the attached-tab pool. `targetUrl` and `targetIndex` then select an existing
+attached page; they never navigate. A URL selector must match exactly one page,
+and active, URL, and index selectors cannot be combined. Adoption makes that tab
+the session default, closes the session's previous relay-created page, and is
+exclusive to one BrowserRig session. Reset or delete releases an adopted
+user tab without closing it.
 
 Prefer adoption for authenticated browser state rather than reproducing login
 in a fresh page.
@@ -109,23 +121,23 @@ not merely evidence that an action was attempted.
 ### 4. Continue Or Finish Cleanly
 
 Named sessions preserve their default page across short-lived CLI and MCP
-processes. They also survive relay restarts: Browser Control restores the id,
+processes. They also survive relay restarts: BrowserRig restores the id,
 read-only mode, and exact default target. JavaScript `state` and snapshot refs
 are process-local and reset after a relay restart with an explicit warning.
 
 ```bash
-browser-control session list
-browser-control session reset github
-browser-control session delete github
+browserrig session list
+browserrig session reset github
+browserrig session delete github
 ```
 
 Every execute is journaled under
-`~/.browser-control/sessions/<id>/journal.jsonl`. The journal records code,
+`~/.browserrig/sessions/<id>/journal.jsonl`. The journal records code,
 status, duration, URL movement, warnings, handoffs, and bounded diagnostics.
 Never place credentials directly in execute source.
 
 ```bash
-browser-control journal --session github --limit 50
+browserrig journal --session github --limit 50
 ```
 
 Completion: retain the session only when follow-up work is expected; otherwise
@@ -134,7 +146,7 @@ work.
 
 ## Canonical Authenticated Flow
 
-The distinguishing Browser Control workflow is an authenticated tab plus a
+The distinguishing BrowserRig workflow is an authenticated tab plus a
 human-only prompt:
 
 Attach and adopt the existing tab, inspect its real UI, fill ordinary fields,
@@ -143,7 +155,7 @@ After the user completes it, verify the authenticated destination. The same
 session can continue after an MCP process or relay restart.
 
 When the prompt-triggering action may itself block, put only that action in
-`start`. Browser Control presents and acknowledges WAIT before invoking it:
+`start`. BrowserRig presents and acknowledges WAIT before invoking it:
 
 ```js
 await handoff("Complete the security-key prompt, then continue", {
@@ -196,11 +208,11 @@ correctness. Return screenshot buffers through MCP when visual evidence matters.
 
 Execute code can use `page`, `context`, `browser`, persistent `state`, selected
 Node modules through `modules` and aliases such as `fs` and `path`, plus the
-Browser Control helpers documented here. Single expressions auto-return;
+BrowserRig helpers documented here. Single expressions auto-return;
 multi-statement scripts need `return`. Use `--file` for longer scripts:
 
 ```bash
-browser-control execute --session github --file ./perform-flow.js
+browserrig execute --session github --file ./perform-flow.js
 ```
 
 Human CLI output includes logs, warnings, and a concise aftermath. Use `--json`
@@ -208,7 +220,7 @@ when another command needs to branch on `ok`, `value`, `error`, `warnings`, or
 `aftermath`:
 
 ```bash
-browser-control execute --json --session github '({ url: page.url() })' | jq .value.url
+browserrig execute --json --session github '({ url: page.url() })' | jq .value.url
 ```
 
 Playwright downloads are unavailable through extension-backed tabs because
@@ -218,15 +230,15 @@ page and write them with `fs`. Do not retry `page.waitForEvent("download")`.
 
 ## Safety
 
-Browser Control blocks CDP commands that would destroy shared browser state,
+BrowserRig blocks CDP commands that would destroy shared browser state,
 including browser close and cookie/cache clearing. Never work around those
 guardrails.
 
 For inspect-only work, use a read-only session:
 
 ```bash
-browser-control session new inspect-prod --read-only
-browser-control execute --session inspect-prod 'await page.goto("https://example.com"); return page.title()'
+browserrig session new inspect-prod --read-only
+browserrig execute --session inspect-prod 'await page.goto("https://example.com"); return page.title()'
 ```
 
 Read-only sessions reject `Input.*`, so they cannot click or type through
@@ -248,14 +260,14 @@ before accepting it.
 
 ## TypeScript Client
 
-Applications can import `BrowserControlClient` for schema-decoded,
+Applications can import `BrowserRigClient` for schema-decoded,
 same-origin requests authenticated by a session page. Use `sensitive: true`
-for token-bearing responses and reveal them through Browser Control's API, not
+for token-bearing responses and reveal them through BrowserRig's API, not
 the application's own Effect `Redacted` import; package-manager layouts may
 resolve separate Effect runtimes.
 
 ```ts
-import { BrowserControlClient } from "@opencode-ai/browser-control"
+import { BrowserRigClient } from "browserrig"
 
 const sensitive = yield* origin.json({
   path: "/api/session",
@@ -264,7 +276,7 @@ const sensitive = yield* origin.json({
   response: SessionResponse,
   sensitive: true,
 })
-const session = BrowserControlClient.reveal(sensitive)
+const session = BrowserRigClient.reveal(sensitive)
 ```
 
 ## Authenticated Network Capture
@@ -275,16 +287,16 @@ Capture each flow at least twice with different inputs so constants and
 parameters can be distinguished.
 
 ```bash
-browser-control network start --session github --url /api/ \
+browserrig network start --session github --url /api/ \
   --resource-type fetch --resource-type xhr
-browser-control execute --session github --file ./perform-flow.js
-browser-control network status --session github
-browser-control network stop --session github \
+browserrig execute --session github --file ./perform-flow.js
+browserrig network status --session github
+browserrig network stop --session github \
   --output ./github.har --secrets github
 ```
 
 Written artifacts replace credential-bearing headers, cookies, query fields,
-and structured body fields with stable references such as `${BC_SECRET_1}`.
+and structured body fields with stable references such as `${BROWSERRIG_SECRET_1}`.
 `--secrets github` stores lossless values separately in a mode-`0600` Secret
 Profile. Never copy profile values into source, output, diagnostics, or journals,
 and never deliberately return or log credentials.
@@ -294,14 +306,14 @@ flow, then verify each function with a harmless live request. Run generated
 clients without exposing values:
 
 ```bash
-browser-control secrets status github
-browser-control secrets run github -- ./github-cli repositories
+browserrig secrets status github
+browserrig secrets run github -- ./github-cli repositories
 ```
 
 Refresh credentials normally renewed by a page reload with:
 
 ```bash
-browser-control secrets refresh github --session github --url /api/
+browserrig secrets refresh github --session github --url /api/
 ```
 
 If refresh requires login or a human prompt, reauthenticate in the adopted tab
@@ -317,21 +329,26 @@ in source or output.
 Record an attached or session-owned tab with:
 
 ```bash
-browser-control recording start ./tmp/demo.mp4 --session github --mode cdp
-browser-control recording status --session github
-browser-control recording stop --session github
+browserrig recording start ./tmp/demo.mp4 --session github --mode cdp
+browserrig recording status --session github
+browserrig recording stop --session github
 ```
 
-`--mode auto` uses tab capture for user-owned tabs and CDP for relay-owned tabs.
-Tab capture can include audio; CDP requires `ffmpeg` and has no audio. Use the
-command's `--help` for format and cursor options.
+`--mode auto` prefers tab capture for user-owned tabs and CDP for relay-owned
+tabs. A no-click adopted tab does not receive Chrome's temporary `activeTab`
+capture grant; when that grant is absent and audio was not requested, automatic
+mode falls back to CDP. Explicit `--mode tab-capture` and `--audio` require one
+toolbar invocation on the tab. If that click detaches the tab, run `session
+adopt --active` again before recording. Tab capture can include audio; CDP
+requires `ffmpeg` and has no audio. Use the command's `--help` for format and
+cursor options.
 
 Completion: stop the recorder, inspect the resulting media rather than only its
 existence, and report the viewport, state, and interaction path actually tested.
 
 ## Troubleshooting
 
-1. Run `browser-control doctor`; it checks package metadata, CLI/relay build
+1. Run `browserrig doctor`; it checks package metadata, CLI/relay build
    identity, extension protocol compatibility, sessions, targets, and artifacts.
 2. Use `status --json` to inspect exact sessions and target ownership.
 3. Reproduce once with the smallest execute before changing code.
@@ -347,14 +364,15 @@ Common diagnoses:
 - `Target not found`: attach the intended tab, then select or adopt it using a
   unique URL substring or explicit index.
 - All targets disappeared: dismissing Chromium's debugging banner detaches every
-  tab. Reattach through the toolbar.
+  tab. Run `session adopt --active` for the current tab; use the toolbar only to
+  curate additional non-active tabs.
 - Relay restarted: named sessions reclaim exact targets, but JavaScript `state`
   and snapshot refs reset. Continue after the warning.
 - Reset/delete after an extension update may wait briefly for target
   re-announcement; if the old relay-owned target is absent from the completed
-  inventory, Browser Control forgets the dead identity without closing a
+  inventory, BrowserRig forgets the dead identity without closing a
   guessed tab.
-- Repeated execution-context errors: run one short follow-up so Browser Control
+- Repeated execution-context errors: run one short follow-up so BrowserRig
   can health-check the page. It may recreate a relay-owned page, but it never
   replaces an unhealthy adopted user tab; reset or re-adopt that tab.
 - Fill timeout on login fields: inspect first, then try `fillInput` after
@@ -363,12 +381,12 @@ Common diagnoses:
 - Download wait fails: use fetch plus `fs`; extension-backed Playwright cannot
   retain a native download artifact.
 
-For deeper relay diagnosis, restart with `BROWSER_CONTROL_DEBUG=1`. Debug traces
+For deeper relay diagnosis, restart with `BROWSERRIG_DEBUG=1`. Debug traces
 must never include expressions, arguments, results, headers, cookies, or form
 values.
 
-Whenever Browser Control fails, wedges, replaces a page/session, or behaves
-unexpectedly, create or update a `browser-control` project todo with the Browser
+Whenever BrowserRig fails, wedges, replaces a page/session, or behaves
+unexpectedly, create or update a `browserrig` project todo with the Browser
 Control version, safe session/page context, exact error, deterministic
 reproduction, expected versus actual behavior, and recovery attempted. Never
 include credentials, form values, or private account data.

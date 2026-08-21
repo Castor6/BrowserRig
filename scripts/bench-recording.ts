@@ -10,10 +10,10 @@ const results: RecordingMetrics[] = []
 for (let index = 0; index < warmupRuns + measuredRuns; index += 1) {
   const session = `recording-bench-${process.pid}-${index}`
   const outputPath = path.resolve(`tmp/${session}.mp4`)
-  runBrowserControl(["session", "new", session])
+  runBrowserRig(["session", "new", session])
   try {
-    runBrowserControl(["execute", "--session", session, setupCode()])
-    runBrowserControl([
+    runBrowserRig(["execute", "--session", session, setupCode()])
+    runBrowserRig([
       "recording",
       "start",
       outputPath,
@@ -26,16 +26,16 @@ for (let index = 0; index < warmupRuns + measuredRuns; index += 1) {
       "--max-duration-ms",
       String(durationMs + 10_000),
     ])
-    runBrowserControl(["execute", "--session", session, animateCode(durationMs)])
-    runBrowserControl(["recording", "stop", "--session", session])
+    runBrowserRig(["execute", "--session", session, animateCode(durationMs)])
+    runBrowserRig(["recording", "stop", "--session", session])
     const metrics = JSON.parse(await fs.readFile(`${outputPath}.json`, "utf8")) as RecordingMetrics
     const encodedSourceFps = metrics.encodedSourceFrameCount / (metrics.durationMs / 1_000)
     const dropRatio = metrics.droppedFrameCount / Math.max(1, metrics.sourceFrameCount)
     console.log(`${index < warmupRuns ? "warmup" : "run"} ${index + 1}: encoded_source_fps=${encodedSourceFps.toFixed(2)} drop_ratio=${dropRatio.toFixed(4)}`)
     if (index >= warmupRuns) results.push(metrics)
   } finally {
-    runBrowserControl(["recording", "cancel", "--session", session], true)
-    runBrowserControl(["session", "delete", session], true)
+    runBrowserRig(["recording", "cancel", "--session", session], true)
+    runBrowserRig(["session", "delete", session], true)
     if (process.env.BENCH_KEEP_ARTIFACTS !== "1") {
       await fs.rm(outputPath, { force: true })
       await fs.rm(`${outputPath}.json`, { force: true })
@@ -57,10 +57,10 @@ type RecordingMetrics = {
   readonly droppedFrameCount: number
 }
 
-function runBrowserControl(args: string[], ignoreFailure = false): void {
-  const result = spawnSync("browser-control", args, { encoding: "utf8" })
+function runBrowserRig(args: string[], ignoreFailure = false): void {
+  const result = spawnSync("browserrig", args, { encoding: "utf8" })
   if (!ignoreFailure && result.status !== 0) {
-    throw new Error(result.stderr.trim() || result.stdout.trim() || `browser-control ${args.join(" ")} failed`)
+    throw new Error(result.stderr.trim() || result.stdout.trim() || `browserrig ${args.join(" ")} failed`)
   }
 }
 
@@ -91,7 +91,7 @@ await page.setContent(
   '@keyframes grid{to{transform:translate3d(88px,88px,0)}}' +
   '@keyframes orbit{from{transform:translate3d(8vw,10vh,0) rotate(0)}to{transform:translate3d(78vw,58vh,0) rotate(360deg)}}' +
   '@keyframes ticker{from{transform:translateX(100%)}to{transform:translateX(-130%)}}' +
-  '</style><div class="grid"></div><div class="orb"></div><div class="ticker">BROWSER CONTROL · SMOOTH MOTION ·</div>'
+  '</style><div class="grid"></div><div class="orb"></div><div class="ticker">BROWSERRIG · SMOOTH MOTION ·</div>'
 )
 return await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
 `

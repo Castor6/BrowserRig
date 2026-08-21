@@ -180,9 +180,9 @@ function connectFakeExtension(relayUrl: string): Promise<WebSocket & { readonly 
   return new Promise((resolve, reject) => {
     let nextTabId = 1
     const commands: ExtensionCommand[] = []
-    const socket = new WebSocket(`${relayUrl.replace(/^http/, "ws")}/extension`, { origin: "chrome-extension://browser-control-test" })
+    const socket = new WebSocket(`${relayUrl.replace(/^http/, "ws")}/extension`, { origin: "chrome-extension://browserrig-test" })
     socket.on("open", () => {
-      socket.send(JSON.stringify({ method: "hello", params: { version: "test", protocolVersion: 2 } }))
+      socket.send(JSON.stringify({ method: "hello", params: { version: "test", protocolVersion: 3 } }))
       resolve(Object.assign(socket, { commands }))
     })
     socket.on("error", reject)
@@ -212,11 +212,11 @@ function connectFakeExtension(relayUrl: string): Promise<WebSocket & { readonly 
   })
 }
 
-function connectCdpClient(relayUrl: string, browserControlSessionId?: string): Promise<WebSocket & { readonly events: CdpEvent[]; readonly messages: CdpMessage[] }> {
+function connectCdpClient(relayUrl: string, browserRigSessionId?: string): Promise<WebSocket & { readonly events: CdpEvent[]; readonly messages: CdpMessage[] }> {
   return new Promise((resolve, reject) => {
     const endpoint = new URL(`${relayUrl.replace(/^http/, "ws")}/devtools/browser/test`)
-    if (browserControlSessionId) {
-      endpoint.searchParams.set("browserControlSessionId", browserControlSessionId)
+    if (browserRigSessionId) {
+      endpoint.searchParams.set("browserRigSessionId", browserRigSessionId)
     }
     const socket = new WebSocket(endpoint)
     const messages: CdpMessage[] = []

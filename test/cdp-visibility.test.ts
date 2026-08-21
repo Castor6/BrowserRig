@@ -11,14 +11,14 @@ function targetInfo(targetId: string, url = "https://example.com/"): TargetInfo 
 function rootTarget(options: {
   readonly tabId: number
   readonly sessionId: string
-  readonly browserControlSessionId?: string
+  readonly browserRigSessionId?: string
 }): ConnectedTarget {
   return {
     tabId: options.tabId,
     sessionId: options.sessionId,
     targetInfo: targetInfo(`target-${options.tabId}`),
-    owner: options.browserControlSessionId ? "relay" : "user",
-    ...(options.browserControlSessionId ? { browserControlSessionId: options.browserControlSessionId } : {}),
+    owner: options.browserRigSessionId ? "relay" : "user",
+    ...(options.browserRigSessionId ? { browserRigSessionId: options.browserRigSessionId } : {}),
   }
 }
 
@@ -47,7 +47,7 @@ describe("canClientSeeTarget", () => {
 describe("TargetRegistry.allTargetInfos visibility filter", () => {
   it("filters root and child targets through isVisibleTarget", () => {
     const registry = new TargetRegistry()
-    const owned = rootTarget({ tabId: 1, sessionId: "bc-tab-1", browserControlSessionId: "session-a" })
+    const owned = rootTarget({ tabId: 1, sessionId: "bc-tab-1", browserRigSessionId: "session-a" })
     const unowned = rootTarget({ tabId: 2, sessionId: "bc-tab-2" })
     registry.addRootTarget(owned)
     registry.addRootTarget(unowned)
@@ -68,7 +68,7 @@ describe("TargetRegistry.allTargetInfos visibility filter", () => {
             const root = registry.tabTargets.get(target.tabId)
             return canClientSeeTarget({
               clientSessionId,
-              targetOwnerSessionId: root?.browserControlSessionId,
+              targetOwnerSessionId: root?.browserRigSessionId,
               targetOwner: root?.owner ?? "relay",
               clientHasOwnedTarget: clientSessionId === "session-a",
             })

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { Deferred, Effect, Fiber } from "effect"
-import { adoptionTipForUrl, BrowserControlSessions, shouldAppendAdoptionTip } from "../src/session-manager.ts"
+import { adoptionTipForUrl, BrowserRigSessions, shouldAppendAdoptionTip } from "../src/session-manager.ts"
 import type { ExecuteSandboxLike } from "../src/relay-types.ts"
 import type { PersistedSession } from "../src/session-catalog.ts"
 import { TargetRegistry } from "../src/target-registry.ts"
@@ -115,9 +115,9 @@ const makeFakeSandbox = (options?: {
   }
 }
 
-describe("BrowserControlSessions", () => {
+describe("BrowserRigSessions", () => {
   it("atomically ensures one named session", async () => {
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox())
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
     const summaries = await Effect.runPromise(Effect.all([
       sessions.ensure("x-live-chat-auth"),
       sessions.ensure("x-live-chat-auth"),
@@ -128,7 +128,7 @@ describe("BrowserControlSessions", () => {
 
   it("runs authenticated requests under the session permit without journaling", async () => {
     const records: string[] = []
-    const sessions = new BrowserControlSessions(
+    const sessions = new BrowserRigSessions(
       "http://127.0.0.1:0",
       () => makeFakeSandbox(),
       { onExecuteRecord: (record) => records.push(record.code) },
@@ -146,7 +146,7 @@ describe("BrowserControlSessions", () => {
 
   it("blocks mutations in read-only sessions before reaching the sandbox", async () => {
     let requests = 0
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox({
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox({
       onAuthenticatedJson: () => Effect.sync(() => {
         requests += 1
         return { _tag: "Success", status: 200, value: null } as const
@@ -165,7 +165,7 @@ describe("BrowserControlSessions", () => {
 
   it("restores persisted identity and target ownership with reset JavaScript state", async () => {
     const persisted: PersistedSession[][] = []
-    const sessions = new BrowserControlSessions(
+    const sessions = new BrowserRigSessions(
       "http://127.0.0.1:0",
       () => makeFakeSandbox({ defaultTargetId: "target-1" }),
       { onSessionsChanged: (entries) => persisted.push([...entries]) },
@@ -177,7 +177,7 @@ describe("BrowserControlSessions", () => {
     expect(descriptor).toMatchObject({ id: "alpha", readOnly: true, target: { id: "target-1", owner: "relay" } })
 
     const restoredSandboxes: FakeSandbox[] = []
-    const restored = new BrowserControlSessions("http://127.0.0.1:0", () => {
+    const restored = new BrowserRigSessions("http://127.0.0.1:0", () => {
       const sandbox = makeFakeSandbox()
       restoredSandboxes.push(sandbox)
       return sandbox
@@ -190,7 +190,7 @@ describe("BrowserControlSessions", () => {
   })
 
   it("rejects duplicate target ownership in a persisted catalog", () => {
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox())
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
     const entry = {
       createdAt: "2026-07-19T00:00:00.000Z",
       updatedAt: "2026-07-19T00:01:00.000Z",
@@ -204,7 +204,7 @@ describe("BrowserControlSessions", () => {
 
   it("persists target identity while disconnecting sessions for relay shutdown", async () => {
     const persisted: PersistedSession[][] = []
-    const sessions = new BrowserControlSessions(
+    const sessions = new BrowserRigSessions(
       "http://127.0.0.1:0",
       () => makeFakeSandbox({ defaultTargetId: "target-1" }),
       { onSessionsChanged: (entries) => persisted.push([...entries]) },
@@ -232,7 +232,7 @@ describe("BrowserControlSessions", () => {
         releaseCommit = resolve
       })
       let blockWrites = false
-      const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox(), {
+      const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox(), {
         onSessionsChanged: () => {
           if (!blockWrites) return
           markCommitStarted?.()
@@ -263,7 +263,7 @@ describe("BrowserControlSessions", () => {
     })
     let blockWrites = false
     const committed: PersistedSession[][] = []
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox(), {
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox(), {
       onSessionsChanged: async (entries) => {
         if (blockWrites) {
           markCommitStarted?.()
@@ -290,7 +290,7 @@ describe("BrowserControlSessions", () => {
   it("fails durable lifecycle operations when the catalog cannot commit", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
     let failWrites = false
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox(), {
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox(), {
       onSessionsChanged: () => failWrites ? Promise.reject(new Error("catalog unavailable")) : undefined,
     })
     sessions.createNew("alpha")
@@ -311,7 +311,7 @@ describe("BrowserControlSessions", () => {
 
   it("releases a restored relay-owned target during reset", async () => {
     const released: string[] = []
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox(), {
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox(), {
       onReleaseRelayTarget: (targetId) => Effect.sync(() => {
         released.push(targetId)
       }),
@@ -331,7 +331,7 @@ describe("BrowserControlSessions", () => {
   })
 
   it("creates a readable session id inside the first execute request", async () => {
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox())
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
 
     const result = await Effect.runPromise(sessions.execute({ code: "noop", createIfMissing: true }))
 
@@ -341,7 +341,7 @@ describe("BrowserControlSessions", () => {
   })
 
   it("requires createIfMissing when execute omits the session id", async () => {
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox())
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
 
     const error = await Effect.runPromise(sessions.execute({ code: "noop", createIfMissing: false }).pipe(Effect.flip))
 
@@ -351,7 +351,7 @@ describe("BrowserControlSessions", () => {
 
   it("removes an implicitly created session when page acquisition fails", async () => {
     const sandbox = makeFakeSandbox({ setupFailure: new Error("extension disconnected") })
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => sandbox)
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandbox)
 
     const error = await Effect.runPromise(sessions.execute({ code: "noop", createIfMissing: true }).pipe(Effect.flip))
 
@@ -369,7 +369,7 @@ describe("BrowserControlSessions", () => {
       logSummary: { totalCount: 0, returnedCount: 0, repeatedCount: 0, omittedCount: 0 },
       warnings: [],
     })
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => sandbox)
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandbox)
 
     const result = await Effect.runPromise(sessions.execute({ code: "const = ]", createIfMissing: true }))
 
@@ -383,7 +383,7 @@ describe("BrowserControlSessions", () => {
     await Effect.runPromise(
       Effect.gen(function* () {
         const sandbox = makeFakeSandbox()
-        const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => sandbox)
+        const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandbox)
         sessions.createNew("alpha")
         expect(sessions.listSummaries().map((session) => session.id)).toEqual(["alpha"])
         expect(yield* sessions.delete("alpha")).toBe(true)
@@ -394,7 +394,7 @@ describe("BrowserControlSessions", () => {
   })
 
   it("rejects duplicate explicit session ids", () => {
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox())
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
     sessions.createNew("alpha")
     expect(() => sessions.createNew("alpha")).toThrow("Session already exists")
   })
@@ -403,7 +403,7 @@ describe("BrowserControlSessions", () => {
     const first = makeFakeSandbox({ defaultTargetId: "target-1" })
     const second = makeFakeSandbox({ defaultTargetId: "target-2" })
     const sandboxes = [first, second]
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => sandboxes.shift()!)
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandboxes.shift()!)
     sessions.createNew("alpha")
     sessions.createNew("beta")
 
@@ -416,7 +416,7 @@ describe("BrowserControlSessions", () => {
     const first = makeFakeSandbox({ defaultTargetId: "target-1" })
     const second = makeFakeSandbox({ defaultTargetId: "target-2" })
     const sandboxes = [first, second]
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => sandboxes.shift()!)
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandboxes.shift()!)
     sessions.createNew("alpha")
     sessions.createNew("beta")
 
@@ -435,7 +435,7 @@ describe("BrowserControlSessions", () => {
             Effect.andThen(Deferred.await(release)),
           ),
         })
-        const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => sandbox)
+        const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandbox)
         sessions.createNew("alpha")
 
         const executeFiber = yield* Effect.forkChild(
@@ -469,7 +469,7 @@ describe("BrowserControlSessions", () => {
             Effect.andThen(Deferred.await(release)),
           ),
         })
-        const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => sandbox)
+        const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandbox)
         sessions.createNew("alpha")
 
         const executeFiber = yield* Effect.forkChild(
@@ -499,7 +499,7 @@ describe("BrowserControlSessions", () => {
             Effect.andThen(Deferred.await(never)),
           ),
         })
-        const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => sandbox, {
+        const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandbox, {
           lifecycleTimeoutMs: 20,
         })
         sessions.createNew("alpha")
@@ -521,7 +521,7 @@ describe("BrowserControlSessions", () => {
       const started = yield* Deferred.make<void>()
       const release = yield* Deferred.make<void>()
       const sandboxes: FakeSandbox[] = []
-      const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => {
+      const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => {
         const sandbox = makeFakeSandbox(sandboxes.length === 0
           ? {
               onAdopt: () => Deferred.succeed(started, undefined).pipe(
@@ -565,7 +565,7 @@ describe("BrowserControlSessions", () => {
         adoptFailure: new Error("target detached"),
         onClose: Deferred.succeed(closeStarted, undefined).pipe(Effect.andThen(Deferred.await(releaseClose))),
       })
-      const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => sandbox)
+      const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandbox)
 
       const adoption = yield* Effect.forkChild(sessions.adopt({
         createIfMissing: true,
@@ -598,7 +598,7 @@ describe("BrowserControlSessions", () => {
           executed = true
         }),
       })
-      const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => sandbox, { lifecycleTimeoutMs: 5_000 })
+      const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandbox, { lifecycleTimeoutMs: 5_000 })
 
       const adoption = yield* Effect.forkChild(sessions.adopt({
         sessionId: "alpha",
@@ -629,7 +629,7 @@ describe("BrowserControlSessions", () => {
       const releaseFirst = yield* Deferred.make<void>()
       const secondStarted = yield* Deferred.make<void>()
       const releaseSecond = yield* Deferred.make<void>()
-      const sessions = new BrowserControlSessions("http://127.0.0.1:0", (id) => makeFakeSandbox({
+      const sessions = new BrowserRigSessions("http://127.0.0.1:0", (id) => makeFakeSandbox({
         onAdopt: () => (id === "alpha" ? Deferred.succeed(firstStarted, undefined).pipe(
           Effect.andThen(Deferred.await(releaseFirst)),
           Effect.as("https://example.com/alpha"),
@@ -675,7 +675,7 @@ describe("BrowserControlSessions", () => {
       const executeStarted = yield* Deferred.make<void>()
       const releaseExecute = yield* Deferred.make<void>()
       let betaAdopted = false
-      const sessions = new BrowserControlSessions("http://127.0.0.1:0", (id) => makeFakeSandbox(id === "alpha"
+      const sessions = new BrowserRigSessions("http://127.0.0.1:0", (id) => makeFakeSandbox(id === "alpha"
         ? {
             onAdopt: () => Deferred.succeed(firstStarted, undefined).pipe(
               Effect.andThen(Deferred.await(releaseFirst)),
@@ -736,7 +736,7 @@ describe("BrowserControlSessions", () => {
             Effect.andThen(Deferred.await(never)),
           ),
         })
-        const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => sandbox, {
+        const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandbox, {
           lifecycleTimeoutMs: 20,
         })
         sessions.createNew("alpha")
@@ -754,7 +754,7 @@ describe("BrowserControlSessions", () => {
 
   it("delete completes when sandbox close never settles", async () => {
     const sandbox = makeFakeSandbox()
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => ({
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => ({
       ...sandbox,
       close: () => Effect.never,
     }), {
@@ -772,7 +772,7 @@ describe("BrowserControlSessions", () => {
         const started = yield* Deferred.make<void>()
         const release = yield* Deferred.make<void>()
         const sandboxes: FakeSandbox[] = []
-        const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => {
+        const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => {
           const sandbox = sandboxes.length === 0
             ? makeFakeSandbox({
               onExecute: Deferred.succeed(started, undefined).pipe(
@@ -807,7 +807,7 @@ describe("BrowserControlSessions", () => {
   })
 
   it("execute fails for unknown sessions when createIfMissing is false", async () => {
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox())
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
     const result = await Effect.runPromise(
       sessions.execute({ sessionId: "ghost", code: "noop", createIfMissing: false }).pipe(Effect.flip),
     )
@@ -815,7 +815,7 @@ describe("BrowserControlSessions", () => {
   })
 
   it("reports whether execute created a missing session", async () => {
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox())
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
     const first = await Effect.runPromise(
       sessions.execute({ sessionId: "ghost", code: "noop", createIfMissing: true }),
     )
@@ -831,7 +831,7 @@ describe("BrowserControlSessions", () => {
 
   it("marks the exact crashed target on active sandboxes", () => {
     const sandboxes = new Map<string, FakeSandbox>()
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", (id) => {
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", (id) => {
       const sandbox = makeFakeSandbox({ defaultTargetId: id === "alpha" ? "target-9" : "target-10" })
       sandboxes.set(id, sandbox)
       return sandbox
@@ -845,7 +845,7 @@ describe("BrowserControlSessions", () => {
   })
 
   it("tracks read-only sessions and preserves the flag across reset", async () => {
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox())
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
     sessions.createNew("locked", { readOnly: true })
     sessions.createNew("open")
     expect(sessions.isReadOnly("locked")).toBe(true)
@@ -865,7 +865,7 @@ describe("BrowserControlSessions", () => {
         const release = yield* Deferred.make<void>()
         const stateChanges: Array<[string, boolean]> = []
         const records: Array<{ sessionId: string; code: string }> = []
-        const sessions = new BrowserControlSessions(
+        const sessions = new BrowserRigSessions(
           "http://127.0.0.1:0",
           () => makeFakeSandbox({
             onExecute: Deferred.succeed(started, undefined).pipe(
@@ -915,7 +915,7 @@ describe("BrowserControlSessions", () => {
       const journalCompleted = new Promise<void>((resolve) => {
         markJournalCompleted = resolve
       })
-      const sessions = new BrowserControlSessions(
+      const sessions = new BrowserRigSessions(
         "http://127.0.0.1:0",
         () => makeFakeSandbox({
           onExecute: Deferred.succeed(executeStarted, undefined).pipe(
@@ -948,7 +948,7 @@ describe("BrowserControlSessions", () => {
 
   it("bounds best-effort journal I/O without retaining the execute permit", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox(), {
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox(), {
       journalTimeoutMs: 20,
       onExecuteRecord: () => new Promise(() => {}),
     })
@@ -964,7 +964,7 @@ describe("BrowserControlSessions", () => {
 
   it("removes an implicitly created session when its durable execute commit fails", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox(), {
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox(), {
       onSessionsChanged: () => Promise.reject(new Error("catalog unavailable")),
     })
     try {
@@ -978,7 +978,7 @@ describe("BrowserControlSessions", () => {
 
   it("hook failures do not fail execute", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
-    const sessions = new BrowserControlSessions(
+    const sessions = new BrowserRigSessions(
       "http://127.0.0.1:0",
       () => makeFakeSandbox(),
       {
@@ -1004,9 +1004,9 @@ describe("BrowserControlSessions", () => {
 
   it("redacts capture values before execute code reaches the session journal hook", async () => {
     const records: string[] = []
-    const sessions = new BrowserControlSessions(
+    const sessions = new BrowserRigSessions(
       "http://127.0.0.1:0",
-      () => makeFakeSandbox({ redactText: (text) => text.replaceAll("live-token", "${BC_SECRET_1}") }),
+      () => makeFakeSandbox({ redactText: (text) => text.replaceAll("live-token", "${BROWSERRIG_SECRET_1}") }),
       { onExecuteRecord: (record) => records.push(record.code) },
     )
     sessions.createNew("alpha")
@@ -1016,12 +1016,12 @@ describe("BrowserControlSessions", () => {
       code: "return 'live-token'",
       createIfMissing: false,
     }))
-    expect(records).toEqual(["return '${BC_SECRET_1}'"])
+    expect(records).toEqual(["return '${BROWSERRIG_SECRET_1}'"])
   })
 
   it("adopts a selected page while serializing on the session execute permit", async () => {
     const sandbox = makeFakeSandbox()
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => sandbox)
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandbox)
     sessions.createNew("alpha")
 
     const result = await Effect.runPromise(
@@ -1048,18 +1048,18 @@ describe("BrowserControlSessions", () => {
         canAccessOpener: false,
       },
     })
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox(), undefined, registry)
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox(), undefined, registry)
     sessions.createNew("alpha")
 
     await Effect.runPromise(sessions.adopt({ sessionId: "alpha", createIfMissing: false, targetId: "target-2", targetUrl: "https://example.com/adopted" }))
-    expect(registry.targetsByTargetId.get("target-2")?.browserControlSessionId).toBe("alpha")
+    expect(registry.targetsByTargetId.get("target-2")?.browserRigSessionId).toBe("alpha")
 
     await Effect.runPromise(sessions.reset("alpha"))
-    expect(registry.targetsByTargetId.get("target-2")?.browserControlSessionId).toBeUndefined()
+    expect(registry.targetsByTargetId.get("target-2")?.browserRigSessionId).toBeUndefined()
   })
 
   it("reports whether adopt created a missing session", async () => {
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox())
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
     const result = await Effect.runPromise(
       sessions.adopt({ sessionId: "ghost", createIfMissing: true, targetId: "target-1", targetUrl: "https://example.com/adopted" }),
     )
@@ -1068,7 +1068,7 @@ describe("BrowserControlSessions", () => {
   })
 
   it("creates and cleans up an implicit adopt session transactionally", async () => {
-    const success = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox())
+    const success = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
     const result = await Effect.runPromise(
       success.adopt({ createIfMissing: true, targetId: "target-1", targetUrl: "https://example.com/adopted" }),
     )
@@ -1076,7 +1076,7 @@ describe("BrowserControlSessions", () => {
     expect(result.session.created).toBe(true)
 
     const sandbox = makeFakeSandbox({ adoptFailure: new Error("target detached") })
-    const failure = new BrowserControlSessions("http://127.0.0.1:0", () => sandbox)
+    const failure = new BrowserRigSessions("http://127.0.0.1:0", () => sandbox)
     const error = await Effect.runPromise(
       failure.adopt({ createIfMissing: true, targetId: "target-1", targetUrl: "https://example.com/adopted" }).pipe(Effect.flip),
     )
@@ -1086,7 +1086,7 @@ describe("BrowserControlSessions", () => {
   })
 
   it("requires createIfMissing when adopt omits the session id", async () => {
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox())
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
 
     const error = await Effect.runPromise(
       sessions.adopt({ createIfMissing: false, targetId: "target-1", targetUrl: "https://example.com/adopted" }).pipe(Effect.flip),
@@ -1100,7 +1100,7 @@ describe("BrowserControlSessions", () => {
     await Effect.runPromise(Effect.gen(function* () {
       const started = yield* Deferred.make<void>()
       const release = yield* Deferred.make<void>()
-      const sessions = new BrowserControlSessions("http://127.0.0.1:0", (id) => makeFakeSandbox(id === "alpha"
+      const sessions = new BrowserRigSessions("http://127.0.0.1:0", (id) => makeFakeSandbox(id === "alpha"
         ? {
             onAdopt: () => Deferred.succeed(started, undefined).pipe(
               Effect.andThen(Deferred.await(release)),
@@ -1156,7 +1156,7 @@ describe("BrowserControlSessions", () => {
           canAccessOpener: false,
         },
       })
-      const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox({
+      const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox({
         onAdopt: () => Deferred.succeed(started, undefined).pipe(
           Effect.andThen(Deferred.await(release)),
           Effect.as("https://example.com/adopted"),
@@ -1173,7 +1173,7 @@ describe("BrowserControlSessions", () => {
       yield* Deferred.await(started)
       const error = yield* Fiber.join(adopt)
       expect(error.message).toBe("Session adopt for alpha timed out after 20ms")
-      expect(registry.targetsByTargetId.get("target-1")?.browserControlSessionId).toBeUndefined()
+      expect(registry.targetsByTargetId.get("target-1")?.browserRigSessionId).toBeUndefined()
 
       const deleteResult = yield* sessions.delete("alpha").pipe(Effect.result)
       expect(deleteResult._tag).toBe("Failure")
@@ -1181,7 +1181,7 @@ describe("BrowserControlSessions", () => {
       yield* Deferred.succeed(release, undefined)
       for (let i = 0; i < 20; i++) yield* Effect.yieldNow
       expect(sessions.adoptedTargetId("alpha")).toBeUndefined()
-      expect(registry.targetsByTargetId.get("target-1")?.browserControlSessionId).toBeUndefined()
+      expect(registry.targetsByTargetId.get("target-1")?.browserRigSessionId).toBeUndefined()
     }))
   })
 
@@ -1202,8 +1202,8 @@ describe("BrowserControlSessions", () => {
     })
     addTarget(1, "bc-tab-a", "target-a")
     addTarget(2, "bc-tab-b", "target-b")
-    let sessions: BrowserControlSessions
-    sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox({
+    let sessions: BrowserRigSessions
+    sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox({
       onAdopt: (target) => Effect.sync(() => {
         if (target.targetId === "target-b") {
           addTarget(1, "bc-tab-a2", "target-a2")
@@ -1228,8 +1228,8 @@ describe("BrowserControlSessions", () => {
     }))
 
     expect(sessions.adoptedTargetId("alpha")).toBe("target-b")
-    expect(registry.targetsByTargetId.get("target-a2")?.browserControlSessionId).toBeUndefined()
-    expect(registry.targetsByTargetId.get("target-b")?.browserControlSessionId).toBe("alpha")
+    expect(registry.targetsByTargetId.get("target-a2")?.browserRigSessionId).toBeUndefined()
+    expect(registry.targetsByTargetId.get("target-b")?.browserRigSessionId).toBe("alpha")
   })
 
   it("explicitly releases the previous target when a later adoption fails", async () => {
@@ -1249,7 +1249,7 @@ describe("BrowserControlSessions", () => {
     })
     addTarget(1, "target-a")
     addTarget(2, "target-b")
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox({
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox({
       onAdopt: (target) => target.targetId === "target-b"
         ? Effect.fail(new Error("prompt target vanished"))
         : Effect.succeed(target.url),
@@ -1270,14 +1270,14 @@ describe("BrowserControlSessions", () => {
     }))).rejects.toThrow("prompt target vanished")
 
     expect(sessions.adoptedTargetId("alpha")).toBeUndefined()
-    expect(registry.targetsByTargetId.get("target-a")?.browserControlSessionId).toBeUndefined()
-    expect(registry.targetsByTargetId.get("target-b")?.browserControlSessionId).toBeUndefined()
+    expect(registry.targetsByTargetId.get("target-a")?.browserRigSessionId).toBeUndefined()
+    expect(registry.targetsByTargetId.get("target-b")?.browserRigSessionId).toBeUndefined()
   })
 
   it("surfaces a durable adoption rollback failure", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
     let failRollback = false
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox({
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox({
       adoptFailure: new Error("target vanished"),
     }), {
       onSessionsChanged: (entries) => failRollback && entries.some((entry) => entry.id === "alpha" && !entry.target)
@@ -1307,7 +1307,7 @@ describe("BrowserControlSessions", () => {
       const started = yield* Deferred.make<void>()
       const release = yield* Deferred.make<void>()
       const sandboxes = new Map<string, FakeSandbox>()
-      const sessions = new BrowserControlSessions("http://127.0.0.1:0", (id) => {
+      const sessions = new BrowserRigSessions("http://127.0.0.1:0", (id) => {
         const sandbox = makeFakeSandbox(id === "alpha"
           ? {
               onAdopt: () => Deferred.succeed(started, undefined).pipe(
@@ -1361,7 +1361,7 @@ describe("BrowserControlSessions", () => {
       },
     })
     const sandboxes: FakeSandbox[] = []
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => {
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => {
       const sandbox = makeFakeSandbox(sandboxes.length === 0
         ? {
             onAdopt: () => Effect.sync(() => {
@@ -1398,7 +1398,7 @@ describe("BrowserControlSessions", () => {
     expect(sandboxes[0]?.closes()).toBe(1)
     expect(sandboxes).toHaveLength(2)
     expect(sessions.adoptedTargetId("alpha")).toBeUndefined()
-    expect(registry.targetsByTargetId.get("target-1")?.browserControlSessionId).toBeUndefined()
+    expect(registry.targetsByTargetId.get("target-1")?.browserRigSessionId).toBeUndefined()
   })
 
   it("appends the adoption tip only for bare fresh-page executes with user-attached tabs", async () => {
@@ -1421,12 +1421,12 @@ describe("BrowserControlSessions", () => {
       userAttachedPageUrls: ["https://example.com/path"],
     })).toBe(false)
     expect(adoptionTipForUrl("https://example.com/path")).toBe(
-      "Tip: an attached tab is open (https://example.com/path). Use browser-control session adopt --target-url 'example.com' to drive it instead of this new tab.",
+      "Tip: an attached tab is open (https://example.com/path). Use browserrig session adopt --target-url 'example.com' to drive it instead of this new tab.",
     )
   })
 
   it("adds the adoption tip to execute warnings when a missing session is recreated", async () => {
-    const sessions = new BrowserControlSessions("http://127.0.0.1:0", () => makeFakeSandbox(), {
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox(), {
       getUserAttachedPageUrls: () => ["https://example.com/path"],
     })
 
@@ -1435,7 +1435,7 @@ describe("BrowserControlSessions", () => {
     )
 
     expect(result.warnings).toContain(
-      "Tip: an attached tab is open (https://example.com/path). Use browser-control session adopt --target-url 'example.com' to drive it instead of this new tab.",
+      "Tip: an attached tab is open (https://example.com/path). Use browserrig session adopt --target-url 'example.com' to drive it instead of this new tab.",
     )
   })
 })

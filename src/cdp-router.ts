@@ -24,11 +24,11 @@ export class CdpRouter<Client extends object> {
   canSessionSeeTarget(clientSessionId: string | undefined, target: ConnectedTarget): boolean {
     return canClientSeeTarget({
       clientSessionId,
-      targetOwnerSessionId: target.browserControlSessionId,
+      targetOwnerSessionId: target.browserRigSessionId,
       targetOwner: target.owner,
       clientHasOwnedTarget: clientSessionId !== undefined && this.registry
         .listRootTargets()
-        .some((candidate) => candidate.browserControlSessionId === clientSessionId),
+        .some((candidate) => candidate.browserRigSessionId === clientSessionId),
     })
   }
 

@@ -8,7 +8,7 @@ function root(options: {
   readonly tabId: number
   readonly sessionId: string
   readonly targetId: string
-  readonly browserControlSessionId?: string
+  readonly browserRigSessionId?: string
   readonly owner?: "relay" | "user"
 }): ConnectedTarget {
   return {
@@ -23,7 +23,7 @@ function root(options: {
       canAccessOpener: false,
     },
     owner: options.owner ?? "relay",
-    ...(options.browserControlSessionId ? { browserControlSessionId: options.browserControlSessionId } : {}),
+    ...(options.browserRigSessionId ? { browserRigSessionId: options.browserRigSessionId } : {}),
   }
 }
 
@@ -45,7 +45,7 @@ describe("CdpRouter", () => {
       tabId: 1,
       sessionId: "bc-tab-1",
       targetId: "target-1",
-      browserControlSessionId: "session-a",
+      browserRigSessionId: "session-a",
     })
     registry.addRootTarget(target)
 
@@ -88,7 +88,7 @@ describe("CdpRouter", () => {
       tabId: 1,
       sessionId: "bc-tab-1",
       targetId: "target-1",
-      browserControlSessionId: "session-a",
+      browserRigSessionId: "session-a",
     }))
 
     expect(router.targetInfo(client, {})).toBeUndefined()
@@ -124,8 +124,8 @@ describe("CdpRouter", () => {
     const { clients, registry, router } = setup()
     const client = {}
     clients.register(client, "session-a")
-    const visible = root({ tabId: 1, sessionId: "visible-session", targetId: "visible-target", browserControlSessionId: "session-a" })
-    const hidden = root({ tabId: 2, sessionId: "hidden-session", targetId: "hidden-target", browserControlSessionId: "session-b" })
+    const visible = root({ tabId: 1, sessionId: "visible-session", targetId: "visible-target", browserRigSessionId: "session-a" })
+    const hidden = root({ tabId: 2, sessionId: "hidden-session", targetId: "hidden-target", browserRigSessionId: "session-b" })
     registry.addRootTarget(visible)
     registry.addRootTarget(hidden)
 
@@ -146,7 +146,7 @@ describe("CdpRouter", () => {
       tabId: 2,
       sessionId: "owned-session",
       targetId: "owned-target",
-      browserControlSessionId: "session-a",
+      browserRigSessionId: "session-a",
     }))
 
     router.pruneInvisibleAliases(client, [rawTarget.tabId])
@@ -158,8 +158,8 @@ describe("CdpRouter", () => {
     const { clients, registry, router } = setup()
     const client = {}
     clients.register(client, "session-a")
-    const visible = root({ tabId: 1, sessionId: "bc-tab-1", targetId: "target-1", browserControlSessionId: "session-a" })
-    const hidden = root({ tabId: 2, sessionId: "bc-tab-2", targetId: "target-2", browserControlSessionId: "session-b" })
+    const visible = root({ tabId: 1, sessionId: "bc-tab-1", targetId: "target-1", browserRigSessionId: "session-a" })
+    const hidden = root({ tabId: 2, sessionId: "bc-tab-2", targetId: "target-2", browserRigSessionId: "session-b" })
     registry.addRootTarget(visible)
     registry.addRootTarget(hidden)
     registry.addChildTarget({

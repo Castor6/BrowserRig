@@ -43,12 +43,12 @@ describe("NetworkCapture", () => {
     expect(result).toMatchObject({ active: false, entryCount: 2, responseCount: 2, failureCount: 0 })
     expect(result.authProfile).toMatchObject({ name: "uber", slotCount: 4 })
     const artifact = await fs.readFile(outputPath, "utf8")
-    expect(artifact).toContain("${BC_SECRET_1}")
+    expect(artifact).toContain("${BROWSERRIG_SECRET_1}")
     expect(artifact).not.toContain("access-token")
     expect(artifact).not.toContain("cookie-value")
     expect(artifact).not.toContain("refresh-value")
     expect(artifact).not.toContain("/api/ignored")
-    expect(artifact).toContain("access_token=${BC_SECRET_2}")
+    expect(artifact).toContain("access_token=${BROWSERRIG_SECRET_2}")
   })
 
   it("preserves stable refs when a later capture refreshes values", async () => {
@@ -65,8 +65,8 @@ describe("NetworkCapture", () => {
     const refreshed = await Effect.runPromise(recorder.stop({ secrets: "uber" }))
     const profile = await Effect.runPromise(AuthProfile.read("uber", { baseDir: directory }))
 
-    expect(refreshed.updatedSecretRefs).toContain("BC_SECRET_1")
-    expect(profile.slots).toEqual([expect.objectContaining({ ref: "BC_SECRET_1", value: "new-token" })])
+    expect(refreshed.updatedSecretRefs).toContain("BROWSERRIG_SECRET_1")
+    expect(profile.slots).toEqual([expect.objectContaining({ ref: "BROWSERRIG_SECRET_1", value: "new-token" })])
   })
 
   it("reports body truncation and request failures", async () => {
@@ -103,7 +103,7 @@ describe("NetworkCapture", () => {
     const result = await Effect.runPromise(recorder.stop({ outputPath }))
     const artifact = await fs.readFile(outputPath, "utf8")
     expect(result.authProfile).toBeUndefined()
-    expect(artifact).toContain("Bearer ${BC_SECRET_1}")
+    expect(artifact).toContain("Bearer ${BROWSERRIG_SECRET_1}")
     expect(artifact).not.toContain("never-write-me")
   })
 
@@ -199,7 +199,7 @@ describe("NetworkCapture", () => {
     await Effect.runPromise(recorder.stop({ outputPath }))
     const artifact = await fs.readFile(outputPath, "utf8")
     expect(artifact).not.toContain("echoed-token")
-    expect(artifact).toContain('${BC_SECRET_1}')
+    expect(artifact).toContain('${BROWSERRIG_SECRET_1}')
   })
 
   it("redacts capture-derived values and secret-shaped execute output", async () => {
@@ -209,7 +209,7 @@ describe("NetworkCapture", () => {
     page.exchange({ requestHeaders: [{ name: "Authorization", value: "Bearer captured-token-value" }] })
     await recorder.settleForOutput()
 
-    expect(recorder.redactText("token=captured-token-value")).toBe("token=${BC_SECRET_1}")
+    expect(recorder.redactText("token=captured-token-value")).toBe("token=${BROWSERRIG_SECRET_1}")
     expect(recorder.redactValue({ refreshToken: "returned-token", nested: { ok: true } })).toEqual({
       refreshToken: "[REDACTED]",
       nested: { ok: true },
@@ -237,7 +237,7 @@ describe("NetworkCapture", () => {
     page.exchange({ requestHeaders: [{ name: "Cookie", value: "count=1" }] })
     await recorder.settleForOutput()
 
-    expect(recorder.redactValue(1)).toBe("${BC_SECRET_1}")
+    expect(recorder.redactValue(1)).toBe("${BROWSERRIG_SECRET_1}")
     await Effect.runPromise(recorder.cancel())
   })
 
@@ -392,7 +392,7 @@ function fakeResponse(request: Request, headers: readonly Header[] = [], body: U
 }
 
 async function temporaryDirectory(): Promise<string> {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-network-"))
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-network-"))
   temporaryDirectories.push(directory)
   return directory
 }

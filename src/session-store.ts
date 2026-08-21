@@ -3,8 +3,8 @@ import os from "node:os"
 import { endpointForPort, portConfig } from "./relay-client.ts"
 
 /**
- * SessionStore persists the CLI's current Browser Control session id, scoped
- * by relay endpoint so switching `BROWSER_CONTROL_PORT` cannot silently reuse
+ * SessionStore persists the CLI's current BrowserRig session id, scoped
+ * by relay endpoint so switching `BROWSERRIG_PORT` cannot silently reuse
  * a session id created against a different relay.
  *
  * File format (v2): `{ "endpoints": { "<endpoint>": { "id": "..." } } }`.
@@ -36,10 +36,10 @@ export interface Interface {
   readonly clear: Effect.Effect<void, SessionStoreError>
 }
 
-export class Service extends Context.Service<Service, Interface>()("browser-control/SessionStore") {}
+export class Service extends Context.Service<Service, Interface>()("browserrig/SessionStore") {}
 
 export const defaultFilePath = (): string => {
-  return `${os.homedir()}/.browser-control/session.json`
+  return `${os.homedir()}/.browserrig/session.json`
 }
 
 export const make = Effect.fn("SessionStore.make")(function* (options?: {
@@ -51,13 +51,13 @@ export const make = Effect.fn("SessionStore.make")(function* (options?: {
   const filePath = options?.filePath ?? defaultFilePath()
   const port = yield* portConfig.pipe(
     Effect.mapError((cause) => new SessionStoreError({
-      message: `Invalid BROWSER_CONTROL_PORT configuration: ${cause.message}`,
+      message: `Invalid BROWSERRIG_PORT configuration: ${cause.message}`,
       operation: "configure",
       cause,
     })),
   )
   const endpoint = options?.endpoint ?? endpointForPort(port)
-  const defaultEndpoint = endpointForPort(19989)
+  const defaultEndpoint = endpointForPort(19990)
 
   const storeError = (operation: string) => (cause: unknown) =>
     new SessionStoreError({

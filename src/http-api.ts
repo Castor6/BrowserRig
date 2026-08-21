@@ -34,10 +34,10 @@ import {
   type ExtensionStatus,
   type TargetSummary,
 } from "./relay-schema.ts"
-import { SessionError, type BrowserControlSessions } from "./session-manager.ts"
+import { SessionError, type BrowserRigSessions } from "./session-manager.ts"
 import type { RecordingRelay, RecordingStartOptions, RecordingTargetOptions } from "./recording-relay.ts"
 import { TargetOwnershipError, type TargetRegistry } from "./target-registry.ts"
-import { browserControlBuildId, browserControlVersion } from "./version.ts"
+import { browserRigBuildId, browserRigVersion } from "./version.ts"
 
 export function createHttpRequestHandler(options: {
   readonly host: string
@@ -49,7 +49,8 @@ export function createHttpRequestHandler(options: {
   >
   readonly recordingRelay: RecordingRelay
   readonly registry: TargetRegistry
-  readonly sessions: BrowserControlSessions
+  readonly sessions: BrowserRigSessions
+  readonly attachActiveTab: () => Effect.Effect<{ readonly targetId: string; readonly url: string }, Error>
 }): (request: http.IncomingMessage, response: http.ServerResponse) => void {
   options.sessions.setUserAttachedPageUrlsProvider(() =>
     options.registry.listRootTargets()
@@ -71,8 +72,8 @@ export function createHttpRequestHandler(options: {
     const pathname = requestUrl.pathname.replace(/\/$/, "") || "/"
     if (pathname === "/" || pathname === "/version") {
       sendJson(response, {
-        version: browserControlVersion,
-        buildId: browserControlBuildId,
+        version: browserRigVersion,
+        buildId: browserRigBuildId,
         instanceId: options.relayInstance.id,
         startedAt: options.relayInstance.startedAt,
         pid: options.relayInstance.pid,
@@ -80,13 +81,13 @@ export function createHttpRequestHandler(options: {
       return
     }
     if (pathname === "/json/version") {
-      const browserControlSessionId = headerValue(request.headers["browser-control-session-id"])
+      const browserRigSessionId = headerValue(request.headers["browserrig-session-id"])
       const webSocketDebuggerUrl = new URL(`ws://${formatHostForUrl(options.host)}:${options.port}/devtools/browser/${options.browserId}`)
-      if (browserControlSessionId) {
-        webSocketDebuggerUrl.searchParams.set("browserControlSessionId", browserControlSessionId)
+      if (browserRigSessionId) {
+        webSocketDebuggerUrl.searchParams.set("browserRigSessionId", browserRigSessionId)
       }
       sendJson(response, {
-        Browser: `Browser-Control/${browserControlVersion}`,
+        Browser: `BrowserRig/${browserRigVersion}`,
         "Protocol-Version": "1.3",
         webSocketDebuggerUrl: webSocketDebuggerUrl.toString(),
       })
@@ -140,6 +141,7 @@ export function createHttpRequestHandler(options: {
         pathname,
         sessions: options.sessions,
         registry: options.registry,
+        attachActiveTab: options.attachActiveTab,
       }))
       return
     }
@@ -152,7 +154,7 @@ function handleClientRequest(options: {
   readonly request: http.IncomingMessage
   readonly response: http.ServerResponse
   readonly pathname: string
-  readonly sessions: BrowserControlSessions
+  readonly sessions: BrowserRigSessions
 }): Effect.Effect<void, Error> {
   return Effect.gen(function* () {
     if (options.pathname === "/v1/sessions/ensure" && options.request.method === "POST") {
@@ -179,7 +181,7 @@ function handleNetworkRequest(options: {
   readonly request: http.IncomingMessage
   readonly response: http.ServerResponse
   readonly pathname: string
-  readonly sessions: BrowserControlSessions
+  readonly sessions: BrowserRigSessions
 }): Effect.Effect<void, Error> {
   return Effect.gen(function* () {
     if (options.pathname === "/network/start" && options.request.method === "POST") {
@@ -214,7 +216,7 @@ function handleAuthRequest(options: {
   readonly request: http.IncomingMessage
   readonly response: http.ServerResponse
   readonly pathname: string
-  readonly sessions: BrowserControlSessions
+  readonly sessions: BrowserRigSessions
 }): Effect.Effect<void, Error> {
   return Effect.gen(function* () {
     if (options.pathname === "/auth/status" && options.request.method === "POST") {
@@ -336,8 +338,9 @@ function handleCliRequest(options: {
   readonly request: http.IncomingMessage
   readonly response: http.ServerResponse
   readonly pathname: string
-  readonly sessions: BrowserControlSessions
+  readonly sessions: BrowserRigSessions
   readonly registry: TargetRegistry
+  readonly attachActiveTab: () => Effect.Effect<{ readonly targetId: string; readonly url: string }, Error>
 }): Effect.Effect<void, Error> {
   return Effect.gen(function* () {
     if (options.pathname === "/cli/sessions" && options.request.method === "GET") {
@@ -379,24 +382,41 @@ function handleCliRequest(options: {
       const body = yield* readJsonBody(options.request)
       const request = yield* decodeRequest(SessionAdoptRequest, body, "session adopt")
       const requestedSessionId = optionalSessionId(request.sessionId)
-      const targetSelection = parseTargetSelection(request.targetSelection)
-      if (!targetSelection) {
-        throw new Error("targetSelection is required")
+      if (
+        request.active === true &&
+        requestedSessionId &&
+        !request.createIfMissing &&
+        !options.sessions.summary(requestedSessionId)
+      ) {
+        sendJson(options.response, {
+          error: `Session not found: ${requestedSessionId}`,
+          code: "session-not-found",
+        }, 404)
+        return
       }
-      const selectedTarget = selectTarget({
-        targets: options.registry.listRootTargets(),
-        selection: targetSelection,
-        getUrl: (target) => target.targetInfo.url,
-      })
-      if (!selectedTarget) {
-        throw new Error("No page matched target selection")
-      }
-      const adoptedTargetId = selectedTarget.targetInfo.targetId
+      const selectedTarget = request.active === true
+        ? yield* options.attachActiveTab()
+        : (() => {
+            const targetSelection = parseTargetSelection(request.targetSelection)
+            if (!targetSelection) {
+              throw new Error("targetSelection is required")
+            }
+            const target = selectTarget({
+              targets: options.registry.listRootTargets(),
+              selection: targetSelection,
+              getUrl: (candidate) => candidate.targetInfo.url,
+            })
+            if (!target) {
+              throw new Error("No page matched target selection")
+            }
+            return { targetId: target.targetInfo.targetId, url: target.targetInfo.url }
+          })()
+      const adoptedTargetId = selectedTarget.targetId
       const { session, adoptedUrl } = yield* options.sessions.adopt({
         ...(requestedSessionId ? { sessionId: requestedSessionId } : {}),
         createIfMissing: request.createIfMissing,
         targetId: adoptedTargetId,
-        targetUrl: selectedTarget.targetInfo.url,
+        targetUrl: selectedTarget.url,
       })
       sendJson(options.response, { session, adoptedUrl, adoptedTargetId })
       return
@@ -430,7 +450,7 @@ function targetSummaries(registry: TargetRegistry): TargetSummary[] {
         url: target.targetInfo.url,
         tabId: target.tabId,
         sessionId: target.sessionId,
-        ...(target.browserControlSessionId ? { browserControlSessionId: target.browserControlSessionId } : {}),
+        ...(target.browserRigSessionId ? { browserRigSessionId: target.browserRigSessionId } : {}),
         owner: target.owner,
         ...(target.crashed ? { crashed: true } : {}),
       }

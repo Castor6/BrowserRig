@@ -53,12 +53,12 @@ import { ExecuteSandbox, type HandoffPageTarget } from "./execute.ts"
 import { makePageStatus } from "./page-status.ts"
 import { appendJournalEntry, defaultJournalBaseDir, makeJournalEntry } from "./session-journal.ts"
 import { defaultSessionCatalogPath, SessionCatalog } from "./session-catalog.ts"
-import { BrowserControlSessions } from "./session-manager.ts"
+import { BrowserRigSessions } from "./session-manager.ts"
 import { RecordingRelay } from "./recording-relay.ts"
 import { appendManagedRelayProcessLog } from "./relay-log.ts"
 import { boundedToken, runtimeFailureKind, summarizeDiagnosticUrl, summarizeRuntimeEvaluate } from "./runtime-diagnostics.ts"
 import { shouldExposeChildTarget, TargetRegistry, type RootTargetChange, type TargetOwnershipChange } from "./target-registry.ts"
-import { browserControlVersion } from "./version.ts"
+import { browserRigVersion } from "./version.ts"
 
 export type { RelayServer } from "./relay-types.ts"
 
@@ -125,11 +125,11 @@ function rethrowProcessFault(cause: unknown): never {
 
 function logProcessFault(kind: RelayProcessFaultKind, cause: unknown, detail: Record<string, unknown>, disposition: string): void {
   const errorText = cause instanceof Error ? cause.stack ?? cause.message : String(cause)
-  const message = `[browser-control relay] ${kind}; ${disposition}\n${errorText}`
+  const message = `[browserrig relay] ${kind}; ${disposition}\n${errorText}`
   console.error(message)
-  if (process.env.BROWSER_CONTROL_MANAGED_RELAY === "1") appendManagedRelayProcessLog(message)
-  if (debugEnvironmentEnabled(process.env.BROWSER_CONTROL_DEBUG)) {
-    console.error(`[browser-control relay] ${kind} detail`, detail)
+  if (process.env.BROWSERRIG_MANAGED_RELAY === "1") appendManagedRelayProcessLog(message)
+  if (debugEnvironmentEnabled(process.env.BROWSERRIG_DEBUG)) {
+    console.error(`[browserrig relay] ${kind} detail`, detail)
   }
 }
 
@@ -157,7 +157,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
   const releaseTargetGraceMs = Math.max(0, options.releaseTargetGraceMs ?? 10_000)
   const browserId = crypto.randomUUID()
   const endpointUrl = `http://${formatHostForUrl(host)}:${port}`
-  const allowAnyChromeExtension = browserControlVersion === "0.0.0-dev"
+  const allowAnyChromeExtension = browserRigVersion === "0.0.0-dev"
   const bundledUnpackedExtensionOrigin = getBundledUnpackedExtensionOrigin()
   const additionalChromeExtensionOrigins = new Set(
     bundledUnpackedExtensionOrigin ? [bundledUnpackedExtensionOrigin] : [],
@@ -179,8 +179,30 @@ const makeRelay = Effect.fnUntraced(function* (options: {
   let relayClosing = false
   let extensionGeneration = 0
   const extensionRpc = new ExtensionRpc()
+  type ExtensionCommandWithoutId = Parameters<ExtensionRpc["send"]>[0]
   const sendToExtension = Effect.fnUntraced(function* (command: Parameters<ExtensionRpc["send"]>[0]) {
     return yield* extensionRpc.send(command)
+  })
+  const assertExtensionGeneration = Effect.fnUntraced(function* (expectedGeneration: number) {
+    if (extensionGeneration !== expectedGeneration) {
+      return yield* Effect.fail(new Error(
+        `Extension changed during active-tab attachment (expected generation ${expectedGeneration}, current generation ${extensionGeneration})`,
+      ))
+    }
+    if (!extensionRpc.acceptsEvents) {
+      return yield* Effect.fail(new Error(
+        `Extension generation ${expectedGeneration} disconnected during active-tab attachment`,
+      ))
+    }
+  })
+  const sendToExtensionAtGeneration = Effect.fnUntraced(function* (
+    expectedGeneration: number,
+    command: ExtensionCommandWithoutId,
+  ) {
+    yield* assertExtensionGeneration(expectedGeneration)
+    const result = yield* extensionRpc.send(command)
+    yield* assertExtensionGeneration(expectedGeneration)
+    return result
   })
   const sendDebuggerCommand = Effect.fnUntraced(function* (options: {
     readonly tabId: number
@@ -189,6 +211,22 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     readonly params: JsonObject
   }) {
     return yield* sendToExtension({
+      method: "debugger.sendCommand",
+      params: {
+        tabId: options.tabId,
+        method: options.method,
+        params: options.params,
+        ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+      },
+    })
+  })
+  const sendDebuggerCommandAtGeneration = Effect.fnUntraced(function* (expectedGeneration: number, options: {
+    readonly tabId: number
+    readonly sessionId?: string
+    readonly method: string
+    readonly params: JsonObject
+  }) {
+    return yield* sendToExtensionAtGeneration(expectedGeneration, {
       method: "debugger.sendCommand",
       params: {
         tabId: options.tabId,
@@ -236,17 +274,17 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     }
   })
   const journalBaseDir = defaultJournalBaseDir()
-  const attachedBadge = { text: "ON", color: "#7c3aed", title: "Detach from Browser Control" }
-  const executingBadge = { text: "RUN", color: "#f59e0b", title: "Browser Control is running a script" }
-  const waitingBadge = (message: string) => ({ text: "WAIT", color: "#2563eb", title: `Browser Control is waiting for you: ${message}` })
+  const attachedBadge = { text: "ON", color: "#7c3aed", title: "Detach from BrowserRig" }
+  const executingBadge = { text: "RUN", color: "#f59e0b", title: "BrowserRig is running a script" }
+  const waitingBadge = (message: string) => ({ text: "WAIT", color: "#2563eb", title: `BrowserRig is waiting for you: ${message}` })
   const executionBadge = (sessionId: string, executing: boolean) => executing && !sessions.isReadOnly(sessionId) ? executingBadge : attachedBadge
   const setActivityForSessionTabs = (
-    browserControlSessionId: string,
+    browserRigSessionId: string,
     state: PageStatus["state"],
     badge: { readonly text: string; readonly color: string; readonly title: string },
   ) => {
     for (const target of registry.listRootTargets()) {
-      if (pageStatusSessionId(target) !== browserControlSessionId) {
+      if (pageStatusSessionId(target) !== browserRigSessionId) {
         continue
       }
       // Best-effort: older shims without action.setBadge just reject the command.
@@ -347,7 +385,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
       }
     }
   }
-  const sessions: BrowserControlSessions = new BrowserControlSessions(
+  const sessions: BrowserRigSessions = new BrowserRigSessions(
     endpointUrl,
     (id) =>
       new ExecuteSandbox({
@@ -406,7 +444,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     registry,
   )
   function pageStatusSessionId(target: ConnectedTarget): string | undefined {
-    return target.browserControlSessionId
+    return target.browserRigSessionId
   }
 
   function activeHandoffSessionIdForTab(tabId: number): string | undefined {
@@ -421,11 +459,11 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     })
   }
 
-  function sendPageStatusEffect(
+  function pageStatusCommandParams(
     target: ConnectedTarget,
     state: PageStatus["state"],
     options: { readonly sessionId?: string; readonly message?: string; readonly handoffId?: string } = {},
-  ): Effect.Effect<void, Error> {
+  ): JsonObject {
     const sessionId = options.sessionId ?? pageStatusSessionId(target)
     const status = makePageStatus({
       state,
@@ -434,20 +472,29 @@ const makeRelay = Effect.fnUntraced(function* (options: {
       ...(options.message ? { message: options.message } : {}),
       ...(options.handoffId ? { handoffId: options.handoffId } : {}),
     })
-    return sendToExtension({
-      method: "pageStatus.set",
-      params: {
-        tabId: target.tabId,
-        status: {
-          state: status.state,
-          owner: status.owner,
-          ...(status.sessionId ? { sessionId: status.sessionId } : {}),
-          ...(status.readOnly ? { readOnly: true } : {}),
-          ...(status.message ? { message: status.message } : {}),
-          ...(status.handoffId ? { handoffId: status.handoffId } : {}),
-        },
+    return {
+      tabId: target.tabId,
+      status: {
+        state: status.state,
+        owner: status.owner,
+        ...(status.sessionId ? { sessionId: status.sessionId } : {}),
+        ...(status.readOnly ? { readOnly: true } : {}),
+        ...(status.message ? { message: status.message } : {}),
+        ...(status.handoffId ? { handoffId: status.handoffId } : {}),
       },
-    }).pipe(Effect.asVoid)
+    }
+  }
+
+  function sendPageStatusEffect(
+    target: ConnectedTarget,
+    state: PageStatus["state"],
+    options: { readonly sessionId?: string; readonly message?: string; readonly handoffId?: string } = {},
+  ): Effect.Effect<void, Error> {
+    const command: ExtensionCommandWithoutId = {
+      method: "pageStatus.set",
+      params: pageStatusCommandParams(target, state, options),
+    }
+    return sendToExtension(command).pipe(Effect.asVoid)
   }
 
   function sendPageStatus(
@@ -486,6 +533,10 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     registry,
     recordingRelay,
     sessions,
+    attachActiveTab: () => attachActiveUserTab().pipe(Effect.map((target) => ({
+      targetId: target.targetInfo.targetId,
+      url: target.targetInfo.url,
+    }))),
     extensionStatus: () => {
       return {
         connected: extensionRpc.connected,
@@ -501,15 +552,15 @@ const makeRelay = Effect.fnUntraced(function* (options: {
   const httpServer = http.createServer((request, response) => {
     if (!relayReady) {
       response.writeHead(503, { "content-type": "application/json; charset=utf-8", "retry-after": "1" })
-      response.end(JSON.stringify({ error: "Browser Control relay is starting", code: "relay-starting" }))
+      response.end(JSON.stringify({ error: "BrowserRig relay is starting", code: "relay-starting" }))
       return
     }
     relayRequestHandler(request, response)
   })
 
-  const debugEnabled = yield* Config.boolean("BROWSER_CONTROL_DEBUG").pipe(Config.withDefault(false))
-  const debugLog = debugEnabled ? (line: string) => console.error(`[bc ${new Date().toISOString().slice(11, 23)}] ${line}`) : undefined
-  const contextDebugLog = debugLog ? (line: string) => debugLog(`[bc:ctx] ${line}`) : undefined
+  const debugEnabled = yield* Config.boolean("BROWSERRIG_DEBUG").pipe(Config.withDefault(false))
+  const debugLog = debugEnabled ? (line: string) => console.error(`[browserrig ${new Date().toISOString().slice(11, 23)}] ${line}`) : undefined
+  const contextDebugLog = debugLog ? (line: string) => debugLog(`[browserrig:ctx] ${line}`) : undefined
   const websocketServer = new WebSocketServer({ noServer: true })
   const cdpClients = new CdpClientPool<WebSocket>()
   const cdpRouter = new CdpRouter(cdpClients, registry)
@@ -530,7 +581,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
       `target=${boundedToken(target.targetInfo.targetId)}`,
       `cdpSession=${boundedToken(target.sessionId)}`,
       `owner=${isRoot ? target.owner : root?.owner ?? "child"}`,
-      `bcSession=${boundedToken(isRoot ? target.browserControlSessionId : root?.browserControlSessionId)}`,
+      `browserRigSession=${boundedToken(isRoot ? target.browserRigSessionId : root?.browserRigSessionId)}`,
       `browserContext=${boundedToken(target.targetInfo.browserContextId ?? root?.targetInfo.browserContextId)}`,
     ].join(" ")
   }
@@ -601,7 +652,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
 
   httpServer.on("upgrade", (request, socket, head) => {
     if (!relayReady) {
-      sendUpgradeError({ socket, status: 404, message: "Browser Control relay is starting" })
+      sendUpgradeError({ socket, status: 404, message: "BrowserRig relay is starting" })
       return
     }
     const hostError = validateHostHeader({ hostHeader: request.headers.host, host, port })
@@ -683,9 +734,9 @@ const makeRelay = Effect.fnUntraced(function* (options: {
       return
     }
 
-    const browserControlSessionId = requestUrl.searchParams.get("browserControlSessionId") ?? headerValue(request.headers["browser-control-session-id"])
-    cdpClients.register(socket, browserControlSessionId)
-    debugLog?.(`client+ ${browserControlSessionId ?? "raw"} total=${cdpClients.size}`)
+    const browserRigSessionId = requestUrl.searchParams.get("browserRigSessionId") ?? headerValue(request.headers["browserrig-session-id"])
+    cdpClients.register(socket, browserRigSessionId)
+    debugLog?.(`client+ ${browserRigSessionId ?? "raw"} total=${cdpClients.size}`)
     socket.on("message", (data) => {
       Effect.runPromise(handleCdpMessage(socket, data.toString())).catch((error: unknown) => {
         sendCdpResponse(socket, {
@@ -1112,11 +1163,11 @@ const makeRelay = Effect.fnUntraced(function* (options: {
   })
 
   const routeCdpCommand = Effect.fn("Relay.routeCdpCommand")(function* (socket: WebSocket, message: CdpRequest) {
-    const clientBrowserControlSessionId = cdpClients.sessionId(socket)
+    const clientBrowserRigSessionId = cdpClients.sessionId(socket)
     const guardMessage = guardCdpMethod({
       method: message.method,
-      readOnly: clientBrowserControlSessionId ? sessions.isReadOnly(clientBrowserControlSessionId) : false,
-      sessionId: clientBrowserControlSessionId,
+      readOnly: clientBrowserRigSessionId ? sessions.isReadOnly(clientBrowserRigSessionId) : false,
+      sessionId: clientBrowserRigSessionId,
     })
     if (guardMessage) {
       return yield* Effect.fail(new Error(guardMessage))
@@ -1124,9 +1175,9 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     if (message.method === "Browser.getVersion") {
       return {
         protocolVersion: "1.3",
-        product: "Browser-Control/0.0.0",
+        product: "BrowserRig/0.0.0",
         revision: "0",
-        userAgent: "Browser-Control",
+        userAgent: "BrowserRig",
         jsVersion: "V8",
       }
     }
@@ -1201,12 +1252,12 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     if (message.method === "Target.createTarget" || message.method === "Target.closeTarget") {
       if (message.method === "Target.createTarget") {
         const url = typeof message.params?.url === "string" ? message.params.url : "about:blank"
-        const browserControlSessionId = cdpClients.sessionId(socket)
+        const browserRigSessionId = cdpClients.sessionId(socket)
         const autoAttachParams = cdpClients.autoAttachParams(socket)
         const target = yield* createAndAttachTab({
           url,
           active: false,
-          ...(browserControlSessionId ? { browserControlSessionId } : {}),
+          ...(browserRigSessionId ? { browserRigSessionId } : {}),
           ...(autoAttachParams ? { autoAttachParams } : {}),
         })
         return { targetId: target.targetInfo.targetId }
@@ -1320,7 +1371,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
   const createAndAttachTab = Effect.fnUntraced(function* (options: {
     readonly url: string
     readonly active: boolean
-    readonly browserControlSessionId?: string
+    readonly browserRigSessionId?: string
     readonly autoAttachParams?: JsonObject
   }) {
     const result = yield* sendToExtension({ method: "tabs.create", params: { url: options.url, active: options.active } })
@@ -1331,47 +1382,98 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     return yield* attachTab({
       tabId,
       owner: "relay",
-      ...(options.browserControlSessionId ? { browserControlSessionId: options.browserControlSessionId } : {}),
+      ...(options.browserRigSessionId ? { browserRigSessionId: options.browserRigSessionId } : {}),
       ...(options.autoAttachParams ? { autoAttachParams: options.autoAttachParams } : {}),
     })
   })
 
+  function attachActiveUserTab(): Effect.Effect<ConnectedTarget, Error> {
+    return Effect.gen(function* () {
+      const activeExtensionGeneration = extensionGeneration
+      const result = yield* sendToExtensionAtGeneration(activeExtensionGeneration, {
+        method: "tabs.attachActive",
+        params: {},
+      })
+      const tabId = typeof result.tabId === "number" ? result.tabId : undefined
+      if (tabId === undefined) {
+        return yield* Effect.fail(new Error("tabs.attachActive did not return a tabId"))
+      }
+      return yield* attachTab({
+        tabId,
+        owner: "user",
+        alreadyAttached: true,
+        expectedExtensionGeneration: activeExtensionGeneration,
+        extensionRpcGeneration: activeExtensionGeneration,
+        reuseExisting: true,
+      })
+    })
+  }
+
   const attachTabUnlocked = Effect.fnUntraced(function* (options: {
     readonly tabId: number
     readonly owner: "relay" | "user"
-    readonly browserControlSessionId?: string
+    readonly browserRigSessionId?: string
     readonly alreadyAttached?: boolean
     readonly autoAttachParams?: JsonObject
+    readonly extensionRpcGeneration?: number
   }) {
     const { tabId } = options
     if (!options.alreadyAttached) {
-      yield* sendToExtension({ method: "debugger.attach", params: { tabId } })
+      yield* (options.extensionRpcGeneration === undefined
+        ? sendToExtension({ method: "debugger.attach", params: { tabId } })
+        : sendToExtensionAtGeneration(options.extensionRpcGeneration, {
+            method: "debugger.attach",
+            params: { tabId },
+          }))
     }
-    yield* sendDebuggerCommand({ tabId, method: "Page.enable", params: {} })
-    yield* injectGhostCursor(tabId).pipe(Effect.ignore)
-    const targetInfoResult = yield* sendDebuggerCommand({ tabId, method: "Target.getTargetInfo", params: {} })
+    yield* (options.extensionRpcGeneration === undefined
+      ? sendDebuggerCommand({ tabId, method: "Page.enable", params: {} })
+      : sendDebuggerCommandAtGeneration(options.extensionRpcGeneration, {
+          tabId,
+          method: "Page.enable",
+          params: {},
+        }))
+    yield* injectGhostCursor(tabId, options.extensionRpcGeneration).pipe(Effect.ignore)
+    if (options.extensionRpcGeneration !== undefined) {
+      yield* assertExtensionGeneration(options.extensionRpcGeneration)
+    }
+    const targetInfoResult = yield* (options.extensionRpcGeneration === undefined
+      ? sendDebuggerCommand({ tabId, method: "Target.getTargetInfo", params: {} })
+      : sendDebuggerCommandAtGeneration(options.extensionRpcGeneration, {
+          tabId,
+          method: "Target.getTargetInfo",
+          params: {},
+        }))
     const targetInfo = getTargetInfo(targetInfoResult.targetInfo)
     if (!targetInfo) {
       return yield* Effect.fail(new Error("Target.getTargetInfo did not return targetInfo"))
     }
-    const restoredTarget = options.browserControlSessionId
+    const restoredTarget = options.browserRigSessionId
       ? undefined
       : sessions.persistedTargetOwner(targetInfo.targetId)
-    const browserControlSessionId = options.browserControlSessionId ?? restoredTarget?.sessionId
+    const browserRigSessionId = options.browserRigSessionId ?? restoredTarget?.sessionId
     const sessionId = `bc-tab-${nextTargetSessionId++}`
     const candidate: ConnectedTarget = {
       tabId,
       sessionId,
       targetInfo,
       owner: restoredTarget?.owner ?? options.owner,
-      ...(browserControlSessionId ? { browserControlSessionId } : {}),
+      ...(browserRigSessionId ? { browserRigSessionId } : {}),
     }
-    return yield* finishAttachedTarget(registry.stageRootTarget(candidate), options.autoAttachParams)
+    return yield* finishAttachedTarget(
+      registry.stageRootTarget(candidate),
+      options.autoAttachParams,
+      options.extensionRpcGeneration,
+    )
   })
 
-  const finishAttachedTarget = Effect.fnUntraced(function* (target: ConnectedTarget, autoAttachParams?: JsonObject) {
+  const finishAttachedTarget = Effect.fnUntraced(function* (
+    target: ConnectedTarget,
+    autoAttachParams?: JsonObject,
+    extensionRpcGeneration?: number,
+  ) {
     const tabId = target.tabId
-    yield* sendDebuggerCommand({
+    const autoAttachCommand = {
       tabId,
       method: "Target.setAutoAttach",
       params: autoAttachParams ?? {
@@ -1379,8 +1481,14 @@ const makeRelay = Effect.fnUntraced(function* (options: {
         waitForDebuggerOnStart: false,
         flatten: true,
       },
-    })
-    const currentTargetInfoResult = yield* sendDebuggerCommand({ tabId, method: "Target.getTargetInfo", params: {} })
+    }
+    yield* (extensionRpcGeneration === undefined
+      ? sendDebuggerCommand(autoAttachCommand)
+      : sendDebuggerCommandAtGeneration(extensionRpcGeneration, autoAttachCommand))
+    const targetInfoCommand = { tabId, method: "Target.getTargetInfo", params: {} }
+    const currentTargetInfoResult = yield* (extensionRpcGeneration === undefined
+      ? sendDebuggerCommand(targetInfoCommand)
+      : sendDebuggerCommandAtGeneration(extensionRpcGeneration, targetInfoCommand))
     const currentTargetInfo = getTargetInfo(currentTargetInfoResult.targetInfo)
     if (!currentTargetInfo || currentTargetInfo.targetId !== target.targetInfo.targetId) {
       return yield* Effect.fail(new Error(`Root target changed while preparing ${target.targetInfo.targetId}`))
@@ -1391,23 +1499,64 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     if (change.kind === "replaced") reconcileRootReplacement(change)
     mainFrameIdsByTab.set(tabId, committedTarget.targetInfo.targetId)
     contextDebugLog?.(`target-attached kind=root ${targetDiagnosticIdentity(committedTarget)} ${summarizeDiagnosticUrl(committedTarget.targetInfo.url)}`)
-    if (committedTarget.browserControlSessionId) {
-      pruneInvisibleAnnouncementsForSession(committedTarget.browserControlSessionId)
+    if (committedTarget.browserRigSessionId) {
+      pruneInvisibleAnnouncementsForSession(committedTarget.browserRigSessionId)
     }
-    yield* Effect.ignore(sendToExtension({
-      method: committedTarget.browserControlSessionId ? "tabs.group" : "tabs.ungroup",
+    const sendPresentationCommand = (command: ExtensionCommandWithoutId): Effect.Effect<void, Error> => {
+      const send = extensionRpcGeneration === undefined
+        ? sendToExtension(command)
+        : sendToExtensionAtGeneration(extensionRpcGeneration, command)
+      return Effect.gen(function* () {
+        yield* Effect.ignore(send)
+        if (extensionRpcGeneration === undefined) return
+        yield* assertExtensionGeneration(extensionRpcGeneration)
+        if (registry.getRootTargetByTabId(tabId)?.sessionId !== committedTarget.sessionId) {
+          return yield* Effect.fail(new Error(
+            `Target ${committedTarget.targetInfo.targetId} detached during active-tab attachment`,
+          ))
+        }
+      })
+    }
+    yield* sendPresentationCommand({
+      method: committedTarget.browserRigSessionId ? "tabs.group" : "tabs.ungroup",
       params: { tabId },
-    }))
-    yield* Effect.ignore(sendToExtension({ method: "action.setAttached", params: { tabId, attached: true } }))
+    })
+    yield* sendPresentationCommand({ method: "action.setAttached", params: { tabId, attached: true } })
     const pendingHandoff = handoffs.pendingForTab(tabId)
     if (pendingHandoff) {
-      setActivityForTarget(committedTarget, "waiting", waitingBadge(pendingHandoff.message), {
-        sessionId: pendingHandoff.sessionId,
-        message: pendingHandoff.message,
-        handoffId: pendingHandoff.id,
-      })
+      if (extensionRpcGeneration === undefined) {
+        setActivityForTarget(committedTarget, "waiting", waitingBadge(pendingHandoff.message), {
+          sessionId: pendingHandoff.sessionId,
+          message: pendingHandoff.message,
+          handoffId: pendingHandoff.id,
+        })
+      } else {
+        const badge = waitingBadge(pendingHandoff.message)
+        yield* sendPresentationCommand({
+          method: "action.setBadge",
+          params: { tabId, ...badge },
+        })
+        yield* sendPresentationCommand({
+          method: "pageStatus.set",
+          params: pageStatusCommandParams(committedTarget, "waiting", {
+            sessionId: pendingHandoff.sessionId,
+            message: pendingHandoff.message,
+            handoffId: pendingHandoff.id,
+          }),
+        })
+      }
     } else {
-      sendPageStatus(committedTarget, committedTarget.browserControlSessionId && sessions.isExecuting(committedTarget.browserControlSessionId) ? "running" : "attached")
+      const state = committedTarget.browserRigSessionId && sessions.isExecuting(committedTarget.browserRigSessionId)
+        ? "running"
+        : "attached"
+      if (extensionRpcGeneration === undefined) {
+        sendPageStatus(committedTarget, state)
+      } else {
+        yield* sendPresentationCommand({
+          method: "pageStatus.set",
+          params: pageStatusCommandParams(committedTarget, state),
+        })
+      }
     }
     announceAttachedTarget(committedTarget)
     for (const child of registry.childTargets.values()) {
@@ -1421,9 +1570,11 @@ const makeRelay = Effect.fnUntraced(function* (options: {
   const attachTab = Effect.fnUntraced(function* (options: {
     readonly tabId: number
     readonly owner: "relay" | "user"
-    readonly browserControlSessionId?: string
+    readonly browserRigSessionId?: string
     readonly alreadyAttached?: boolean
     readonly expectedExtensionGeneration?: number
+    readonly extensionRpcGeneration?: number
+    readonly reuseExisting?: boolean
     readonly autoAttachParams?: JsonObject
   }) {
     const semaphore = rootLifecycleSemaphores.get(options.tabId) ?? Semaphore.makeUnsafe(1)
@@ -1432,6 +1583,23 @@ const makeRelay = Effect.fnUntraced(function* (options: {
       if (relayClosing) return yield* Effect.fail(new Error("Relay is closing"))
       if (options.expectedExtensionGeneration !== undefined && options.expectedExtensionGeneration !== extensionGeneration) {
         return yield* Effect.fail(new Error("Extension changed before target reconciliation acquired its permit"))
+      }
+      if (options.reuseExisting) {
+        const existing = registry.getRootTargetByTabId(options.tabId)
+        if (existing) {
+          const targetInfoCommand = {
+            tabId: options.tabId,
+            method: "Target.getTargetInfo",
+            params: {},
+          }
+          const targetInfoResult = yield* (options.extensionRpcGeneration === undefined
+            ? sendDebuggerCommand(targetInfoCommand)
+            : sendDebuggerCommandAtGeneration(options.extensionRpcGeneration, targetInfoCommand))
+          const targetInfo = getTargetInfo(targetInfoResult.targetInfo)
+          if (targetInfo?.targetId === existing.targetInfo.targetId) {
+            return existing
+          }
+        }
       }
       return yield* attachTabUnlocked(options)
     }))
@@ -1467,7 +1635,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
       tabId,
       owner: ownerSource.owner,
       alreadyAttached: true,
-      ...(ownerSource.browserControlSessionId ? { browserControlSessionId: ownerSource.browserControlSessionId } : {}),
+      ...(ownerSource.browserRigSessionId ? { browserRigSessionId: ownerSource.browserRigSessionId } : {}),
     })
   })
 
@@ -1561,17 +1729,23 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     rootReconciliationWorkers.set(workerKey, worker)
   }
 
-  const injectGhostCursor = Effect.fnUntraced(function* (tabId: number) {
-    yield* sendDebuggerCommand({
+  const injectGhostCursor = Effect.fnUntraced(function* (tabId: number, extensionRpcGeneration?: number) {
+    const installCommand = {
       tabId,
       method: "Page.addScriptToEvaluateOnNewDocument",
       params: { source: ghostCursorClientSource },
-    })
-    yield* sendDebuggerCommand({
+    }
+    yield* (extensionRpcGeneration === undefined
+      ? sendDebuggerCommand(installCommand)
+      : sendDebuggerCommandAtGeneration(extensionRpcGeneration, installCommand))
+    const evaluateCommand = {
       tabId,
       method: "Runtime.evaluate",
       params: { expression: ghostCursorClientSource },
-    })
+    }
+    yield* (extensionRpcGeneration === undefined
+      ? sendDebuggerCommand(evaluateCommand)
+      : sendDebuggerCommandAtGeneration(extensionRpcGeneration, evaluateCommand))
   })
 
   const applyGhostCursorMouseEvent = Effect.fnUntraced(function* (options: { readonly tabId: number; readonly message: CdpRequest }) {
@@ -1707,9 +1881,9 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     }
   }
 
-  function pruneInvisibleAnnouncementsForSession(browserControlSessionId: string): void {
+  function pruneInvisibleAnnouncementsForSession(browserRigSessionId: string): void {
     for (const client of cdpClients) {
-      if (cdpClients.sessionId(client) === browserControlSessionId) {
+      if (cdpClients.sessionId(client) === browserRigSessionId) {
         pruneInvisibleAnnouncementsForClient(client)
       }
     }
@@ -1830,11 +2004,11 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     Effect.gen(function* () {
       const restoredSessions = yield* Effect.tryPromise({
         try: () => sessionCatalog?.load() ?? Promise.resolve([]),
-        catch: (cause) => cause instanceof Error ? cause : new Error("Load Browser Control session catalog", { cause }),
+        catch: (cause) => cause instanceof Error ? cause : new Error("Load BrowserRig session catalog", { cause }),
       })
       yield* Effect.try({
         try: () => sessions.restore(restoredSessions),
-        catch: (cause) => cause instanceof Error ? cause : new Error("Restore Browser Control sessions", { cause }),
+        catch: (cause) => cause instanceof Error ? cause : new Error("Restore BrowserRig sessions", { cause }),
       })
       catalogWritesEnabled = true
       relayReady = true

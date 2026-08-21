@@ -1,8 +1,9 @@
 import http from "node:http"
+import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { createHttpRequestHandler } from "../src/http-api.ts"
 import { RecordingRelay } from "../src/recording-relay.ts"
-import { BrowserControlSessions } from "../src/session-manager.ts"
+import { BrowserRigSessions } from "../src/session-manager.ts"
 import { TargetRegistry } from "../src/target-registry.ts"
 
 describe("HTTP request schemas", () => {
@@ -23,7 +24,7 @@ describe("HTTP request schemas", () => {
     registry.addRootTarget({
       tabId: 7,
       sessionId: "bc-tab-7",
-      browserControlSessionId: "alpha",
+      browserRigSessionId: "alpha",
       owner: "user",
       targetInfo: {
         targetId: "target-7",
@@ -34,8 +35,9 @@ describe("HTTP request schemas", () => {
         canAccessOpener: false,
       },
     })
-    const sessions = new BrowserControlSessions(`http://127.0.0.1:${port}`, undefined, undefined, registry)
+    const sessions = new BrowserRigSessions(`http://127.0.0.1:${port}`, undefined, undefined, registry)
     sessions.createNew("beta")
+    let activeTabAttachCalls = 0
     handler = createHttpRequestHandler({
       relayInstance: { id: "relay-test", startedAt: "2026-07-19T00:00:00.000Z", pid: 123 },
       host: "127.0.0.1",
@@ -44,7 +46,7 @@ describe("HTTP request schemas", () => {
       extensionStatus: () => ({
         connected: true,
         version: "9.4.2",
-        protocolVersion: 2,
+        protocolVersion: 3,
         protocolCompatible: true,
         protocolLegacy: false,
       }),
@@ -55,6 +57,10 @@ describe("HTTP request schemas", () => {
       }),
       registry,
       sessions,
+      attachActiveTab: () => Effect.sync(() => {
+        activeTabAttachCalls += 1
+        return { targetId: "target-7", url: "https://owned.example/" }
+      }),
     })
 
     try {
@@ -68,7 +74,7 @@ describe("HTTP request schemas", () => {
       expect(extension).toMatchObject({
         connected: true,
         version: "9.4.2",
-        protocolVersion: 2,
+        protocolVersion: 3,
         protocolCompatible: true,
         protocolLegacy: false,
       })
@@ -116,6 +122,24 @@ describe("HTTP request schemas", () => {
         status: 400,
         body: { error: expect.stringContaining("Invalid session adopt request"), code: "invalid-request" },
       })
+      await expect(postJson(port, "/cli/session/adopt", {
+        createIfMissing: true,
+        active: true,
+        targetSelection: { index: 0 },
+      })).resolves.toMatchObject({
+        status: 400,
+        body: { error: expect.stringContaining("Invalid session adopt request"), code: "invalid-request" },
+      })
+      expect(activeTabAttachCalls).toBe(0)
+      await expect(postJson(port, "/cli/session/adopt", {
+        sessionId: "beta",
+        createIfMissing: false,
+        active: true,
+      })).resolves.toMatchObject({
+        status: 409,
+        body: { error: expect.stringContaining("already adopted by session alpha"), code: "target-owned" },
+      })
+      expect(activeTabAttachCalls).toBe(1)
       await expect(postJson(port, "/cli/execute", { sessionId: "ghost", code: "1", createIfMissing: false })).resolves.toMatchObject({
         status: 404,
         body: { error: "Session not found: ghost", code: "session-not-found" },

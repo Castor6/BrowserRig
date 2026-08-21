@@ -7,7 +7,7 @@ export type TargetOwnershipReservation = {
   readonly targetSessionId: string
   readonly tabId: number
   readonly sessionId: string
-  readonly previousBrowserControlSessionId?: string
+  readonly previousBrowserRigSessionId?: string
 }
 
 export type TargetOwnershipChange = {
@@ -48,7 +48,7 @@ export class MemoryTargetOwnership implements TargetOwnership {
       targetSessionId: targetId,
       tabId: -1,
       sessionId,
-      ...(owner ? { previousBrowserControlSessionId: owner } : {}),
+      ...(owner ? { previousBrowserRigSessionId: owner } : {}),
     }
   }
 
@@ -56,8 +56,8 @@ export class MemoryTargetOwnership implements TargetOwnership {
     if (this.owners.get(reservation.targetId) !== reservation.sessionId) {
       return emptyOwnershipChange
     }
-    if (reservation.previousBrowserControlSessionId) {
-      this.owners.set(reservation.targetId, reservation.previousBrowserControlSessionId)
+    if (reservation.previousBrowserRigSessionId) {
+      this.owners.set(reservation.targetId, reservation.previousBrowserRigSessionId)
     } else {
       this.owners.delete(reservation.targetId)
     }
@@ -139,16 +139,16 @@ export class TargetRegistry {
     const pendingReservation = existingForTab
       ? this.pendingOwnershipReservations.get(existingForTab.targetInfo.targetId)
       : undefined
-    const inheritedBrowserControlSessionId = pendingReservation
-      ? pendingReservation.previousBrowserControlSessionId
-      : existingForTab?.browserControlSessionId
-    const { browserControlSessionId: _incomingOwner, ...targetWithoutOwner } = target
+    const inheritedBrowserRigSessionId = pendingReservation
+      ? pendingReservation.previousBrowserRigSessionId
+      : existingForTab?.browserRigSessionId
+    const { browserRigSessionId: _incomingOwner, ...targetWithoutOwner } = target
     const nextTarget = generationChanged
       ? {
           ...targetWithoutOwner,
           owner: existingForTab.owner,
-          ...(inheritedBrowserControlSessionId
-            ? { browserControlSessionId: inheritedBrowserControlSessionId }
+          ...(inheritedBrowserRigSessionId
+            ? { browserRigSessionId: inheritedBrowserRigSessionId }
             : {}),
         }
       : target
@@ -178,15 +178,15 @@ export class TargetRegistry {
     const pendingReservation = existing
       ? this.pendingOwnershipReservations.get(existing.targetInfo.targetId)
       : undefined
-    const inheritedBrowserControlSessionId = pendingReservation
-      ? pendingReservation.previousBrowserControlSessionId
-      : existing?.browserControlSessionId
-    const { browserControlSessionId: _incomingOwner, ...targetWithoutOwner } = target
+    const inheritedBrowserRigSessionId = pendingReservation
+      ? pendingReservation.previousBrowserRigSessionId
+      : existing?.browserRigSessionId
+    const { browserRigSessionId: _incomingOwner, ...targetWithoutOwner } = target
     const staged = existing
       ? {
           ...targetWithoutOwner,
           owner: existing.owner,
-          ...(inheritedBrowserControlSessionId ? { browserControlSessionId: inheritedBrowserControlSessionId } : {}),
+          ...(inheritedBrowserRigSessionId ? { browserRigSessionId: inheritedBrowserRigSessionId } : {}),
         }
       : target
     this.stagedRootTargets.set(target.tabId, staged)
@@ -241,7 +241,7 @@ export class TargetRegistry {
 
   getRootTargetBySessionId(sessionId: string): ConnectedTarget | undefined {
     return this.targets.get(sessionId) ?? this.listRootTargets().find((target) => {
-      return target.browserControlSessionId === sessionId
+      return target.browserRigSessionId === sessionId
     })
   }
 
@@ -250,17 +250,17 @@ export class TargetRegistry {
     if (!target) {
       throw new TargetOwnershipError({ reason: "not-found", message: `Target detached before adoption: ${targetId}` })
     }
-    const owner = target.browserControlSessionId
+    const owner = target.browserRigSessionId
     if (owner && owner !== sessionId) {
       throw targetOwnedError(owner)
     }
-    this.addRootTarget({ ...target, browserControlSessionId: sessionId })
+    this.addRootTarget({ ...target, browserRigSessionId: sessionId })
     const reservation = {
       targetId,
       targetSessionId: target.sessionId,
       tabId: target.tabId,
       sessionId,
-      ...(owner ? { previousBrowserControlSessionId: owner } : {}),
+      ...(owner ? { previousBrowserRigSessionId: owner } : {}),
     }
     this.pendingOwnershipReservations.set(targetId, reservation)
     return reservation
@@ -269,12 +269,12 @@ export class TargetRegistry {
   rollbackTargetOwnership(reservation: TargetOwnershipReservation): TargetOwnershipChange {
     this.pendingOwnershipReservations.delete(reservation.targetId)
     const target = this.targetsByTargetId.get(reservation.targetId)
-    if (!target || target.sessionId !== reservation.targetSessionId || target.browserControlSessionId !== reservation.sessionId) {
+    if (!target || target.sessionId !== reservation.targetSessionId || target.browserRigSessionId !== reservation.sessionId) {
       return emptyOwnershipChange
     }
-    const { browserControlSessionId: _owner, ...unowned } = target
-    this.addRootTarget(reservation.previousBrowserControlSessionId
-      ? { ...unowned, browserControlSessionId: reservation.previousBrowserControlSessionId }
+    const { browserRigSessionId: _owner, ...unowned } = target
+    this.addRootTarget(reservation.previousBrowserRigSessionId
+      ? { ...unowned, browserRigSessionId: reservation.previousBrowserRigSessionId }
       : unowned)
     return ownershipChange(target.targetInfo.targetId, target.tabId)
   }
@@ -285,7 +285,7 @@ export class TargetRegistry {
   }): TargetOwnershipChange {
     this.pendingOwnershipReservations.delete(options.reservation.targetId)
     const target = this.targetsByTargetId.get(options.reservation.targetId)
-    if (!target || target.sessionId !== options.reservation.targetSessionId || target.browserControlSessionId !== options.reservation.sessionId) {
+    if (!target || target.sessionId !== options.reservation.targetSessionId || target.browserRigSessionId !== options.reservation.sessionId) {
       throw new TargetOwnershipError({
         reason: "generation-changed",
         message: `Target detached or changed during adoption: ${options.reservation.targetId}`,
@@ -303,10 +303,10 @@ export class TargetRegistry {
 
   releaseTargetOwnership(targetId: string, sessionId: string): TargetOwnershipChange {
     const target = this.targetsByTargetId.get(targetId)
-    if (!target || target.browserControlSessionId !== sessionId) {
+    if (!target || target.browserRigSessionId !== sessionId) {
       return emptyOwnershipChange
     }
-    const { browserControlSessionId: _owner, ...released } = target
+    const { browserRigSessionId: _owner, ...released } = target
     this.addRootTarget(released)
     return ownershipChange(target.targetInfo.targetId, target.tabId)
   }

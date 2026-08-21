@@ -7,13 +7,14 @@ import type {
   OffscreenStatusRecordingResult,
   OffscreenStopRecordingResult,
 } from "./recording-types.ts"
-import { isBrowserControlGroupTitle, isCurrentBrowserControlGroupTitle, isLegacyBrowserControlGroupTitle, shouldUngroupBrowserControlTab, tabGroupColor, tabGroupTitle } from "./tab-groups.ts"
+import { isCurrentBrowserRigGroupTitle, isLegacyBrowserRigGroupTitle, shouldUngroupBrowserRigTab, tabGroupColor, tabGroupTitle } from "./tab-groups.ts"
 import { pageStatusFromJson } from "./page-status.ts"
 import { debuggerDetachedEvent } from "./debugger-detach.ts"
 import { ensureReconnectAlarm, reconnectAlarmName, startSocketKeepAlive } from "./connection-lifecycle.ts"
+import { tabCaptureGrantRequiredFailure } from "./tab-capture-error.ts"
 
 const relayHost = "127.0.0.1"
-const relayPort = 19989
+const relayPort = 19990
 const offscreenDocumentPath = "offscreen.html"
 const maxRecordingSocketBufferedBytes = 16 * 1024 * 1024
 
@@ -66,7 +67,7 @@ chrome.debugger.onDetach.addListener((source, reason) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   void cleanupRecordingForTab(tabId)
-  void guardedUngroupBrowserControlTab(tabId)
+  void guardedUngroupBrowserRigTab(tabId)
   sendMessage({ method: "tabs.removed", params: { tabId } })
 })
 
@@ -193,7 +194,7 @@ async function reannounceAttachedTabsAndReconcileGroups(currentSocket: WebSocket
       sendOnSocket(currentSocket, { method: "debugger.attached", params: { tabId: target.tabId } })
     }
   }
-  await reconcileBrowserControlGroups(attachedTabIds)
+  await reconcileBrowserRigGroups(attachedTabIds)
 }
 
 function sendOnSocket(currentSocket: WebSocket, message: JsonObject): void {
@@ -243,7 +244,7 @@ async function handleCommand(command: ShimCommand): Promise<JsonObject> {
   if (command.method === "debugger.detach") {
     const tabId = numberParam(command.params, "tabId")
     await chrome.debugger.detach({ tabId })
-    await guardedUngroupBrowserControlTab(tabId)
+    await guardedUngroupBrowserRigTab(tabId)
     return {}
   }
   if (command.method === "debugger.sendCommand") {
@@ -253,6 +254,25 @@ async function handleCommand(command: ShimCommand): Promise<JsonObject> {
     const sessionId = optionalStringParam(command.params, "sessionId")
     const debuggee: chrome.debugger.DebuggerSession = { tabId, ...(sessionId === undefined ? {} : { sessionId }) }
     return toJsonObject(await chrome.debugger.sendCommand(debuggee, cdpMethod, params))
+  }
+  if (command.method === "tabs.attachActive") {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
+    if (typeof tab?.id !== "number") {
+      throw new Error("The last focused browser window has no active tab")
+    }
+    try {
+      await chrome.debugger.attach({ tabId: tab.id }, "1.3")
+    } catch (error) {
+      if (!isAlreadyAttachedError(error)) {
+        throw error
+      }
+      try {
+        await chrome.debugger.sendCommand({ tabId: tab.id }, "Target.getTargetInfo", {})
+      } catch {
+        throw new Error("The active tab is already controlled by another debugger")
+      }
+    }
+    return { tabId: tab.id }
   }
   if (command.method === "tabs.create") {
     const url = optionalStringParam(command.params, "url") ?? "about:blank"
@@ -298,7 +318,7 @@ async function handleCommand(command: ShimCommand): Promise<JsonObject> {
   }
   if (command.method === "tabs.ungroup") {
     const tabId = numberParam(command.params, "tabId")
-    await guardedUngroupBrowserControlTab(tabId)
+    await guardedUngroupBrowserRigTab(tabId)
     return {}
   }
   if (command.method === "action.setAttached") {
@@ -306,7 +326,7 @@ async function handleCommand(command: ShimCommand): Promise<JsonObject> {
     const attached = Boolean(command.params?.attached)
     await chrome.action.setBadgeText({ tabId, text: attached ? "ON" : "" })
     await chrome.action.setBadgeBackgroundColor({ tabId, color: "#7c3aed" })
-    await chrome.action.setTitle({ tabId, title: attached ? "Detach from Browser Control" : "Attach to Browser Control" })
+    await chrome.action.setTitle({ tabId, title: attached ? "Detach from BrowserRig" : "Attach to BrowserRig" })
     return {}
   }
   if (command.method === "action.setBadge") {
@@ -356,8 +376,15 @@ async function handleCommand(command: ShimCommand): Promise<JsonObject> {
 
 async function startRecording(params: JsonObject | undefined): Promise<JsonObject> {
   const tabId = numberParam(params, "tabId")
+  let streamId: string
+  try {
+    streamId = await getTabCaptureStreamId(tabId)
+  } catch (error) {
+    const grantFailure = tabCaptureGrantRequiredFailure(error)
+    if (grantFailure) return grantFailure
+    throw error
+  }
   await ensureOffscreenDocument()
-  const streamId = await getTabCaptureStreamId(tabId)
   const result = await chrome.runtime.sendMessage({
     action: "recording.start",
     tabId,
@@ -430,7 +457,7 @@ async function ensureOffscreenDocument(): Promise<void> {
   offscreenDocumentCreating = chrome.offscreen.createDocument({
     url: offscreenDocumentPath,
     reasons: [chrome.offscreen.Reason.USER_MEDIA],
-    justification: "Record Browser Control tabs with chrome.tabCapture and MediaRecorder",
+    justification: "Record BrowserRig tabs with chrome.tabCapture and MediaRecorder",
   })
   try {
     await offscreenDocumentCreating
@@ -440,25 +467,17 @@ async function ensureOffscreenDocument(): Promise<void> {
 }
 
 async function getTabCaptureStreamId(tabId: number): Promise<string> {
-  try {
-    return await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if (message.includes("Extension has not been invoked") || message.includes("activeTab")) {
-      throw new Error(`${message}. Click the Browser Control extension icon on this tab once before recording.`)
-    }
-    throw error
-  }
+  return chrome.tabCapture.getMediaStreamId({ targetTabId: tabId })
 }
 
-async function reconcileBrowserControlGroups(knownAttachedTabIds?: ReadonlySet<number>): Promise<void> {
+async function reconcileBrowserRigGroups(knownAttachedTabIds?: ReadonlySet<number>): Promise<void> {
   if (!chrome.tabGroups) {
     return
   }
   const attachedTabIds = knownAttachedTabIds ?? await getAttachedTabIds()
   const groups = await chrome.tabGroups.query({})
   for (const group of groups) {
-    if (!isCurrentBrowserControlGroupTitle(group.title) && !isLegacyBrowserControlGroupTitle(group.title)) {
+    if (!isCurrentBrowserRigGroupTitle(group.title) && !isLegacyBrowserRigGroupTitle(group.title)) {
       continue
     }
     const tabs = await chrome.tabs.query({ groupId: group.id })
@@ -469,7 +488,7 @@ async function reconcileBrowserControlGroups(knownAttachedTabIds?: ReadonlySet<n
       if (attachedTabIds.has(tab.id)) {
         continue
       }
-      await guardedUngroupBrowserControlTab(tab.id)
+      await guardedUngroupBrowserRigTab(tab.id)
     }
   }
 }
@@ -485,7 +504,7 @@ async function getAttachedTabIds(): Promise<Set<number>> {
   return attachedTabIds
 }
 
-async function guardedUngroupBrowserControlTab(tabId: number): Promise<void> {
+async function guardedUngroupBrowserRigTab(tabId: number): Promise<void> {
   try {
     const tab = await chrome.tabs.get(tabId)
     if (tab.groupId === undefined || tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE) {
@@ -496,7 +515,7 @@ async function guardedUngroupBrowserControlTab(tabId: number): Promise<void> {
       const group = await chrome.tabGroups.get(tab.groupId)
       groupTitle = group.title
     }
-    if (!shouldUngroupBrowserControlTab(groupTitle)) {
+    if (!shouldUngroupBrowserRigTab(groupTitle)) {
       return
     }
     await chrome.tabs.ungroup(tabId)
@@ -565,14 +584,14 @@ async function sendMessageAfterConnection(message: JsonObject): Promise<void> {
 async function sendBinaryAfterConnection(data: Uint8Array): Promise<void> {
   if (socket?.readyState !== WebSocket.OPEN) await ensureConnection()
   const currentSocket = socket
-  if (currentSocket?.readyState !== WebSocket.OPEN) throw new Error("Browser Control relay is not connected")
+  if (currentSocket?.readyState !== WebSocket.OPEN) throw new Error("BrowserRig relay is not connected")
   const deadline = Date.now() + 30_000
   while (currentSocket.bufferedAmount + data.byteLength > maxRecordingSocketBufferedBytes) {
     await new Promise((resolve) => setTimeout(resolve, 10))
     if (socket !== currentSocket || currentSocket.readyState !== WebSocket.OPEN) {
-      throw new Error("Browser Control relay disconnected while sending recording data")
+      throw new Error("BrowserRig relay disconnected while sending recording data")
     }
-    if (Date.now() >= deadline) throw new Error("Timed out sending recording data to the Browser Control relay")
+    if (Date.now() >= deadline) throw new Error("Timed out sending recording data to the BrowserRig relay")
   }
   currentSocket.send(data.buffer)
 }

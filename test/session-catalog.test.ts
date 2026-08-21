@@ -12,7 +12,7 @@ afterEach(() => {
 
 describe("SessionCatalog", () => {
   it("round-trips endpoint-scoped session descriptors with private permissions", async () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "browser-control-session-catalog-"))
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "browserrig-session-catalog-"))
     temporaryDirectories.push(home)
     const filePath = defaultSessionCatalogPath(20001, home)
     const catalog = new SessionCatalog(filePath)
@@ -32,19 +32,19 @@ describe("SessionCatalog", () => {
   })
 
   it("reports invalid data without overwriting it", async () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "browser-control-session-catalog-"))
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "browserrig-session-catalog-"))
     temporaryDirectories.push(home)
     const filePath = defaultSessionCatalogPath(20002, home)
     fs.mkdirSync(path.dirname(filePath), { recursive: true })
     fs.writeFileSync(filePath, "not json")
     const catalog = new SessionCatalog(filePath)
 
-    await expect(catalog.load()).rejects.toThrow("Could not decode Browser Control session catalog")
+    await expect(catalog.load()).rejects.toThrow("Could not decode BrowserRig session catalog")
     expect(fs.readFileSync(filePath, "utf8")).toBe("not json")
   })
 
   it("rejects session ids that the HTTP API cannot address", async () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "browser-control-session-catalog-"))
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "browserrig-session-catalog-"))
     temporaryDirectories.push(home)
     const filePath = defaultSessionCatalogPath(20003, home)
     fs.mkdirSync(path.dirname(filePath), { recursive: true })

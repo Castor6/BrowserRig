@@ -2,7 +2,7 @@
  * Relay-level CDP guardrails.
  *
  * The relay refuses a small set of CDP methods that would destroy the user's
- * real browser state (Browser Control drives the user's own browser, with
+ * real browser state (BrowserRig drives the user's own browser, with
  * their real logins). Read-only sessions additionally refuse input-dispatching
  * methods so "go look at X" tasks cannot click or type.
  *
@@ -36,7 +36,7 @@ export type GuardContext = {
 export function guardCdpMethod(context: GuardContext): string | null {
   const reason = alwaysBlocked.get(context.method)
   if (reason) {
-    return `Browser Control blocked ${context.method}: ${reason}. This command is always blocked by the relay.`
+    return `BrowserRig blocked ${context.method}: ${reason}. This command is always blocked by the relay.`
   }
   if (context.readOnly && readOnlyBlockedPrefixes.some((prefix) => context.method.startsWith(prefix))) {
     const session = context.sessionId ? `Session ${context.sessionId}` : "This session"

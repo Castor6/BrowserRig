@@ -1,1 +1,1 @@
-export { AuthenticatedOrigin, BrowserControlClient } from "./browser-control-client.ts"
+export { AuthenticatedOrigin, BrowserRigClient } from "./browserrig-client.ts"

@@ -2,7 +2,7 @@ import { Deferred, Effect, Fiber, Option, Schema, Semaphore } from "effect"
 import { defaultPageClosedWarning, ExecuteSandbox, hasExplicitTargetSelection, type ExecuteResult, type ExecuteTargetSelection } from "./execute.ts"
 import type { NetworkCaptureOptions, NetworkCaptureResult, NetworkCaptureStatus, NetworkCaptureStopOptions } from "./network-capture.ts"
 import { generateSessionId } from "./relay-helpers.ts"
-import type { BrowserControlSession, ExecuteSandboxLike, SessionSummary, SessionTarget } from "./relay-types.ts"
+import type { BrowserRigSession, ExecuteSandboxLike, SessionSummary, SessionTarget } from "./relay-types.ts"
 import type { AuthenticatedJsonOutcome, AuthenticatedJsonRequest } from "./relay-schema.ts"
 import type { PersistedSession } from "./session-catalog.ts"
 import {
@@ -39,7 +39,7 @@ export type SessionHooks = {
 }
 
 export class SessionError extends Schema.TaggedErrorClass<SessionError>()(
-  "BrowserControlSessions.SessionError",
+  "BrowserRigSessions.SessionError",
   {
     message: Schema.String,
     reason: Schema.Literals([
@@ -63,7 +63,7 @@ const sessionError = (
 
 export const adoptionTipForUrl = (url: string): string => {
   const selector = targetUrlHintSelector(url)
-  return `Tip: an attached tab is open (${url}). Use browser-control session adopt --target-url '${selector}' to drive it instead of this new tab.`
+  return `Tip: an attached tab is open (${url}). Use browserrig session adopt --target-url '${selector}' to drive it instead of this new tab.`
 }
 
 export const shouldAppendAdoptionTip = (options: {
@@ -78,8 +78,8 @@ export const shouldAppendAdoptionTip = (options: {
   return options.sessionCreated || options.warnings.includes(defaultPageClosedWarning)
 }
 
-export class BrowserControlSessions {
-  readonly sessions = new Map<string, BrowserControlSession>()
+export class BrowserRigSessions {
+  readonly sessions = new Map<string, BrowserRigSession>()
   private readonly createSandbox: (id: string) => ExecuteSandboxLike
   private readonly hooks: SessionHooks
   private readonly executing = new Set<string>()
@@ -124,7 +124,7 @@ export class BrowserControlSessions {
       if (entry.target) targetOwners.add(entry.target.id)
     }
     for (const entry of entries) {
-      const session = this.createBrowserControlSession(entry.id, entry.readOnly, {
+      const session = this.createBrowserRigSession(entry.id, entry.readOnly, {
         createdAt: entry.createdAt,
         updatedAt: entry.updatedAt,
       })
@@ -152,27 +152,27 @@ export class BrowserControlSessions {
     this.schedulePersistence()
   }
 
-  createNew(id: string | undefined, options?: { readonly readOnly?: boolean }): BrowserControlSession {
+  createNew(id: string | undefined, options?: { readonly readOnly?: boolean }): BrowserRigSession {
     if (this.closing) {
-      throw sessionError("inactive", "Browser Control sessions are closing")
+      throw sessionError("inactive", "BrowserRig sessions are closing")
     }
     const sessionId = id ?? generateSessionId(this.sessions)
     if (this.sessions.has(sessionId)) {
       throw sessionError("already-exists", `Session already exists: ${sessionId}`, sessionId)
     }
-    const session = this.createBrowserControlSession(sessionId, options?.readOnly === true)
+    const session = this.createBrowserRigSession(sessionId, options?.readOnly === true)
     this.sessions.set(sessionId, session)
     this.schedulePersistence()
     return session
   }
 
-  create(id: string | undefined, options?: { readonly readOnly?: boolean }): Effect.Effect<BrowserControlSession, Error> {
+  create(id: string | undefined, options?: { readonly readOnly?: boolean }): Effect.Effect<BrowserRigSession, Error> {
     const manager = this
     return Effect.gen(function* () {
       const session = manager.createNew(id, options)
       yield* manager.flushPersistence().pipe(Effect.catch((error) => Effect.gen(function* () {
         if (manager.sessions.get(session.id) === session) manager.sessions.delete(session.id)
-        yield* manager.closeBrowserControlSession(session)
+        yield* manager.closeBrowserRigSession(session)
         manager.schedulePersistence()
         yield* manager.flushPersistence().pipe(Effect.ignore)
         return yield* Effect.fail(error)
@@ -185,7 +185,7 @@ export class BrowserControlSessions {
     const manager = this
     return Effect.gen(function* () {
       if (manager.closing) {
-        return yield* Effect.fail(sessionError("inactive", "Browser Control sessions are closing", id))
+        return yield* Effect.fail(sessionError("inactive", "BrowserRig sessions are closing", id))
       }
       const existing = manager.sessions.get(id)
       if (existing) {
@@ -201,7 +201,7 @@ export class BrowserControlSessions {
       const session = manager.createNew(id, options)
       yield* manager.flushPersistence().pipe(Effect.catch((error) => Effect.gen(function* () {
         if (manager.sessions.get(session.id) === session) manager.sessions.delete(session.id)
-        yield* manager.closeBrowserControlSession(session)
+        yield* manager.closeBrowserRigSession(session)
         manager.schedulePersistence()
         yield* manager.flushPersistence().pipe(Effect.ignore)
         return yield* Effect.fail(error)
@@ -210,15 +210,15 @@ export class BrowserControlSessions {
     })
   }
 
-  getOrCreate(id: string): { readonly session: BrowserControlSession; readonly created: boolean } {
+  getOrCreate(id: string): { readonly session: BrowserRigSession; readonly created: boolean } {
     if (this.closing) {
-      throw sessionError("inactive", "Browser Control sessions are closing", id)
+      throw sessionError("inactive", "BrowserRig sessions are closing", id)
     }
     const existing = this.sessions.get(id)
     if (existing) {
       return { session: existing, created: false }
     }
-    const session = this.createBrowserControlSession(id, false)
+    const session = this.createBrowserRigSession(id, false)
     this.sessions.set(id, session)
     this.schedulePersistence()
     return { session, created: true }
@@ -273,7 +273,7 @@ export class BrowserControlSessions {
     const manager = this
     return Effect.gen(function* () {
       if (manager.closing) {
-        return yield* Effect.fail(sessionError("inactive", "Browser Control sessions are closing", id))
+        return yield* Effect.fail(sessionError("inactive", "BrowserRig sessions are closing", id))
       }
       const session = manager.sessions.get(id)
       if (!session) {
@@ -293,7 +293,7 @@ export class BrowserControlSessions {
           return yield* Effect.fail(error)
         })))
         yield* manager.releaseSessionTargetOwnership(session)
-        yield* manager.closeBrowserControlSession(session)
+        yield* manager.closeBrowserRigSession(session)
         return true
       }))
     })
@@ -303,7 +303,7 @@ export class BrowserControlSessions {
     const manager = this
     return Effect.gen(function* () {
       if (manager.closing) {
-        return yield* Effect.fail(sessionError("inactive", "Browser Control sessions are closing", id))
+        return yield* Effect.fail(sessionError("inactive", "BrowserRig sessions are closing", id))
       }
       const existing = manager.sessions.get(id)
       if (!existing) {
@@ -314,7 +314,7 @@ export class BrowserControlSessions {
           return yield* Effect.fail(sessionError("inactive", `Session is no longer active: ${id}`, id))
         }
         if (existing.target?.owner === "relay") yield* manager.closeRelayTarget(existing.target.id)
-        const session = manager.createBrowserControlSession(id, existing.readOnly)
+        const session = manager.createBrowserRigSession(id, existing.readOnly)
         manager.sessions.set(id, session)
         manager.schedulePersistence()
         yield* manager.flushPersistence().pipe(Effect.catch((error) => Effect.gen(function* () {
@@ -324,7 +324,7 @@ export class BrowserControlSessions {
           return yield* Effect.fail(error)
         })))
         yield* manager.releaseSessionTargetOwnership(existing)
-        yield* manager.closeBrowserControlSession(existing)
+        yield* manager.closeBrowserRigSession(existing)
         return manager.sessionSummary(session)
       }))
     })
@@ -430,7 +430,7 @@ export class BrowserControlSessions {
     const manager = this
     return Effect.gen(function* () {
       if (manager.closing) {
-        return yield* Effect.fail(sessionError("inactive", "Browser Control sessions are closing"))
+        return yield* Effect.fail(sessionError("inactive", "BrowserRig sessions are closing"))
       }
       if (options.sessionId === undefined && !options.createIfMissing) {
         return yield* Effect.fail(sessionError("invalid-request", "sessionId is required when createIfMissing is false"))
@@ -516,7 +516,7 @@ export class BrowserControlSessions {
     const manager = this
     return Effect.gen(function* () {
       if (manager.closing) {
-        return yield* Effect.fail(sessionError("inactive", "Browser Control sessions are closing"))
+        return yield* Effect.fail(sessionError("inactive", "BrowserRig sessions are closing"))
       }
       if (options.sessionId === undefined && !options.createIfMissing) {
         return yield* Effect.fail(sessionError("invalid-request", "sessionId is required when createIfMissing is false"))
@@ -638,7 +638,7 @@ export class BrowserControlSessions {
           return manager.withLifecyclePermit(
             session,
             "close",
-            manager.disconnectBrowserControlSession(session),
+            manager.disconnectBrowserRigSession(session),
           ).pipe(
             Effect.match({
               onFailure: () => undefined,
@@ -694,10 +694,10 @@ export class BrowserControlSessions {
     )
   }
 
-  private createBrowserControlSession(id: string, readOnly: boolean, timestamps?: {
+  private createBrowserRigSession(id: string, readOnly: boolean, timestamps?: {
     readonly createdAt: string
     readonly updatedAt: string
-  }): BrowserControlSession {
+  }): BrowserRigSession {
     const now = new Date().toISOString()
     return {
       id,
@@ -709,7 +709,7 @@ export class BrowserControlSessions {
     }
   }
 
-  private sessionSummary(session: BrowserControlSession): SessionSummary {
+  private sessionSummary(session: BrowserRigSession): SessionSummary {
     const status = session.sandbox.getStatus()
     return {
       id: session.id,
@@ -722,19 +722,19 @@ export class BrowserControlSessions {
     }
   }
 
-  private closeBrowserControlSession(session: BrowserControlSession): Effect.Effect<void> {
+  private closeBrowserRigSession(session: BrowserRigSession): Effect.Effect<void> {
     return this.withLifecycleTimeout(session.sandbox.close(), `Close session ${session.id}`).pipe(Effect.ignore)
   }
 
-  private disconnectBrowserControlSession(session: BrowserControlSession): Effect.Effect<void> {
+  private disconnectBrowserRigSession(session: BrowserRigSession): Effect.Effect<void> {
     return this.withLifecycleTimeout(session.sandbox.disconnect(), `Disconnect session ${session.id}`).pipe(Effect.ignore)
   }
 
-  private closeBrowserControlSessionSettled(session: BrowserControlSession): Effect.Effect<void> {
+  private closeBrowserRigSessionSettled(session: BrowserRigSession): Effect.Effect<void> {
     return session.sandbox.closeSettled().pipe(Effect.ignore)
   }
 
-  private releaseSessionTargetOwnership(session: BrowserControlSession): Effect.Effect<void> {
+  private releaseSessionTargetOwnership(session: BrowserRigSession): Effect.Effect<void> {
     const target = session.target
     if (!target) return Effect.void
     this.notifyTargetOwnershipChange(this.targetOwnership.releaseTargetOwnership(target.id, session.id))
@@ -758,7 +758,7 @@ export class BrowserControlSessions {
     }
   }
 
-  private persistedSession(session: BrowserControlSession): PersistedSession {
+  private persistedSession(session: BrowserRigSession): PersistedSession {
     const target = session.target
     return {
       id: session.id,
@@ -781,7 +781,7 @@ export class BrowserControlSessions {
       await hook(sessions)
     })
     void this.persistenceTail.catch((error) => {
-      console.error("Failed to persist Browser Control sessions", error)
+      console.error("Failed to persist BrowserRig sessions", error)
     })
   }
 
@@ -789,7 +789,7 @@ export class BrowserControlSessions {
     const pending = this.persistenceTail
     return Effect.tryPromise({
       try: () => pending,
-      catch: (cause) => cause instanceof Error ? cause : new Error("Persist Browser Control sessions", { cause }),
+      catch: (cause) => cause instanceof Error ? cause : new Error("Persist BrowserRig sessions", { cause }),
     })
   }
 
@@ -798,7 +798,7 @@ export class BrowserControlSessions {
   }
 
   private cleanupSettledAdoption(
-    session: BrowserControlSession,
+    session: BrowserRigSession,
     created: boolean,
     previousTarget?: SessionTarget,
     previousRelayClosed = false,
@@ -811,7 +811,7 @@ export class BrowserControlSessions {
         manager.notifyTargetOwnershipChange(manager.targetOwnership.releaseTargetOwnership(previousTarget.id, session.id))
         if (previousTarget.owner === "relay" && !previousRelayClosed) yield* manager.closeRelayTarget(previousTarget.id)
       }
-      yield* manager.closeBrowserControlSessionSettled(session)
+      yield* manager.closeBrowserRigSessionSettled(session)
       if (manager.sessions.get(session.id) !== session) {
         return
       }
@@ -821,7 +821,7 @@ export class BrowserControlSessions {
         yield* manager.flushPersistence()
         return
       }
-      const replacement = manager.createBrowserControlSession(session.id, session.readOnly)
+      const replacement = manager.createBrowserRigSession(session.id, session.readOnly)
       manager.sessions.set(session.id, {
         ...replacement,
         createdAt: session.createdAt,
@@ -831,20 +831,20 @@ export class BrowserControlSessions {
     })
   }
 
-  private cleanupCreatedSession(session: BrowserControlSession): Effect.Effect<void> {
+  private cleanupCreatedSession(session: BrowserRigSession): Effect.Effect<void> {
     const manager = this
     return Effect.gen(function* () {
       if (manager.sessions.get(session.id) !== session) return
       manager.sessions.delete(session.id)
       yield* manager.releaseSessionTargetOwnership(session)
-      yield* manager.closeBrowserControlSession(session)
+      yield* manager.closeBrowserRigSession(session)
       manager.schedulePersistence()
       yield* manager.flushPersistence().pipe(Effect.ignore)
     })
   }
 
   private withLifecyclePermit<A, E, R>(
-    session: BrowserControlSession,
+    session: BrowserRigSession,
     operation: string,
     effect: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | Error, R> {

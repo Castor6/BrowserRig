@@ -36,10 +36,10 @@ describe("ghost cursor mouse actions", () => {
 
   it("generates a bounded optional-runtime expression", () => {
     expect(ghostCursorMouseActionExpression({ type: "move", x: 12, y: 34, button: "none" })).toBe(
-      'globalThis.__browserControlGhostCursor?.applyMouseEvent({"type":"move","x":12,"y":34,"button":"none"})',
+      'globalThis.__browserRigGhostCursor?.applyMouseEvent({"type":"move","x":12,"y":34,"button":"none"})',
     )
     expect(ghostCursorRestoreExpression({ x: 12, y: 34 })).toBe(
-      'globalThis.__browserControlGhostCursor?.restore({"x":12,"y":34})',
+      'globalThis.__browserRigGhostCursor?.restore({"x":12,"y":34})',
     )
   })
 })

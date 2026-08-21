@@ -38,7 +38,7 @@ if (await next.count()) {
 }
 
 const cursor = await page.evaluate(() => {
-  const element = document.getElementById("__browser_control_ghost_cursor__")
+  const element = document.getElementById("__browserrig_ghost_cursor__")
   return element
     ? {
         targetX: element.dataset.targetX,

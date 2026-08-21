@@ -17,7 +17,7 @@ afterEach(() => {
 describe("relay session persistence", () => {
   it("restores a named session after a clean relay restart", async () => {
     const port = await freePort()
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "browser-control-relay-sessions-"))
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "browserrig-relay-sessions-"))
     temporaryDirectories.push(directory)
     const sessionCatalogPath = path.join(directory, "sessions.json")
 
@@ -47,7 +47,7 @@ describe("relay session persistence", () => {
 
   it("reclaims persisted target ownership when the extension re-announces the tab", async () => {
     const port = await freePort()
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "browser-control-relay-sessions-"))
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "browserrig-relay-sessions-"))
     temporaryDirectories.push(directory)
     const sessionCatalogPath = path.join(directory, "sessions.json")
     await new SessionCatalog(sessionCatalogPath).save([{
@@ -68,13 +68,13 @@ describe("relay session persistence", () => {
           targets = await fetch(new URL("/json/list", relay.url)).then((response) => response.json())
           return Array.isArray(targets) && targets.some((target) => {
             return typeof target === "object" && target !== null &&
-              "browserControlSessionId" in target && target.browserControlSessionId === "restored"
+              "browserRigSessionId" in target && target.browserRigSessionId === "restored"
           })
         })
         expect(targets).toMatchObject([{
           id: "restored-target",
           owner: "user",
-          browserControlSessionId: "restored",
+          browserRigSessionId: "restored",
         }])
         extension.close()
         await waitFor(async () => {
@@ -87,7 +87,7 @@ describe("relay session persistence", () => {
           const current = await fetch(new URL("/json/list", relay.url)).then((response) => response.json())
           return Array.isArray(current) && current.some((target) => {
             return typeof target === "object" && target !== null &&
-              "browserControlSessionId" in target && target.browserControlSessionId === "restored"
+              "browserRigSessionId" in target && target.browserRigSessionId === "restored"
           })
         })
         const reset = await fetch(new URL("/cli/session/reset", relay.url), {
@@ -101,7 +101,7 @@ describe("relay session persistence", () => {
           return Array.isArray(current) && current.some((target) => {
             return typeof target === "object" && target !== null &&
               "id" in target && target.id === "restored-target" &&
-              !("browserControlSessionId" in target)
+              !("browserRigSessionId" in target)
           })
         })
         reconnected.close()
@@ -111,7 +111,7 @@ describe("relay session persistence", () => {
 
   it("does not let a process that loses the port race rewrite the catalog", async () => {
     const port = await freePort()
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "browser-control-relay-sessions-"))
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "browserrig-relay-sessions-"))
     temporaryDirectories.push(directory)
     const sessionCatalogPath = path.join(directory, "sessions.json")
     const catalog = new SessionCatalog(sessionCatalogPath)
@@ -133,7 +133,7 @@ describe("relay session persistence", () => {
 
   it("waits for a delayed relay target re-announcement before resetting", async () => {
     const port = await freePort()
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "browser-control-relay-sessions-"))
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "browserrig-relay-sessions-"))
     temporaryDirectories.push(directory)
     const sessionCatalogPath = path.join(directory, "sessions.json")
     const catalog = new SessionCatalog(sessionCatalogPath)
@@ -176,7 +176,7 @@ describe("relay session persistence", () => {
   for (const operation of ["reset", "delete"] as const) {
     it(`${operation} forgets a relay target missing from a completed extension inventory`, async () => {
       const port = await freePort()
-      const directory = fs.mkdtempSync(path.join(os.tmpdir(), "browser-control-relay-sessions-"))
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), "browserrig-relay-sessions-"))
       temporaryDirectories.push(directory)
       const sessionCatalogPath = path.join(directory, "sessions.json")
       const catalog = new SessionCatalog(sessionCatalogPath)
@@ -216,7 +216,7 @@ describe("relay session persistence", () => {
 
   it("bounds stale relay target cleanup when no extension inventory arrives", async () => {
     const port = await freePort()
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "browser-control-relay-sessions-"))
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "browserrig-relay-sessions-"))
     temporaryDirectories.push(directory)
     const sessionCatalogPath = path.join(directory, "sessions.json")
     const catalog = new SessionCatalog(sessionCatalogPath)
@@ -260,7 +260,7 @@ async function openProtocolExtension(relayUrl: string, targetId?: string): Promi
       : {}
     extension.send(JSON.stringify({ id: command.id, result }))
   })
-  extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 2 } }))
+  extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 3 } }))
   if (targetId) extension.send(JSON.stringify({ method: "debugger.attached", params: { tabId: 7 } }))
   extension.send(JSON.stringify({ method: "ready" }))
   return Object.assign(extension, { commands })
@@ -275,13 +275,13 @@ async function openFakeExtension(relayUrl: string, targetId: string): Promise<We
       : {}
     extension.send(JSON.stringify({ id: command.id, result }))
   })
-  extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 2 } }))
+  extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: 3 } }))
   extension.send(JSON.stringify({ method: "debugger.attached", params: { tabId: 7 } }))
   return extension
 }
 
 async function openSocket(url: string): Promise<WebSocket> {
-  const socket = new WebSocket(url, { origin: "chrome-extension://browser-control-test" })
+  const socket = new WebSocket(url, { origin: "chrome-extension://browserrig-test" })
   await new Promise<void>((resolve, reject) => {
     socket.once("open", resolve)
     socket.once("error", reject)

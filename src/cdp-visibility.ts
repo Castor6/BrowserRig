@@ -1,8 +1,8 @@
 /**
  * Per-client CDP target visibility.
  *
- * Each Browser Control session's sandbox connects as its own CDP client and
- * identifies itself with a Browser Control session id. Tabs created for a
+ * Each BrowserRig session's sandbox connects as its own CDP client and
+ * identifies itself with a BrowserRig session id. Tabs created for a
  * session are owned by that session. Without scoping, every client is told
  * about every tab, so concurrently connected clients attach to and
  * double-initialize each other's pages, which makes
@@ -12,7 +12,7 @@
  * - Session-owned targets are visible only to that session's clients.
  * - User toolbar-attached targets stay visible to every client, so
  *   `--target-url` recovery keeps working.
- * - Relay-created targets without a Browser Control session id belong to raw
+ * - Relay-created targets without a BrowserRig session id belong to raw
  *   `connectOverCDP` clients. They are visible to raw clients and to a session
  *   client that does not already own a target, so explicit `--target-url`
  *   adoption can still find existing attached pages. Once a session has its own
@@ -21,7 +21,7 @@
  *   `locator.evaluate` can wedge.
  *
  * Two simultaneous raw clients can still interfere with each other's tabs;
- * Browser Control sessions are the isolated, supported path.
+ * BrowserRig sessions are the isolated, supported path.
  */
 export function canClientSeeTarget(options: {
   readonly clientSessionId: string | undefined

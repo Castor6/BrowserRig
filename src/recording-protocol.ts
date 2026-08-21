@@ -4,6 +4,7 @@ const finalFlag = 1
 const headerLength = 20
 
 export const maxRecordingFramePayloadBytes = 4 * 1024 * 1024
+export const tabCaptureGrantRequiredErrorCode = "tab-capture-grant-required"
 
 export type RecordingFrame = {
   readonly tabId: number

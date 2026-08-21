@@ -350,6 +350,37 @@ describe("snapshot helpers", () => {
     expect(page.getByRole).toHaveBeenCalledWith("textbox")
   })
 
+  it("uses accessible identity to fail closed when a positional selector drifts", async () => {
+    const evaluate = vi.fn().mockResolvedValue({
+      entries: [{
+        depth: 0,
+        role: "button",
+        name: "Second duplicate",
+        identityName: "Second duplicate",
+        selector: "main > button:nth-of-type(2)",
+      }],
+      truncated: false,
+    })
+    const resolvedLocator = {} as Locator
+    const selectorLocator = { and: vi.fn(() => resolvedLocator) } as unknown as Locator
+    const roleLocator = {} as Locator
+    const page = {
+      evaluate,
+      locator: vi.fn(() => selectorLocator),
+      getByRole: vi.fn(() => roleLocator),
+      url: vi.fn(() => "https://example.com/duplicates"),
+      mainFrame: vi.fn(() => ({})),
+      on: vi.fn(),
+      off: vi.fn(),
+    } as unknown as Page
+    const helpers = createSnapshotHelpers(page, { selectors: new Map() })
+
+    await helpers.snapshot()
+    expect(helpers.ref("e1")).toBe(resolvedLocator)
+    expect(page.getByRole).toHaveBeenCalledWith("button", { name: "Second duplicate", exact: true })
+    expect(selectorLocator.and).toHaveBeenCalledWith(roleLocator)
+  })
+
   it("diffs against the previous full snapshot and exposes only current changed refs", async () => {
     const evaluate = vi.fn()
       .mockResolvedValueOnce({

@@ -5,12 +5,12 @@ import { fileURLToPath } from "node:url"
 
 declare global {
   // Injected by scripts/build-cli.ts at build time.
-  var __BROWSER_CONTROL_VERSION__: string | undefined
-  var __BROWSER_CONTROL_BUILD_ID__: string | undefined
+  var __BROWSERRIG_VERSION__: string | undefined
+  var __BROWSERRIG_BUILD_ID__: string | undefined
 }
 
-export const browserControlVersion: string = globalThis.__BROWSER_CONTROL_VERSION__ ?? "0.0.0-dev"
-export const browserControlBuildId: string = globalThis.__BROWSER_CONTROL_BUILD_ID__ ?? sourceBuildId()
+export const browserRigVersion: string = globalThis.__BROWSERRIG_VERSION__ ?? "0.0.0-dev"
+export const browserRigBuildId: string = globalThis.__BROWSERRIG_BUILD_ID__ ?? sourceBuildId()
 
 export function sourceBuildIdForFiles(files: readonly { readonly name: string; readonly content: string | Buffer }[]): string {
   const hash = crypto.createHash("sha256")

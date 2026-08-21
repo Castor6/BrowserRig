@@ -6,7 +6,7 @@ describe("cdp-guardrails", () => {
     for (const method of ["Network.clearBrowserCookies", "Network.clearBrowserCache", "Storage.clearCookies", "Browser.close"]) {
       expect(alwaysBlockedCdpMethods.has(method)).toBe(true)
       const message = guardCdpMethod({ method, readOnly: false })
-      expect(message).toContain(`Browser Control blocked ${method}`)
+      expect(message).toContain(`BrowserRig blocked ${method}`)
       expect(message).toContain("always blocked")
     }
   })

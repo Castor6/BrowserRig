@@ -110,7 +110,7 @@ describe("RelayClient", () => {
       ),
     )
     expect(error._tag).toBe("RelayClient.RelayUnreachable")
-    expect(error.message).toContain("browser-control serve")
+    expect(error.message).toContain("browserrig serve")
   })
 
   it("decodes execute responses", async () => {
@@ -182,6 +182,15 @@ describe("RelayClient", () => {
     expect(result.adoptedUrl).toBe("https://example.com/")
     expect(result.adoptedTargetId).toBe("target-2")
     expect(result.session.created).toBe(true)
+    expect(lastRequestBody).toEqual({
+      sessionId: session.id,
+      createIfMissing: true,
+      targetSelection: { urlIncludes: "example.com" },
+    })
+
+    await withClient((client) =>
+      client.sessionAdopt({ sessionId: session.id, createIfMissing: false, active: true }))
+    expect(lastRequestBody).toEqual({ sessionId: session.id, createIfMissing: false, active: true })
   })
 
   it("preserves recording bitrate options", async () => {
@@ -243,7 +252,7 @@ describe("RelayClient", () => {
       body: {
         exitCode: 0,
         signal: null,
-        stdout: "${BC_SECRET_1}\n",
+        stdout: "${BROWSERRIG_SECRET_1}\n",
         stderr: "",
         stdoutTruncated: false,
         stderrTruncated: false,
@@ -251,7 +260,7 @@ describe("RelayClient", () => {
       },
     })
     const result = await withClient((client) => client.authRun({ name: "uber", command: "./uber-cli", args: ["restaurants"] }))
-    expect(result.stdout).toBe("${BC_SECRET_1}\n")
+    expect(result.stdout).toBe("${BROWSERRIG_SECRET_1}\n")
     expect(lastRequestBody).toEqual({ name: "uber", command: "./uber-cli", args: ["restaurants"] })
   })
 })

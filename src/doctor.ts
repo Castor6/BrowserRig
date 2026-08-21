@@ -4,7 +4,7 @@ import { relayBuildProblem } from "./relay-lifecycle.ts"
 import type { ExtensionStatus, RelayVersion, SessionSummary, TargetSummary } from "./relay-schema.ts"
 import { extensionProtocolVersion } from "./protocol.ts"
 import * as SessionStore from "./session-store.ts"
-import { browserControlBuildId, browserControlVersion } from "./version.ts"
+import { browserRigBuildId, browserRigVersion } from "./version.ts"
 
 /**
  * Read-only local install and runtime diagnostics. Pure report construction
@@ -31,8 +31,8 @@ type PackageInfo = {
   readonly name: string
   readonly version: string
   readonly bin: {
-    readonly browserControl: string | null
-    readonly browserControlMcp: string | null
+    readonly browserRig: string | null
+    readonly browserRigMcp: string | null
   }
 }
 
@@ -63,8 +63,8 @@ export type DoctorReport = {
     readonly name: string | null
     readonly version: string | null
     readonly bin: {
-      readonly browserControl: boolean
-      readonly browserControlMcp: boolean
+      readonly browserRig: boolean
+      readonly browserRigMcp: boolean
     }
     readonly error: string | null
   }
@@ -150,8 +150,8 @@ export const createDoctorReport = Effect.fn("Doctor.createReport")(function* (op
       name: metadata.name,
       version: metadata.version,
       bin: {
-        browserControl: metadata.bin?.["browser-control"] ?? null,
-        browserControlMcp: metadata.bin?.["browser-control-mcp"] ?? null,
+        browserRig: metadata.bin?.["browserrig"] ?? null,
+        browserRigMcp: metadata.bin?.["browserrig-mcp"] ?? null,
       },
     })),
   )
@@ -175,7 +175,7 @@ export const createDoctorReport = Effect.fn("Doctor.createReport")(function* (op
   const relayResult = yield* probe(relay.version)
   const relayBuildMatches = relayResult.ok
     ? relayResult.value.buildId
-      ? relayBuildProblem(relayResult.value, browserControlBuildId) === undefined
+      ? relayBuildProblem(relayResult.value, browserRigBuildId) === undefined
       : null
     : null
   const [extensionResult, targetsResult, sessionsResult] = relayResult.ok
@@ -233,14 +233,14 @@ export const createDoctorReport = Effect.fn("Doctor.createReport")(function* (op
   const report: DoctorReport = {
     status: summarizeCheckStatus(checks),
     endpoint: relay.endpoint,
-    cli: { version: browserControlVersion, buildId: browserControlBuildId },
+    cli: { version: browserRigVersion, buildId: browserRigBuildId },
     package: {
       path: path.join(options.packageRoot, "package.json"),
       name: packageResult.ok ? packageResult.value.name : null,
       version: packageResult.ok ? packageResult.value.version : null,
       bin: {
-        browserControl: packageResult.ok ? Boolean(packageResult.value.bin.browserControl) : false,
-        browserControlMcp: packageResult.ok ? Boolean(packageResult.value.bin.browserControlMcp) : false,
+        browserRig: packageResult.ok ? Boolean(packageResult.value.bin.browserRig) : false,
+        browserRigMcp: packageResult.ok ? Boolean(packageResult.value.bin.browserRigMcp) : false,
       },
       error: packageResult.ok ? null : packageResult.error,
     },
@@ -311,16 +311,16 @@ function buildDoctorChecks(options: {
   const packageBinChecks: readonly DoctorCheck[] = options.packageResult.ok
     ? [
       {
-        id: "bin-browser-control",
-        label: "browser-control bin",
-        status: options.packageResult.value.bin.browserControl ? "ok" : "fail",
-        message: options.packageResult.value.bin.browserControl ?? "missing from package.json bin",
+        id: "bin-browserrig",
+        label: "browserrig bin",
+        status: options.packageResult.value.bin.browserRig ? "ok" : "fail",
+        message: options.packageResult.value.bin.browserRig ?? "missing from package.json bin",
       },
       {
-        id: "bin-browser-control-mcp",
-        label: "browser-control-mcp bin",
-        status: options.packageResult.value.bin.browserControlMcp ? "ok" : "warn",
-        message: options.packageResult.value.bin.browserControlMcp ?? "missing from package.json bin",
+        id: "bin-browserrig-mcp",
+        label: "browserrig-mcp bin",
+        status: options.packageResult.value.bin.browserRigMcp ? "ok" : "warn",
+        message: options.packageResult.value.bin.browserRigMcp ?? "missing from package.json bin",
       },
     ]
     : []
@@ -346,7 +346,7 @@ function buildDoctorChecks(options: {
       status: options.relayResult.ok ? "ok" : "fail",
       message: options.relayResult.ok ? `reachable (${options.relayResult.value.version})` : options.relayResult.error,
     },
-    relayBuildCheck({ relayResult: options.relayResult, cliBuildId: browserControlBuildId }),
+    relayBuildCheck({ relayResult: options.relayResult, cliBuildId: browserRigBuildId }),
     {
       id: "extension-connected",
       label: "extension connection",
@@ -540,21 +540,21 @@ function buildDoctorRecommendations(options: {
   readonly possibleLeakedSessions: readonly SessionSummary[]
 }): readonly string[] {
   const relayRecommendations = options.relayResult.ok ? [] : [
-    "Run a relay-backed command to start the detached relay automatically; use `browser-control serve` only for foreground debugging.",
+    "Run a relay-backed command to start the detached relay automatically; use `browserrig serve` only for foreground debugging.",
   ]
   const relayBuildRecommendations = options.relayResult.ok && options.relayBuildMatches !== true ? [
-    "Restart the relay with `browser-control serve` so it uses the current CLI build.",
+    "Restart the relay with `browserrig serve` so it uses the current CLI build.",
   ] : []
   const extensionRecommendations = options.relayResult.ok && options.extensionResult.ok && !options.extensionResult.value.connected
     ? options.extensionResult.value.protocolCompatible === false
-      ? ["Update the Browser Control extension or npm package so their extension protocols are compatible."]
-      : ["Load or reload `extension/dist` as an unpacked extension, then click the Browser Control toolbar button on a normal web tab."]
+      ? ["Update the BrowserRig extension or npm package so their extension protocols are compatible."]
+      : ["Load or reload `extension/dist` as an unpacked extension; it reconnects automatically when the relay starts."]
     : []
   const artifactRecommendations = options.artifacts.some((artifact) => {
     return !artifact.exists
   }) ? ["Run `pnpm build` to regenerate missing CLI or extension artifacts."] : []
   const staleSessionRecommendations = options.staleCurrent && options.current ? [
-    `Current session ${options.current} is stale; run \`browser-control session new\` or \`browser-control session use <id>\` after the relay is running.`,
+    `Current session ${options.current} is stale; run \`browserrig session new\` or \`browserrig session use <id>\` after the relay is running.`,
   ] : []
   const unhealthyTargetRecommendations = options.unhealthyTargets.length ? [
     "A target is crashed or showing a browser error page. Run the owning session once to trigger relay-owned recovery, or reset/re-adopt a user-owned tab.",
@@ -585,7 +585,7 @@ function summarizeCheckStatus(checks: readonly DoctorCheck[]): DoctorCheckStatus
 
 export function formatDoctorReport(report: DoctorReport): string {
   const lines: string[] = [
-    "Browser Control doctor",
+    "BrowserRig doctor",
     `Status: ${report.status}`,
     `Endpoint: ${report.endpoint}`,
     `CLI: ${report.cli.version} (${report.cli.buildId})`,

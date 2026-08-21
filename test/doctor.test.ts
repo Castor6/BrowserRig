@@ -5,6 +5,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { createDoctorReport, extensionProtocolCheck, formatTargetSummary, relayBuildCheck, unhealthyTargetsCheck } from "../src/doctor.ts"
+import { extensionProtocolVersion } from "../src/protocol.ts"
 import * as RelayClient from "../src/relay-client.ts"
 import * as SessionStore from "../src/session-store.ts"
 
@@ -82,12 +83,12 @@ describe("extensionProtocolCheck", () => {
       value: {
         connected: true,
         version: "9.4.2",
-        protocolVersion: 2,
+        protocolVersion: extensionProtocolVersion,
         protocolCompatible: true,
         protocolLegacy: false,
         activeTargets: 0,
       },
-    })).toMatchObject({ status: "ok", message: "runtime 2 is compatible with relay 2" })
+    })).toMatchObject({ status: "ok", message: `runtime ${extensionProtocolVersion} is compatible with relay ${extensionProtocolVersion}` })
   })
 
   it("fails an incompatible extension protocol", () => {
@@ -96,26 +97,26 @@ describe("extensionProtocolCheck", () => {
       value: {
         connected: false,
         version: "10.0.0",
-        protocolVersion: 3,
+        protocolVersion: extensionProtocolVersion + 1,
         protocolCompatible: false,
         protocolLegacy: false,
         activeTargets: 0,
       },
-    })).toMatchObject({ status: "fail", message: "runtime 3 is incompatible with relay 2" })
+    })).toMatchObject({ status: "fail", message: `runtime ${extensionProtocolVersion + 1} is incompatible with relay ${extensionProtocolVersion}` })
   })
 })
 
 describe("createDoctorReport", () => {
   it("compares the runtime extension with the manifest shipped in the package", async () => {
-    const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "browser-control-doctor-"))
+    const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-doctor-"))
     try {
       await fs.mkdir(path.join(packageRoot, "dist"), { recursive: true })
       await fs.mkdir(path.join(packageRoot, "extension", "dist"), { recursive: true })
       await Promise.all([
         fs.writeFile(path.join(packageRoot, "package.json"), JSON.stringify({
-          name: "@opencode-ai/browser-control",
+          name: "browserrig",
           version: "1.0.0",
-          bin: { "browser-control": "./dist/cli.js", "browser-control-mcp": "./dist/mcp.js" },
+          bin: { "browserrig": "./dist/cli.js", "browserrig-mcp": "./dist/mcp.js" },
         })),
         fs.writeFile(path.join(packageRoot, "dist", "cli.js"), ""),
         fs.writeFile(path.join(packageRoot, "dist", "mcp.js"), ""),
@@ -123,12 +124,12 @@ describe("createDoctorReport", () => {
         fs.writeFile(path.join(packageRoot, "extension", "dist", "manifest.json"), JSON.stringify({ version: "0.0.23" })),
       ])
       const relay = {
-        endpoint: "http://127.0.0.1:19989",
+        endpoint: "http://127.0.0.1:19990",
         version: Effect.succeed({ version: "1.0.0", buildId: "test" }),
         extensionStatus: Effect.succeed({
           connected: true,
           version: "0.0.23",
-          protocolVersion: 2,
+          protocolVersion: extensionProtocolVersion,
           protocolCompatible: true,
           protocolLegacy: false,
           activeTargets: 0,

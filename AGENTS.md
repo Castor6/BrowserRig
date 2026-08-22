@@ -226,6 +226,29 @@ local Node relay.
 - Add a Changeset for pull requests that change behavior shipped in the
   `browserrig` npm package. Documentation, tests, CI, and internal refactors
   without published behavior changes do not need one.
+- For every releasable change, run `pnpm changeset` and commit the generated
+  `.changeset/*.md` file. Its frontmatter must name the package and choose one
+  relative SemVer bump:
+
+  ```md
+  ---
+  "browserrig": minor
+  ---
+
+  Add a user-visible capability.
+  ```
+
+- Choose `patch` for backward-compatible bug fixes or behavior corrections,
+  `minor` for backward-compatible user-visible capabilities, and `major` for
+  breaking public API, CLI, configuration, or behavior changes. Base the choice
+  on published impact rather than the Conventional Commit type.
+- In a pull request that carries a Changeset, do not choose an exact target
+  version, manually edit the `version` field in `package.json`, or prewrite its
+  release entry in `CHANGELOG.md`. The `Version Packages` workflow owns those
+  edits and derives the exact version from the current package version and all
+  pending Changesets.
+- Write the Changeset summary in English for package users. Describe the
+  released behavior and its practical impact, not the implementation work.
 - Run `pnpm typecheck` after TypeScript changes.
 - Run `pnpm test` (vitest) after changes to schemas, relay-client, session
   store/manager, extension-rpc, or execute auto-return logic. Unit tests live in

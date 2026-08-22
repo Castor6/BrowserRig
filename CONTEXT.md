@@ -19,10 +19,26 @@ extension and a local driver daemon.
 
 **Product Identity**:
 `BrowserRig` is the visible product and Store name; `browserrig` is the npm
-package, repository slug, CLI, and skill name; `browserrig-mcp` is the MCP
-executable. Environment variables use `BROWSERRIG_*`, local state lives under
-`~/.browserrig`, and the default loopback relay endpoint is `127.0.0.1:19990`.
+package, repository slug, CLI, skill name, and installable DSH bundle;
+`browserrig-mcp` is the MCP executable. The optional DSH entry ships from this
+same package and registers `browserrig_*` tools; there is no separate
+`dsh-browserrig` product, repository, or npm package. Environment variables use
+`BROWSERRIG_*`, local state lives under `~/.browserrig`, and the default
+loopback relay endpoint is `127.0.0.1:19990`.
 _Avoid_: Browser Control, browser-control, BC
+
+**DSH Adapter**:
+The optional leaf integration that binds a DSH agent session to a BrowserRig
+session, registers typed BrowserRig tools, supplies concise built-in guidance,
+and invokes the package-local BrowserRig runtime with fixed arguments and
+validated machine envelopes. Its endpoint-scoped durable map keeps BrowserRig
+session ids out of model context, isolates concurrent DSH tasks, and repairs a
+mapping only after an explicit missing-session response; ambient human session
+and target selectors never override the mapping. It makes BrowserRig
+native to DSH without making DSH part of the driver core. DSH users do not
+separately install the BrowserRig skill or a global CLI; direct CLI agents
+continue to use the skill.
+_Avoid_: DSH fork, separate dsh-browserrig product, required global CLI
 
 **Driver**:
 A deterministic BrowserRig layer that executes requests from an external

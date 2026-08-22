@@ -11,7 +11,7 @@ vi.mock("@effect/platform-node", async (importOriginal) => {
   }
 })
 
-import { executeJsonEnvelope, formatSessionContinuation, normalizeCliArguments } from "../src/cli.ts"
+import { cliErrorDetails, executeJsonEnvelope, formatSessionContinuation, normalizeCliArguments } from "../src/cli.ts"
 import type { ExecuteResponse } from "../src/relay-schema.ts"
 
 const session: ExecuteResponse["session"] = {
@@ -67,6 +67,33 @@ describe("executeJsonEnvelope", () => {
     }))
 
     expect(envelope.diagnostic).toContain("context-destroyed")
+  })
+
+  it("preserves log summaries and extracted media for machine clients", () => {
+    const envelope = executeJsonEnvelope(executeResponse({
+      logSummary: { totalCount: 9, returnedCount: 3, repeatedCount: 4, omittedCount: 2 },
+      media: [{ type: "image", mimeType: "image/png", data: "AQID", size: 3 }],
+    }))
+
+    expect(envelope.logSummary).toEqual({ totalCount: 9, returnedCount: 3, repeatedCount: 4, omittedCount: 2 })
+    expect(envelope.media).toEqual([{ type: "image", mimeType: "image/png", data: "AQID", size: 3 }])
+  })
+})
+
+describe("cliErrorDetails", () => {
+  it("preserves stable relay error codes and statuses", () => {
+    const error = Object.assign(new Error("Session not found"), {
+      _tag: "RelayRejected",
+      code: "session-not-found",
+      status: 404,
+    })
+
+    expect(cliErrorDetails(error)).toEqual({
+      _tag: "RelayRejected",
+      message: "Session not found",
+      code: "session-not-found",
+      status: 404,
+    })
   })
 })
 

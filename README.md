@@ -34,7 +34,7 @@ its standard non-blocking debugging infobar while a tab is attached, but no
 per-tab approval click is required.
 
 ```text
-Agent or CLI -> local relay -> browser extension -> your browser
+Agent (DSH plugin, CLI, or MCP) -> local relay -> browser extension -> your browser
 ```
 
 The driver runs locally and does not contain an LLM or make planning decisions.
@@ -46,24 +46,39 @@ the result, logs, warnings, and a summary of what changed.
 BrowserRig requires Node.js 22.22.2+, 24.15.0+, or 26+, and a Chromium-family
 browser such as Chrome, Brave, Edge, Arc, or Chromium.
 
-Setup has three parts: install the npm package, install the agent skill, and
-load the included browser extension. Add MCP only when your agent prefers MCP
-tools over shell commands.
+Setup has two required parts: connect BrowserRig to the agent runtime you use,
+then load the included browser extension. DeepSeek Harness uses the native DSH
+bundle; other coding agents can use the CLI skill or MCP server.
 
-### 1. Install the CLI
+### 1. Connect your agent
 
-Install the independent package with:
+#### DeepSeek Harness
+
+The root `browserrig` package follows DSH's
+[official bundle installation model](https://deepseek-harness.github.io/deepseek-harness/develop/basic/publish).
+Install it into the DSH profile you run, then inspect the composed layer:
+
+```bash
+dsh plugin --profile web add browserrig
+dsh --profile web --dump-config
+```
+
+This route needs neither a global `browserrig` CLI nor a separately installed
+BrowserRig skill. The bundle carries its matching package-local CLI runtime,
+five typed `browserrig_*` tools, and concise operating guidance. It binds one
+persistent BrowserRig session to each DSH agent session without exposing or
+asking the model to remember BrowserRig session IDs.
+
+#### CLI and skill-driven agents
+
+Install the independent package globally:
 
 ```bash
 npm install --global browserrig
 ```
 
-This installs two commands:
-
-- `browserrig` for CLI and skill-driven agents
-- `browserrig-mcp` for MCP clients
-
-### 2. Connect your agent
+This installs `browserrig` for CLI and skill-driven agents and
+`browserrig-mcp` for MCP clients.
 
 The packaged skill teaches coding agents how to inspect before acting, preserve
 session identity, handle human-only steps, and recover from browser failures.
@@ -114,14 +129,18 @@ CLI and MCP clients share the detached relay, but each execute session keeps its
 own default page and persistent JavaScript `state`. Restarting an MCP process
 does not stop the relay or interrupt an active CLI session.
 
-### 3. Load the extension
+### 2. Load the extension
 
 BrowserRig currently ships its extension as an unpacked extension inside
 the npm package.
 
-1. Print the extension directory:
+1. Print the extension directory for the installation route you chose:
 
    ```bash
+   # DeepSeek Harness profile (replace web if you use another profile)
+   printf '%s\n' "${DSH_HOME:-$HOME/.dsh}/profiles/web/node_modules/browserrig/extension/dist"
+
+   # Global npm installation
    printf '%s\n' "$(npm root --global)/browserrig/extension/dist"
    ```
 
@@ -131,19 +150,25 @@ the npm package.
 4. Select **Load unpacked** and choose the printed directory.
 5. Optionally pin the BrowserRig toolbar button for manual attach/detach.
 
-### 4. Run your first browser command
+### 3. Run your first browser command
 
-Ask the configured agent to use BrowserRig, or verify the installation
-directly:
+Start the configured DSH profile and ask its agent to use BrowserRig:
+
+```bash
+dsh --profile web
+```
+
+For a direct CLI installation, verify it with:
 
 ```bash
 browserrig execute 'await page.goto("https://example.com"); return { title: await page.title(), url: page.url() }'
 ```
 
-The command starts a detached local relay when needed, opens a background tab in
-your existing browser profile, and prints a readable session ID with the exact
-`--session` command needed to continue. The relay listens on
-`127.0.0.1:19990` and stays running between CLI calls.
+Both routes start the same detached local relay when needed and open a
+background tab in your existing browser profile. Direct CLI calls print a
+readable session ID with the exact `--session` command needed to continue; the
+DSH plugin keeps that continuity internal. The relay listens on
+`127.0.0.1:19990` and stays running between calls.
 
 A successful run returns the `Example Domain` title, a generated session ID,
 and a continuation command. `browserrig status` then reports the extension
@@ -159,10 +184,41 @@ browserrig status
 `doctor` and `status` are read-only. They report a stopped relay but never start
 one. Use `browserrig serve` only for foreground debugging.
 
+## Native DeepSeek Harness Integration
+
+The DSH bundle is a thin, native adapter over BrowserRig rather than a second
+browser driver or an MCP wrapper. It contributes these tools directly to DSH:
+
+- `browserrig_execute` runs Playwright JavaScript in the DSH session's
+  persistent page and returns structured values, logs, warnings, aftermath,
+  and DSH image attachments when available.
+- `browserrig_adopt_active` adopts the user's active signed-in tab directly.
+- `browserrig_status` reports readiness and only this DSH session's projected
+  browser state.
+- `browserrig_reset` resets that session without closing an adopted user tab.
+- `browserrig_journal` reads its recent BrowserRig execute history.
+
+Each DSH agent session maps durably to one BrowserRig session at the configured
+relay endpoint. First use creates the mapping atomically; an explicitly missing
+BrowserRig session is replaced once, while unrelated DSH tasks remain isolated.
+Internal BrowserRig IDs and the global target list are not returned to the
+model.
+
+The adapter invokes the CLI shipped in the same npm package with fixed argument
+arrays, validated JSON envelopes, bounded output, and DSH cancellation. There
+is no arbitrary shell or CLI passthrough, no separate global executable to drift
+out of version, and ambient CLI session or target selectors cannot override the
+DSH task binding. There is also no duplicate click/fill/navigation micro-tool
+layer. Direct CLI, MCP, and library users remain independent of DSH.
+
 ## TypeScript Client
 
 The package also exports an Effect client for applications that need structured
 browser-authenticated requests without executing generated JavaScript:
+
+```bash
+npm install browserrig effect@4.0.0-beta.97
+```
 
 ```ts
 import { BrowserRigClient } from "browserrig"
@@ -287,8 +343,10 @@ Other inspection helpers include:
 - `fillInput()` and `fillInputs()` when browser extensions interfere with
   Playwright's normal `locator.fill()`
 
-The agent skill gives the operating workflow and canonical examples; command
-`--help` output remains the source of truth for detailed options.
+The native DSH bundle supplies its own concise operating guidance. For direct
+CLI and MCP agents, the packaged skill gives the full workflow and canonical
+examples; command `--help` output remains the source of truth for detailed
+options.
 
 ## Pause for Human-Only Steps
 
@@ -436,11 +494,18 @@ Current limitations:
 
 ## Troubleshooting and Upgrades
 
-- **`browserrig: command not found`**: confirm npm's global binary
-  directory is on `PATH`, then rerun the global install.
+- **DSH tools are missing**: run `dsh --profile <name> --dump-config` and
+  confirm the `browserrig` bundle layer is present, then restart that profile.
+- **`browserrig: command not found`**: for direct CLI/MCP setup, confirm npm's
+  global binary directory is on `PATH`, then rerun the global install. Native
+  DSH setup does not require this global command.
 - **Extension disconnected**: confirm the unpacked extension is enabled, then
   reload it from the browser's extensions page. The extension reconnects to a
   running relay automatically.
+- **Another tool is debugging the browser**: if BrowserRig repeatedly connects
+  and disconnects while Chrome shows that another product is debugging the
+  browser, end that browser-wide debugging session and reload BrowserRig.
+  Chrome does not let BrowserRig attach the same targets concurrently.
 - **Active tab is controlled by another debugger**: close DevTools or detach the
   other debugging extension for that tab, then rerun `session adopt --active`.
 - **After an npm upgrade**: reload the unpacked extension. Extension and relay
@@ -451,6 +516,11 @@ Current limitations:
 For PowerShell, print the unpacked extension path with:
 
 ```powershell
+# DeepSeek Harness profile
+$dshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $HOME ".dsh" }
+Join-Path $dshHome "profiles/web/node_modules/browserrig/extension/dist"
+
+# Global npm installation
 Join-Path (npm root --global) "browserrig/extension/dist"
 ```
 

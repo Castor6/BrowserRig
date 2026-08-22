@@ -44,12 +44,31 @@ not publish either artifact.
 
 Before release, inspect the npm tarball and confirm that it contains
 `package.json`, `README.md`, `LICENSE`, `DISCLOSURE`, `dist/`,
-`extension/dist/`, and `skills/browserrig/SKILL.md`, and no source maps or local
-state. Record the extension ZIP SHA-256 printed by `pnpm package:extension`.
+`dist/dsh.js`, `dist/types/dsh-plugin.d.ts`, `cordis.patch.yml`,
+`dist/licenses/`, `extension/dist/`, and `skills/browserrig/SKILL.md`, and no
+source maps, local state, or install lifecycle script. `dist/licenses/` must
+cover every dependency bundled into the executable surfaces. Record the
+extension ZIP SHA-256 printed by `pnpm package:extension`.
 Run `pnpm package:npm` twice without changing the checkout and confirm that the
 npm tarball's printed SHA-256 is identical before publishing it. The packaging
 script normalizes gzip's informational source-OS byte so the same source also
 hashes identically on macOS and Linux.
+
+Install the exact tarball into clean DeepSeek Harness profiles before publishing
+it as a DSH-compatible release:
+
+```bash
+export BROWSERRIG_DSH_RELEASE_HOME="$(mktemp -d)"
+DSH_HOME="$BROWSERRIG_DSH_RELEASE_HOME" dsh plugin --profile web add ./artifacts/browserrig-<version>.tgz
+DSH_HOME="$BROWSERRIG_DSH_RELEASE_HOME" dsh --profile web --dump-config
+DSH_HOME="$BROWSERRIG_DSH_RELEASE_HOME" dsh plugin --profile headless add ./artifacts/browserrig-<version>.tgz
+DSH_HOME="$BROWSERRIG_DSH_RELEASE_HOME" dsh --profile headless --dump-config
+```
+
+Each dump must contain the `browserrig` bundle row resolving `browserrig/dsh`.
+Boot both profiles, confirm all five `browserrig_*` tools register, and remove
+the temporary profiles after recording the result. The DSH path must work
+without a global `browserrig` command or separately installed BrowserRig skill.
 
 ## Bootstrap npm 0.1.0
 

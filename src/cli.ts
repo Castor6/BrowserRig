@@ -85,7 +85,12 @@ const ensureSessionExists = Effect.fnUntraced(function* (id: string) {
     return session.id === id
   })
   if (!exists) {
-    return yield* Effect.fail(new Error(`Session not found: ${id}`))
+    return yield* Effect.fail(new RelayClient.RelayRejected({
+      message: `Session not found: ${id}`,
+      status: 404,
+      path: "/cli/sessions",
+      code: "session-not-found",
+    }))
   }
 })
 
@@ -142,17 +147,26 @@ function formatAftermath(aftermath: ExecuteAftermath): string | null {
   return parts.length > 0 ? parts.join(" ") : null
 }
 
+type CliErrorDetails = {
+  readonly _tag: string
+  readonly message: string
+  readonly code?: string
+  readonly status?: number
+}
+
 type ExecuteJsonEnvelope = {
   readonly ok: boolean
   readonly isError: boolean
   readonly text: string
   readonly value: unknown | null
   readonly valueUnavailable: boolean
-  readonly error?: { readonly _tag: string; readonly message: string }
+  readonly error?: CliErrorDetails
   readonly logs: readonly ExecuteLogEntry[]
+  readonly logSummary?: ExecuteResponse["logSummary"]
   readonly warnings: readonly string[]
   readonly diagnostic?: string
   readonly aftermath?: ExecuteAftermath
+  readonly media?: ExecuteResponse["media"]
   readonly session?: ExecuteResponse["session"]
 }
 
@@ -166,9 +180,11 @@ export function executeJsonEnvelope(result: ExecuteResponse): ExecuteJsonEnvelop
     valueUnavailable: !hasStructuredValue,
     ...(result.isError ? { error: { _tag: "ScriptError", message: result.text } } : {}),
     logs: result.logs,
+    ...(result.logSummary ? { logSummary: result.logSummary } : {}),
     warnings: result.warnings ?? [],
     ...(result.diagnostic ? { diagnostic: result.diagnostic } : {}),
     ...(result.aftermath ? { aftermath: result.aftermath } : {}),
+    ...(result.media ? { media: result.media } : {}),
     session: result.session,
   }
 }
@@ -177,10 +193,17 @@ export function formatSessionContinuation(sessionId: string): string {
   return `Session: ${sessionId}. Continue with --session ${sessionId}.`
 }
 
-function errorJsonEnvelope(error: unknown): ExecuteJsonEnvelope {
+export function cliErrorDetails(error: unknown): CliErrorDetails {
   const tag = typeof error === "object" && error !== null && "_tag" in error && typeof error._tag === "string" ? error._tag : "Error"
   const message = error instanceof Error ? error.message : String(error)
-  return { ok: false, isError: true, text: message, value: null, valueUnavailable: true, error: { _tag: tag, message }, logs: [], warnings: [] }
+  const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : undefined
+  const status = typeof error === "object" && error !== null && "status" in error && typeof error.status === "number" ? error.status : undefined
+  return { _tag: tag, message, ...(code ? { code } : {}), ...(status === undefined ? {} : { status }) }
+}
+
+function errorJsonEnvelope(error: unknown): ExecuteJsonEnvelope {
+  const details = cliErrorDetails(error)
+  return { ok: false, isError: true, text: details.message, value: null, valueUnavailable: true, error: details, logs: [], warnings: [] }
 }
 
 function optionString(value: Option.Option<string>): string | undefined {
@@ -251,7 +274,7 @@ const execute = Command.make(
           }
           : {}),
       })
-      if (!explicitSessionId) {
+      if (!explicitSessionId && !json) {
         yield* Console.error(formatSessionContinuation(result.session.id))
       }
       return result
@@ -372,15 +395,32 @@ const sessionReset = Command.make(
   {
     id: Argument.string("id").pipe(Argument.optional),
     session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Reset this BrowserRig session id")),
+    json: Flag.boolean("json").pipe(Flag.withDescription("Print a machine-readable result envelope")),
   },
-  Effect.fn("Cli.sessionReset")(function* ({ id, session }) {
-    const relay = yield* RelayClient.Service
-    const sessionId = yield* resolveExistingSessionId(resolveExplicitSessionSelector({
-      positional: optionString(id),
-      flag: optionString(session),
-      environment: Option.getOrUndefined(yield* sessionIdConfig),
-    }))
-    const resetSession = yield* relay.sessionReset(sessionId)
+  Effect.fn("Cli.sessionReset")(function* ({ id, session, json }) {
+    const run = Effect.gen(function* () {
+      const relay = yield* RelayClient.Service
+      const sessionId = yield* resolveExistingSessionId(resolveExplicitSessionSelector({
+        positional: optionString(id),
+        flag: optionString(session),
+        environment: Option.getOrUndefined(yield* sessionIdConfig),
+      }))
+      return yield* relay.sessionReset(sessionId)
+    })
+    if (json) {
+      const envelope = yield* run.pipe(
+        Effect.map((resetSession) => ({ ok: true as const, session: resetSession })),
+        Effect.catch((error) => Effect.succeed({ ok: false as const, error: cliErrorDetails(error) })),
+      )
+      yield* Console.log(JSON.stringify(envelope, null, 2))
+      if (!envelope.ok) {
+        yield* Effect.sync(() => {
+          process.exitCode = 1
+        })
+      }
+      return
+    }
+    const resetSession = yield* run
     yield* Console.log(resetSession.id)
   }),
 ).pipe(Command.withDescription("Reset a BrowserRig session state and page"))
@@ -392,35 +432,52 @@ const sessionAdopt = Command.make(
     active: Flag.boolean("active").pipe(Flag.withDescription("Attach and adopt the active tab in the last focused browser window")),
     targetUrl: Flag.string("target-url").pipe(Flag.optional, Flag.withDescription("Adopt the attached page whose URL contains this text")),
     targetIndex: Flag.integer("target-index").pipe(Flag.optional, Flag.withDescription("Adopt the attached page at this zero-based target index")),
+    json: Flag.boolean("json").pipe(Flag.withDescription("Print a machine-readable result envelope")),
   },
-  Effect.fn("Cli.sessionAdopt")(function* ({ session, active, targetUrl, targetIndex }) {
-    const relay = yield* RelayClient.Service
-    yield* ensureCliRelayAndExtension()
-    const explicitSessionId = optionString(session) ?? Option.getOrUndefined(yield* sessionIdConfig)
-    const targetUrlValue = optionString(targetUrl)
-    const targetIndexValue = optionNumber(targetIndex)
-    if (!active && !targetUrlValue && targetIndexValue === undefined) {
-      return yield* Effect.fail(new Error("session adopt requires --active, --target-url, or --target-index"))
-    }
-    if (targetIndexValue !== undefined && targetIndexValue < 0) {
-      return yield* Effect.fail(new Error("Target index must be a non-negative integer"))
-    }
-    const selectorCount = Number(active) + Number(targetUrlValue !== undefined) + Number(targetIndexValue !== undefined)
-    if (selectorCount !== 1) {
-      return yield* Effect.fail(new Error("Use only one target selector: --active, --target-url, or --target-index"))
-    }
-    const result = yield* relay.sessionAdopt({
-      ...(explicitSessionId ? { sessionId: explicitSessionId } : {}),
-      createIfMissing: !explicitSessionId,
-      ...(active
-        ? { active: true }
-        : {
-            targetSelection: {
-              ...(targetUrlValue ? { urlIncludes: targetUrlValue } : {}),
-              ...(targetIndexValue !== undefined ? { index: targetIndexValue } : {}),
-            },
-          }),
+  Effect.fn("Cli.sessionAdopt")(function* ({ session, active, targetUrl, targetIndex, json }) {
+    const run = Effect.gen(function* () {
+      const relay = yield* RelayClient.Service
+      yield* ensureCliRelayAndExtension()
+      const explicitSessionId = optionString(session) ?? Option.getOrUndefined(yield* sessionIdConfig)
+      const targetUrlValue = optionString(targetUrl)
+      const targetIndexValue = optionNumber(targetIndex)
+      if (!active && !targetUrlValue && targetIndexValue === undefined) {
+        return yield* Effect.fail(new Error("session adopt requires --active, --target-url, or --target-index"))
+      }
+      if (targetIndexValue !== undefined && targetIndexValue < 0) {
+        return yield* Effect.fail(new Error("Target index must be a non-negative integer"))
+      }
+      const selectorCount = Number(active) + Number(targetUrlValue !== undefined) + Number(targetIndexValue !== undefined)
+      if (selectorCount !== 1) {
+        return yield* Effect.fail(new Error("Use only one target selector: --active, --target-url, or --target-index"))
+      }
+      return yield* relay.sessionAdopt({
+        ...(explicitSessionId ? { sessionId: explicitSessionId } : {}),
+        createIfMissing: !explicitSessionId,
+        ...(active
+          ? { active: true }
+          : {
+              targetSelection: {
+                ...(targetUrlValue ? { urlIncludes: targetUrlValue } : {}),
+                ...(targetIndexValue !== undefined ? { index: targetIndexValue } : {}),
+              },
+            }),
+      })
     })
+    if (json) {
+      const envelope = yield* run.pipe(
+        Effect.map((result) => ({ ok: true as const, session: result.session, adoptedUrl: result.adoptedUrl })),
+        Effect.catch((error) => Effect.succeed({ ok: false as const, error: cliErrorDetails(error) })),
+      )
+      yield* Console.log(JSON.stringify(envelope, null, 2))
+      if (!envelope.ok) {
+        yield* Effect.sync(() => {
+          process.exitCode = 1
+        })
+      }
+      return
+    }
+    const result = yield* run
     yield* Console.log(`${result.session.created ? "Created and adopted" : "Adopted"} session '${result.session.id}' default page: ${result.adoptedUrl}`)
     if (result.session.created) {
       yield* Console.error(formatSessionContinuation(result.session.id))

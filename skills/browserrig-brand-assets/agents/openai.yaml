@@ -1,0 +1,6 @@
+interface:
+  display_name: "BrowserRig Brand Assets"
+  short_description: "Coordinate BrowserRig identity and store assets"
+  default_prompt: "Use $browserrig-brand-assets to create several polished BrowserRig BR icon options, show them at real extension sizes, and keep production files unchanged until one is chosen."
+policy:
+  allow_implicit_invocation: true

@@ -203,6 +203,29 @@ local Node relay.
 
 ## Development
 
+- For change or build requests that start on `main`, automatically create a
+  working branch unless the user requests local-only work or names a branch.
+  Derive a concise `<type>/<kebab-case-summary>` name from the task, using the
+  same type vocabulary as Conventional Commits. Continue on an existing
+  non-`main` working branch unless the user asks for a different branch.
+- After implementation and validation, commit, push, and open a pull request
+  automatically unless the user opts out. Never merge a feature pull request,
+  merge a `Version Packages` pull request, or publish a release without explicit
+  user approval. Exclude unrelated worktree changes; stop for direction if they
+  cannot be separated safely.
+- Use Conventional Commits in English: `<type>(optional-scope): description`.
+  Use `feat` for features and `fix` for bug fixes. Other accepted types are
+  `docs`, `refactor`, `test`, `build`, `ci`, `chore`, `perf`, `style`, and
+  `revert`. Mark breaking changes with `!` and a `BREAKING CHANGE:` footer.
+  Keep commit descriptions concise and imperative. Conventional Commit types
+  do not replace Changesets; choose the Changeset bump from published impact.
+- Write code comments, documentation, branch names, commit messages, and pull
+  request titles and bodies in English. Always communicate with the user in
+  Chinese, including progress updates and final responses, unless the user
+  explicitly requests another language.
+- Add a Changeset for pull requests that change behavior shipped in the
+  `browserrig` npm package. Documentation, tests, CI, and internal refactors
+  without published behavior changes do not need one.
 - Run `pnpm typecheck` after TypeScript changes.
 - Run `pnpm test` (vitest) after changes to schemas, relay-client, session
   store/manager, extension-rpc, or execute auto-return logic. Unit tests live in

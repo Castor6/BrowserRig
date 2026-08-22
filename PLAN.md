@@ -220,6 +220,10 @@ require a new extension capture protocol and permission model.
 - The `browserrig` package will be published publicly on npm. Normal setup will
   install that npm artifact; until the first release, source development uses
   `pnpm install`, `pnpm build`, and `npm link`.
+- Releasable pull requests carry Changesets. A scoped GitHub workflow maintains
+  one shared `Version Packages` pull request that batches version and changelog
+  updates. A maintainer decides when to merge it; the workflow never publishes
+  npm, creates tags, or creates GitHub Releases.
 - Until the first Store review completes, the browser extension is loaded
   unpacked from the npm package's `extension/dist` directory or a source build.
   The `0.0.1` bootstrap package created the independent draft; the current shim

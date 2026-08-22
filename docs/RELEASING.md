@@ -5,6 +5,23 @@ browser tabs, execute trusted Playwright and local Node.js code, and capture
 authentication-bearing network traffic. Every npm version must retain both the
 `contentPolicy.class: dual-use` package metadata and the root `DISCLOSURE` file.
 
+## Prepare the next package version
+
+Every pull request that changes published package behavior carries a Changeset.
+After those changes reach `main`, the `Version packages` GitHub workflow uses
+the repository's built-in `GITHUB_TOKEN` to create or update one shared
+`Version Packages` pull request. It runs the full CI command before changing
+release metadata and has no npm publishing credentials or OIDC permission.
+
+Review the accumulated release notes, semantic-version bump, CI result, and
+generated `package.json` and `CHANGELOG.md` changes. Merge the version pull
+request only when that exact set of changes is ready for a release candidate.
+The merge changes release metadata but does not publish npm, create a tag, or
+create a GitHub Release. GitHub Actions must be allowed to create pull requests
+in the repository settings; no personal access token is required. GitHub marks
+CI triggered by a `GITHUB_TOKEN`-created pull request as approval-required, so a
+maintainer must select **Approve workflows to run** before merging it.
+
 ## Build and inspect a release candidate
 
 From a clean checkout of `Castor6/browserrig` on `main`:

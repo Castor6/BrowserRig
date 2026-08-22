@@ -37,6 +37,34 @@ session, adoption, handoff, recording, or extension lifecycle changes.
 Run `git diff --check` before opening a pull request. Explain the behavior being
 changed, the security implications, and the exact tests performed.
 
+## Branches, commits, and language
+
+Do not commit directly to `main`. Use a focused branch named
+`<type>/<kebab-case-summary>` and merge it through a pull request.
+
+Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) in
+English with the form `<type>(optional-scope): description`. Use `feat` for a
+feature and `fix` for a bug fix. The project also accepts `docs`, `refactor`,
+`test`, `build`, `ci`, `chore`, `perf`, `style`, and `revert`. Mark a breaking
+change with `!` and a `BREAKING CHANGE:` footer. Keep source comments,
+documentation, commit messages, branch names, and pull request titles and
+bodies in English.
+
+## Release notes
+
+For a pull request that changes behavior shipped in the `browserrig` npm
+package, run `pnpm changeset`, choose the appropriate semantic-version bump,
+and commit the generated `.changeset/*.md` file. Write the summary for package
+users rather than as an implementation note. Documentation, tests, CI, and
+internal refactors that do not change published behavior do not need a
+changeset.
+
+After releasable changes reach `main`, the `Version packages` workflow creates
+or updates one shared `Version Packages` pull request. Additional changesets
+accumulate in that same pull request until a maintainer merges it. Merging the
+version pull request updates `package.json` and `CHANGELOG.md`; it does not
+publish either release artifact.
+
 ## Reporting security issues
 
 Do not open a public issue for an undisclosed vulnerability. Follow

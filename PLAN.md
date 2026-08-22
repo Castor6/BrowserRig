@@ -61,7 +61,75 @@ Verification:
   and verify that an unpacked release build reports that ID and connects to the
   production relay before every Store upload.
 
-### 2. Split the relay into testable responsibilities
+### 2. Ship BrowserRig as a native DSH bundle
+
+Add the DeepSeek Harness adapter to this repository and the root `browserrig`
+npm package. Do not publish a separate `dsh-browserrig` repository or package:
+DSH discovery, stars, issues, releases, and documentation should lead directly
+to BrowserRig.
+
+- Make the root npm package a valid DSH bundle with a committed
+  `cordis.patch.yml` and an exported DSH host-plugin entry. Keep the adapter a
+  leaf integration: BrowserRig core never imports DSH and remains usable through
+  its CLI, library, MCP server, and other future harness adapters.
+- Make `dsh plugin --profile <name> add browserrig` the supported installation
+  path. The DSH entry invokes the exact package-local BrowserRig runtime instead
+  of discovering an unrelated `browserrig` from `PATH`; this removes a separate
+  CLI installation step and the plugin-versus-driver version matrix. The browser
+  extension remains a separate user-authorized installation.
+- Do not require DSH users to install the BrowserRig skill. Typed tool schemas,
+  a concise prompt contribution, and actionable results provide the normal DSH
+  workflow. Keep `skills/browserrig/SKILL.md` and `browserrig skill` as the
+  source of truth for direct CLI agents and deeper cross-harness guidance.
+- Bind sessions inside the plugin. Key a durable mapping by immutable DSH agent
+  session id; on the first session-bound call, let bare BrowserRig execute create
+  a readable id and persist the returned mapping. Hide BrowserRig session ids
+  from the model, serialize first-use resolution per DSH session, and recreate a
+  stale mapping only after an explicit session-not-found result. A BrowserRig
+  `session ensure` CLI command is an optional generic improvement, not a plugin
+  prerequisite.
+- Treat the BrowserRig CLI as an agent-facing API, but never expose an arbitrary
+  CLI passthrough. Use fixed argv construction, package-local entry resolution,
+  validated machine envelopes, stable error categories, and bounded rendering.
+  Add generic JSON lifecycle output only where an implemented adapter workflow
+  demonstrates the need.
+- Preserve DSH cancellation, timeout, sandbox, approval, exclusive browser
+  scheduling, canonical result, and presentation semantics. Keep the backend
+  private so a public typed BrowserRig controller can replace process invocation
+  only if field evidence shows material latency, sandbox, error-fidelity, or
+  streaming problems.
+- Start with code-first execute plus active adoption, status, reset, and journal.
+  Defer recording and network tools until the core contract is proven; do not
+  duplicate BrowserRig into click/fill/navigation micro-tools.
+- Publish a prebuilt npm artifact as the primary install source. The repository
+  does not commit `dist`, and Git-source DSH installs should not require users to
+  authorize a package build merely to try the plugin.
+- After the packaged install and smoke gates pass, add `dsh-plugin`,
+  `deepseek-harness`, `browser-automation`, `playwright`, and `ai-agents` topics
+  to this repository and publish a reproducible signed-in-browser demo in DSH
+  discovery channels. Do not apply the plugin topic while the root package is an
+  un-installable candidate that ecosystem scanners will reject.
+- Treat ecosystem exposure as the result of useful task isolation, recovery,
+  diagnostics, and browser control. Optimize for successful user workflows and
+  retained BrowserRig use, not marketplace impressions alone.
+
+Verification:
+
+- Verify the packed root npm artifact contains the DSH entry, bundle manifest,
+  patch, BrowserRig runtime, extension artifacts, and no lifecycle install
+  script required by the normal DSH installation path.
+- Cover concurrent DSH task isolation, mapping persistence, restart/resume,
+  stale mapping recovery, malformed CLI output, sandbox denial, timeout/abort,
+  stale relay, active-tab adoption, and plugin unload without a real browser
+  where possible.
+- Verify that a DSH user needs no separately installed BrowserRig skill or
+  global CLI, no plugin call changes the saved human current session, and unload
+  never closes adopted tabs, deletes resumable sessions, or stops the detached
+  relay.
+- Install the prebuilt prerelease into every advertised DSH profile and run one
+  signed-in-browser smoke before ecosystem launch.
+
+### 3. Split the relay into testable responsibilities
 
 Extract cohesive modules from `makeRelay` without changing the protocol:
 
@@ -83,7 +151,7 @@ Verification:
 - Extend reconnect, OOPIF, and multi-client smoke cases to cover root detach and
   conflicting client auto-attach settings.
 
-### 3. Extend recording surfaces
+### 4. Extend recording surfaces
 
 - Add MCP recording start, stop, status, and cancel tools after the relay path is
   robust.
@@ -93,7 +161,7 @@ Verification:
 
 - Confirm CLI and MCP recording behavior match.
 
-### 4. Resolve smaller agent-experience gaps
+### 5. Resolve smaller agent-experience gaps
 
 Verification:
 

@@ -502,6 +502,10 @@ Current limitations:
 - **Extension disconnected**: confirm the unpacked extension is enabled, then
   reload it from the browser's extensions page. The extension reconnects to a
   running relay automatically.
+- **Another tool is debugging the browser**: if BrowserRig repeatedly connects
+  and disconnects while Chrome shows that another product is debugging the
+  browser, end that browser-wide debugging session and reload BrowserRig.
+  Chrome does not let BrowserRig attach the same targets concurrently.
 - **Active tab is controlled by another debugger**: close DevTools or detach the
   other debugging extension for that tab, then rerun `session adopt --active`.
 - **After an npm upgrade**: reload the unpacked extension. Extension and relay

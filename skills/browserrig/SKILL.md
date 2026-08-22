@@ -357,6 +357,9 @@ Common diagnoses:
 
 - `connected:false`: run a relay-backed command, then reload the unpacked
   extension only if its reconnect loop does not recover.
+- `connected:false` while Chrome says another product is debugging the browser:
+  end that browser-wide debugging session before reloading BrowserRig. Chrome
+  debugger ownership is exclusive for the affected targets.
 - Incompatible extension protocol: update either the extension or npm package;
   exact extension and relay release versions do not need to match.
 - Stale relay build: operational commands reject it with restart guidance;

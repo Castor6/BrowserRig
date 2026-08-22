@@ -156,9 +156,9 @@ describe("BrowserRig DSH adapter", () => {
     const continued = await adapter.execute(alpha, "return { turn: 2 }")
 
     expect(runner.calls.map(call => call.args)).toEqual([
-      ["execute", "--json", "--", "return { turn: 1 }"],
-      ["execute", "--json", "--", "return { turn: 1 }"],
-      ["execute", "--json", "--session", "alpha-session", "--", "return { turn: 2 }"],
+      ["execute", "--json", "return { turn: 1 }"],
+      ["execute", "--json", "return { turn: 1 }"],
+      ["execute", "--json", "--session", "alpha-session", "return { turn: 2 }"],
     ])
     expect(await map.get(dshSessionMappingKey(runner.endpointKey(), "dsh-alpha"))).toBe("alpha-session")
     expect(await map.get(dshSessionMappingKey(runner.endpointKey(), "dsh-beta"))).toBe("beta-session")
@@ -176,8 +176,8 @@ describe("BrowserRig DSH adapter", () => {
     const result = await adapter.execute(execContext("dsh-agent", cwd), "return { recovered: true }")
 
     expect(runner.calls.map(call => call.args)).toEqual([
-      ["execute", "--json", "--session", "stale-session", "--", "return { recovered: true }"],
-      ["execute", "--json", "--", "return { recovered: true }"],
+      ["execute", "--json", "--session", "stale-session", "return { recovered: true }"],
+      ["execute", "--json", "return { recovered: true }"],
     ])
     expect(await map.get(key)).toBe("fresh-session")
     expect(result.value).toEqual({ recovered: true })
@@ -199,9 +199,16 @@ describe("BrowserRig DSH adapter", () => {
       value: { recovered: true },
     })
     expect(runner.calls.map(call => call.args)).toEqual([
-      ["execute", "--json", "--", "throw new Error('locator failed')"],
-      ["execute", "--json", "--session", "recoverable-session", "--", "return { recovered: true }"],
+      ["execute", "--json", "throw new Error('locator failed')"],
+      ["execute", "--json", "--session", "recoverable-session", "return { recovered: true }"],
     ])
+  })
+
+  it("keeps flag-like JavaScript in the CLI positional code argument", async () => {
+    const { adapter, runner, cwd } = await fixture([executeSuccess("negative-session", -1)])
+
+    await expect(adapter.execute(execContext("dsh-agent", cwd), "-1")).resolves.toMatchObject({ value: -1 })
+    expect(runner.calls[0]?.args).toEqual(["execute", "--json", " -1"])
   })
 
   it("creates and remembers a session directly through active-tab adoption", async () => {

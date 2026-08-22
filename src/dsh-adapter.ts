@@ -374,8 +374,7 @@ export class BrowserRigDshAdapter {
       "execute",
       "--json",
       ...(sessionId === undefined ? [] : ["--session", sessionId]),
-      "--",
-      code,
+      cliPositionalCode(code),
     ]
     const result = await this.runner.run(args, { cwd: invocation.cwd, signal: invocation.signal })
     const envelope = decodeJson(CliExecuteEnvelope, result, "execute", { allowNonZero: true })
@@ -585,6 +584,10 @@ export function createBrowserRigDshTools(options: {
   })
 
   return [execute, adoptActive, status, reset, journal]
+}
+
+function cliPositionalCode(code: string): string {
+  return code.startsWith("-") ? ` ${code}` : code
 }
 
 function decodeJson<S extends Schema.ConstraintDecoder<unknown>>(

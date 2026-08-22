@@ -18,7 +18,7 @@ describe("Chrome Web Store extension package", () => {
       .map((nibble) => String.fromCharCode(97 + nibble))
       .join("")
 
-    expect(manifest.version).toBe("0.0.2")
+    expect(manifest.version).toBe("0.1.0")
     expect(extensionId).toBe("dbobcmjamjdknplkplgdihdnmdjklpin")
   })
 

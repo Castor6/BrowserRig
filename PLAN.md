@@ -223,7 +223,7 @@ require a new extension capture protocol and permission model.
 - Until the first Store review completes, the browser extension is loaded
   unpacked from the npm package's `extension/dist` directory or a source build.
   The `0.0.1` bootstrap package created the independent draft; the current shim
-  version is `0.0.2`.
+  version is `0.1.0`.
 - The production-origin allowlist and committed public manifest key pin Store
   Item ID `dbobcmjamjdknplkplgdihdnmdjklpin`. Test a production relay against a
   same-ID unpacked build before Store submission; never broaden this to an

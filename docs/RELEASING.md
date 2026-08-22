@@ -80,7 +80,7 @@ acceptable release path for this package.
 
 Follow [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md). The `0.0.1` bootstrap ZIP
 created the independent draft. The manifest key, relay pin, and tests now bind
-version `0.0.2` to Item ID `dbobcmjamjdknplkplgdihdnmdjklpin`. Verify that ID
+version `0.1.0` to Item ID `dbobcmjamjdknplkplgdihdnmdjklpin`. Verify that ID
 and a production relay handshake with the unpacked build, then upload the final
 review ZIP without changing the identity. Publish and independently verify the
 first npm version before submitting Store review because the reviewer steps

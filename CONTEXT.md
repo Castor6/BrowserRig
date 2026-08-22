@@ -30,9 +30,14 @@ _Avoid_: Browser Control, browser-control, BC
 **DSH Adapter**:
 The optional leaf integration that binds a DSH agent session to a BrowserRig
 session, registers typed BrowserRig tools, supplies concise built-in guidance,
-and invokes the package-local BrowserRig runtime. It makes BrowserRig native to
-DSH without making DSH part of the driver core. DSH users do not separately
-install the BrowserRig skill; direct CLI agents continue to use it.
+and invokes the package-local BrowserRig runtime with fixed arguments and
+validated machine envelopes. Its endpoint-scoped durable map keeps BrowserRig
+session ids out of model context, isolates concurrent DSH tasks, and repairs a
+mapping only after an explicit missing-session response; ambient human session
+and target selectors never override the mapping. It makes BrowserRig
+native to DSH without making DSH part of the driver core. DSH users do not
+separately install the BrowserRig skill or a global CLI; direct CLI agents
+continue to use the skill.
 _Avoid_: DSH fork, separate dsh-browserrig product, required global CLI
 
 **Driver**:

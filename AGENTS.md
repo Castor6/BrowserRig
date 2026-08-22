@@ -63,6 +63,27 @@ local Node relay.
   `src/relay-client.ts` service (`RelayClient.Service`), never through ad-hoc
   fetch/node:http calls. Failures are tagged errors that keep the relay's own
   error message as the top-level message.
+- The root `browserrig` npm package is also the native DSH bundle through
+  `browserrig/dsh` and `cordis.patch.yml`; never split it into a separate
+  `dsh-browserrig` product. Keep `src/dsh-*` as a leaf adapter so BrowserRig
+  core never imports DSH. It registers only code-first execute, active adoption,
+  scoped status, reset, and journal plus concise prompt guidance; DSH users do
+  not install the standalone BrowserRig skill.
+- DSH invokes the exact package-local `dist/cli.js` with fixed argv, validated
+  bounded JSON envelopes, and forwarded cancellation; never use PATH discovery,
+  a shell, or arbitrary CLI passthrough. Strip `BROWSERRIG_SESSION`,
+  `BROWSERRIG_TARGET_URL`, and `BROWSERRIG_TARGET_INDEX` from child environments
+  because the plugin owns those selectors. The bundled CLI, MCP, and DSH
+  executable surfaces must carry their Effect runtime so DSH profiles with
+  `autoInstallPeers: false` install without build approval. Keep the library
+  entry's Effect dependency external for application composition, and copy
+  license/notice files for every bundled dependency into `dist/licenses/`.
+- Bind each immutable DSH agent id to one endpoint-scoped BrowserRig session in
+  the durable map under `~/.browserrig/dsh/`. Hash mapping keys, hide BrowserRig
+  ids and global targets from model output, serialize lifecycle work per DSH
+  session, and replace a mapping only after stable `session-not-found`. Bare
+  execute or bare active adoption creates the first BrowserRig session; do not
+  add a BrowserRig `session ensure` prerequisite for the plugin.
 - Human session-management commands keep an endpoint-scoped current id in
   `~/.browserrig/session.json`; execute and adopt never use it implicitly.
   Invalid persisted session JSON is reported and preserved, never treated as an
@@ -256,6 +277,11 @@ local Node relay.
 - Run `pnpm build:cli` after CLI or relay source changes that should affect the
   linked `browserrig` binary.
 - Run `pnpm build:extension` after extension changes.
+- For DSH changes, run the focused DSH tests, build and pack the npm artifact,
+  then install that exact tarball into clean official `web` and `headless`
+  profiles with `dsh plugin --profile <name> add <tarball>`. Check
+  `--dump-config`, peer warnings, `browserrig/dsh` import, and the package-local
+  CLI without relying on a global BrowserRig install.
 - Extension shim changes require reloading the unpacked extension once in Brave.
 - Relay-only changes should not require reloading the extension.
 - Use `termctrl` for long-running relay sessions during testing.

@@ -1,0 +1,3 @@
+- insert:
+    - id: browserrig
+      name: browserrig/dsh

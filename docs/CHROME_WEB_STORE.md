@@ -222,13 +222,15 @@ never be committed.
 
 Before the first review submission:
 
-1. Build extension version `0.1.0`, load `extension/dist` unpacked, and confirm
-   Chrome reports ID `dbobcmjamjdknplkplgdihdnmdjklpin`.
+1. Merge the reviewed `Version Packages` pull request, record its calculated
+   `<extension-version>`, load `extension/dist` unpacked, and confirm Chrome
+   reports ID `dbobcmjamjdknplkplgdihdnmdjklpin`.
 2. Verify that build connects to a production-mode relay and that an arbitrary
    extension origin is still rejected.
-3. Upload `browserrig-extension-0.1.0.zip` over the bootstrap package.
-4. Publish `browserrig@0.1.0` to the official npm registry and verify the
-   review install command from a clean environment.
+3. Upload `browserrig-extension-<extension-version>.zip` over the bootstrap
+   package.
+4. Publish the reviewed `browserrig@<npm-version>` to the official npm registry
+   and verify the review install command from a clean environment.
 5. Complete the listing, privacy questionnaire, testing instructions, and
    unlisted distribution fields from this document, then submit with deferred
    publishing so Store availability remains under maintainer control after

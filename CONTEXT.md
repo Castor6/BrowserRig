@@ -68,6 +68,13 @@ Local Driver Daemon. Store and npm release versions may differ while this
 protocol remains compatible.
 _Avoid_: Extension package version, relay build id
 
+**Extension Release Package**:
+The private `browserrig-extension` workspace package used only by Changesets to
+calculate the next Chrome Web Store package version. The Version Packages
+workflow copies that version into the extension manifest. It is never
+published to npm and does not determine protocol compatibility.
+_Avoid_: Public npm package, Extension Protocol, Store listing
+
 **Browser-Wide Remote Debugging**:
 Chrome's browser-level debugging endpoint, enabled or approved separately from
 an extension. BrowserRig does not use it; this is the source of Chrome's

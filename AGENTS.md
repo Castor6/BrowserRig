@@ -247,6 +247,15 @@ local Node relay.
 - Add a Changeset for pull requests that change behavior shipped in the
   `browserrig` npm package. Documentation, tests, CI, and internal refactors
   without published behavior changes do not need one.
+- Add a Changeset for `browserrig-extension` when a pull request changes files
+  packaged into the Chrome extension. Use `patch` for fixes and asset updates,
+  `minor` for backward-compatible extension capabilities, and `major` for
+  breaking extension behavior. This private workspace package exists only to
+  calculate the Store package version and must never be published to npm.
+- Do not edit `extension/package.json` or the `version` field in
+  `extension/manifest.json` in a feature pull request. The `Version Packages`
+  workflow owns both exact versions and synchronizes them after applying all
+  pending Changesets.
 - For every releasable change, run `pnpm changeset` and commit the generated
   `.changeset/*.md` file. Its frontmatter must name the package and choose one
   relative SemVer bump:

@@ -280,6 +280,10 @@ require a new extension capture protocol and permission model.
 - The `browserrig` package will be published publicly on npm. Normal setup will
   install that npm artifact; until the first release, source development uses
   `pnpm install`, `pnpm build`, and `npm link`.
+- BrowserRig supports Node.js 22.22.0 and newer. CI, versioning, and release
+  builds use Node.js 22.22.0 so the declared runtime floor and published
+  artifacts stay aligned; bundled dependency engine ranges do not become
+  separate user-facing version branches.
 - The same prebuilt npm artifact is the DSH bundle. DSH installs it per profile
   with `dsh plugin --profile <name> add browserrig`; the bundle resolves its own
   matching CLI runtime and does not require a global command or separate skill.

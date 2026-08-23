@@ -149,7 +149,7 @@ initial release.
 Leave username and password empty. The following copy fits the dashboard's
 500-character **Other instructions** limit:
 
-> No account or credentials are required. Install Node.js 24.15+ and run
+> No account or credentials are required. Install Node.js 22.22.0+ and run
 > `npm install -g browserrig`. Run
 > `browserrig execute 'await page.goto("https://example.com"); return await
 > page.title()'`; it should return `Example Domain`. To test no-click active-tab
@@ -160,7 +160,7 @@ Leave username and password empty. The following copy fits the dashboard's
 
 ## Reviewer Instructions
 
-1. Install Node.js 22.22.2+, 24.15.0+, or 26+.
+1. Install Node.js 22.22.0 or newer.
 2. Install the independent npm package named in the final listing.
 3. Install the submitted BrowserRig extension.
 4. Run:

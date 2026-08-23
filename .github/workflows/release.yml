@@ -47,7 +47,7 @@ jobs:
           version: 11.18.0
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 22.22.0
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
       - run: npm install --global npm@11.18.0
@@ -90,7 +90,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 22.22.0
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
       - run: npm install --global npm@11.18.0

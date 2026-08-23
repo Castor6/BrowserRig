@@ -190,14 +190,27 @@ Use the least expensive view that answers the question:
 - `snapshot({ diff: true })` reports semantic changes from the compatible prior
   baseline. A diff invalidates earlier refs and exposes refs only for added or
   changed current lines.
+- `within` accepts a Locator or an exact CSS selector. String selectors are
+  checked immediately and must match exactly one element; use a Locator for
+  Playwright auto-waiting or semantic landmarks.
 - `ariaSnapshot(target?, { timeout })` returns Playwright's detailed YAML aria
   tree when the compact snapshot omits needed structure.
 - `screenshotWithLabels({ page, path? })` adds visual labels and metadata when
   layout matters.
 
 ```js
-return await snapshot({ within: "main", maxItems: 200 })
-// When layout matters, return the image through MCP so it can be inspected.
+return await snapshot()
+```
+
+Narrow a broad view through the semantic main landmark when needed:
+
+```js
+return await snapshot({ within: page.getByRole("main"), maxItems: 200 })
+```
+
+When layout matters, return the image through MCP so it can be inspected:
+
+```js
 return await screenshotWithLabels({ page })
 ```
 
@@ -389,7 +402,7 @@ must never include expressions, arguments, results, headers, cookies, or form
 values.
 
 Whenever BrowserRig fails, wedges, replaces a page/session, or behaves
-unexpectedly, create or update a `browserrig` project todo with the Browser
-Control version, safe session/page context, exact error, deterministic
+unexpectedly, create or update a `browserrig` project todo with the BrowserRig
+version, safe session/page context, exact error, deterministic
 reproduction, expected versus actual behavior, and recovery attempted. Never
 include credentials, form values, or private account data.

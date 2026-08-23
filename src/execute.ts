@@ -1435,8 +1435,8 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
               }
               return matches[0] as Element
             }
-            const mains = Array.from(document.querySelectorAll("main")).filter(isVisible)
-            return mains.length === 1 ? mains[0] as Element : document.body
+            const mainLandmarks = Array.from(document.querySelectorAll("main, [role='main']")).filter(isVisible)
+            return mainLandmarks.length === 1 ? mainLandmarks[0] as Element : document.body
           })()
       if ((settings.rootRole && roleFor(root) !== settings.rootRole) || (settings.rootName && accessibleName(root) !== settings.rootName)) {
         throw new Error("Snapshot ref no longer identifies the captured element; call snapshot() again")

@@ -694,6 +694,18 @@ return {
       const smokeSession = `${marker}-session`
       return yield* Effect.gen(function* () {
         yield* runBrowserRig(["session", "new", smokeSession])
+        const nativeMainOutput = yield* runBrowserRig([
+          "execute",
+          "--session",
+          smokeSession,
+          `
+await page.setContent('<button>Outside native main</button><main><h1>Native main fixture</h1></main>')
+return await snapshot()
+          `,
+        ])
+        if (!nativeMainOutput.includes('heading "Native main fixture"') || nativeMainOutput.includes("Outside native main")) {
+          return yield* Effect.fail(new Error(`snapshot did not isolate the native main landmark: ${nativeMainOutput}`))
+        }
         const snapshotOutput = yield* runBrowserRig([
           "execute",
           "--session",
@@ -701,7 +713,8 @@ return {
           `
 await page.setContent(\`
   <main hidden><button>Hidden template action</button></main>
-  <main>
+  <button id="outside-main">Outside shell action</button>
+  <div role="main">
     <nav aria-label="Fixture navigation"><a href="#elsewhere">Elsewhere</a></nav>
     <h1>Snapshot fixture</h1>
     <p>Important fixture notice.</p>
@@ -721,7 +734,7 @@ await page.setContent(\`
       duplicates[1].addEventListener('click', () => { document.querySelector('#duplicate-result').textContent = 'second' })
       document.querySelector('#continue').addEventListener('click', () => { document.querySelector('#result').hidden = false })
     </script>
-  </main>
+  </div>
 \`)
 return await snapshot()
           `,
@@ -735,6 +748,7 @@ return await snapshot()
           !snapshotOutput.includes('textbox "Private field" [ref=e2]') ||
           snapshotOutput.includes("private-value-must-not-leak") ||
           snapshotOutput.includes("Hidden template action") ||
+          snapshotOutput.includes("Outside shell action") ||
           !snapshotOutput.includes('combobox "Choice" [ref=e3 selected="Beta" 2 options]') ||
           !snapshotOutput.includes('button "First duplicate" [ref=e4]') ||
           !snapshotOutput.includes('button "Second duplicate" [ref=e5]') ||
@@ -757,7 +771,7 @@ await page.evaluate(() => {
   const undo = document.createElement('button')
   undo.id = 'undo'
   undo.textContent = 'Undo fixture'
-  document.querySelector('main:not([hidden])')?.append(status, undo)
+  document.querySelector('[role="main"]')?.append(status, undo)
 })
 return await snapshot({ diff: true })
           `,
@@ -957,6 +971,7 @@ return { result: await page.locator('#class-result').textContent() }
           return yield* Effect.fail(new Error(`unique-class snapshot ref did not survive a safe rerender: ${classRerenderOutput}`))
         }
         return {
+          nativeMainOutput: nativeMainOutput.trim(),
           snapshotOutput: snapshotOutput.trim(),
           diffOutput: diffOutput.trim(),
           diffRefOutput: diffRefOutput.trim(),

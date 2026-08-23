@@ -1,6 +1,6 @@
 {
   "name": "browserrig",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Open-source local browser driver for trusted agents that controls your existing signed-in Chromium browser.",
   "license": "MIT",
   "contentPolicy": {

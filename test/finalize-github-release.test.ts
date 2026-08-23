@@ -306,6 +306,20 @@ describe("GitHub Release finalizer", () => {
     expect(api.mutations).toEqual([])
   })
 
+  it("recovers an exact public candidate from a failed publishing workflow", async () => {
+    const api = new ReleaseApiMock(makeCandidate())
+    api.workflowRuns = [{ id: 42, status: "completed", conclusion: "failure", event: "pull_request" }]
+
+    await expect(finalize(api)).resolves.toMatchObject({
+      status: "created",
+      tag: "v0.2.1",
+      runId: 42,
+    })
+    expect(api.release?.draft).toBe(false)
+    const runsRequest = api.requests.find((request) => request.url.includes("/actions/workflows/"))
+    expect(runsRequest?.url).toContain("status=completed")
+  })
+
   it("resumes an incomplete draft that does not have a tag yet", async () => {
     const api = new ReleaseApiMock(makeCandidate())
     api.release = {
@@ -350,6 +364,7 @@ describe("GitHub Release finalizer", () => {
     })
     const runsRequest = api.requests.find((request) => request.url.includes("/actions/workflows/"))
     expect(runsRequest?.url).toContain("event=pull_request")
+    expect(runsRequest?.url).toContain("status=completed")
     expect(api.requests.some((request) => request.url.includes("/actions/runs/42/artifacts"))).toBe(false)
   })
 

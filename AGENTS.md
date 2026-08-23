@@ -264,21 +264,23 @@ local Node relay.
   neither changes the GitHub Release tag.
 - Merging a repository-owned `Version Packages` pull request builds one
   immutable candidate, uploads its npm tarball, extension ZIP, manifest, and
-  checksums, then submits that exact npm tarball through the stage-only npm
-  Trusted Publisher configured for `.github/workflows/release.yml` and the
-  `npm-staging` environment. Never add an npm token or grant that publisher
-  direct `npm publish` permission.
-- npm staging is not publication. A maintainer must inspect and approve the
-  staged version with npm 2FA. Do not merge another `Version Packages` pull
-  request while one candidate is staged or awaiting GitHub finalization.
-  If `npm stage publish` returns an ambiguous failure, inspect the staging queue
-  interactively before rerunning because OIDC cannot prove that the first
-  submission was rejected.
-  After the approved npm tarball is publicly visible, the scheduled GitHub
+  checksums, then publishes that exact npm tarball through the direct-publish
+  npm Trusted Publisher configured for `.github/workflows/release.yml` and the
+  `npm-publishing` environment. Never add an npm token or bypass-2FA token.
+- Treat merging `Version Packages` as the explicit, irreversible npm
+  publication approval. Review its versions, changelogs, package diff, and
+  green CI before merging; the release workflow reruns full CI, packaging,
+  manifest verification, and exact artifact checks before `npm publish`. Do
+  not merge another `Version Packages` pull request while publication or
+  GitHub finalization is in progress. If `npm publish` returns an ambiguous
+  failure, inspect the exact version and registry tarball before rerunning
+  because npm versions are immutable.
+  After the npm tarball is publicly visible, the scheduled GitHub
   finalizer verifies its integrity against the original candidate before it
   creates the npm-version tag and Release or uploads any assets. It must fail
   closed on tag, commit, manifest, or asset conflicts and never rebuild or
-  overwrite a candidate.
+  overwrite a candidate. It may recover a completed failed publish run only
+  when the retained candidate and public npm tarball match exactly.
 - For every releasable change, run `pnpm changeset` and commit the generated
   `.changeset/*.md` file. Its frontmatter must name the package and choose one
   relative SemVer bump:

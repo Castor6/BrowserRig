@@ -13,13 +13,20 @@ import {
 
 const execFileAsync = promisify(execFile)
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
+const npmPackageName = "browserrig"
 
-export function changesetDeclaresExtensionRelease(text: string): boolean {
+export function changesetDeclaresRelease(text: string, packageName: string): boolean {
   const frontmatter = /^---\s*\n([\s\S]*?)\n---(?:\s*\n|$)/.exec(text)?.[1]
   return frontmatter?.split("\n").some((line) => {
     const match = /^\s*[\"']?([^\"']+)[\"']?\s*:\s*(patch|minor|major)\s*$/.exec(line)
-    return match?.[1] === extensionPackageName
+    return match?.[1] === packageName
   }) ?? false
+}
+
+export function missingExtensionChangesetPackages(changesets: readonly string[]): string[] {
+  return [npmPackageName, extensionPackageName].filter((packageName) =>
+    !changesets.some((changeset) => changesetDeclaresRelease(changeset, packageName))
+  )
 }
 
 export function hasExtensionPayloadChanges(
@@ -83,10 +90,11 @@ async function checkExtensionRelease(base: string, allowVersionUpdate: boolean):
 
   const changesetFiles = changedFiles.filter((file) => /^\.changeset\/[^/]+\.md$/.test(file))
   const changesets = await Promise.all(changesetFiles.map((file) => fs.readFile(path.join(root, file), "utf8")))
-  if (!changesets.some(changesetDeclaresExtensionRelease)) {
+  const missingPackages = missingExtensionChangesetPackages(changesets)
+  if (missingPackages.length > 0) {
     throw new Error(
-      `Extension package content changed without a ${extensionPackageName} Changeset. ` +
-      "Run pnpm changeset and select patch, minor, or major for the extension.",
+      `Extension package content changed without Changeset entries for ${missingPackages.join(" and ")}. ` +
+      "Run pnpm changeset and select patch, minor, or major for both shipped packages.",
     )
   }
 }

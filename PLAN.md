@@ -289,9 +289,11 @@ require a new extension capture protocol and permission model.
   `CHANGESETS_TOKEN` secret so generated pull-request CI starts automatically.
   The private `browserrig-extension` workspace package participates in the same
   Changesets plan without being published to npm. Extension changes declare a
-  relative bump; CI rejects missing release intent and direct version edits,
-  while the version workflow calculates the exact version and synchronizes it
-  into `extension/manifest.json`.
+  relative bump for both the private extension package and `browserrig`, because
+  the built extension also ships in the npm tarball. CI rejects missing release
+  intent and direct version edits, while the version workflow calculates the
+  exact versions and synchronizes the extension result into
+  `extension/manifest.json`. Store-listing-only artwork changes neither plan.
   A maintainer decides when to merge it. Merging that repository-owned branch
   automatically builds npm and extension release-candidate artifacts at the
   exact merge commit for inspection, while a manual rebuild path remains
@@ -309,6 +311,8 @@ require a new extension capture protocol and permission model.
 - Extension and npm releases are independently versioned. The extension hello
   reports an explicit protocol version, and compatibility rather than exact
   package-version equality determines whether the local driver may use it.
+  GitHub tags and Releases follow the npm version and record the extension and
+  protocol versions as component metadata.
 - Browser data crosses only the loopback connection unless an authorized local
   caller sends returned data elsewhere. The default endpoint is
   `127.0.0.1:19990`.

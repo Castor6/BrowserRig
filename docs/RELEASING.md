@@ -8,12 +8,14 @@ authentication-bearing network traffic. Every npm version must retain both the
 ## Prepare the next package version
 
 Every pull request that changes npm package behavior carries a `browserrig`
-Changeset. Every pull request that changes packaged extension code, manifest
-metadata, icons, or build output carries a `browserrig-extension` Changeset.
-The latter is a private workspace package used only to calculate the Store
-version; it is never published to npm. Feature pull requests declare a
-`patch`, `minor`, or `major` bump without editing either exact extension
-version.
+Changeset. Because `extension/dist` ships in that npm package, every pull
+request that changes packaged extension code, manifest metadata, icons, or
+build output carries entries for both `browserrig` and
+`browserrig-extension`. The latter is a private workspace package used only to
+calculate the Store version; it is never published to npm. Changes limited to
+Store listing assets under `docs/chrome-web-store/` need neither entry. Feature
+pull requests declare `patch`, `minor`, or `major` bumps without editing either
+exact extension version.
 
 After those changes reach `main`, the `Version packages` GitHub workflow uses
 the repository-scoped fine-grained token stored in the `CHANGESETS_TOKEN`
@@ -36,6 +38,11 @@ the same repository and permission restrictions, and never print or commit its
 value. A missing or expired secret must fail the workflow rather than falling
 back to `GITHUB_TOKEN`, whose generated pull requests require manual workflow
 approval.
+
+Git tags and GitHub Releases use the `browserrig` npm version, such as
+`v0.2.0`. Each Release records the independently calculated extension version
+and protocol version. An extension package change therefore advances both npm
+and extension release plans, while Store-listing-only artwork advances neither.
 
 ## Build and inspect a release candidate
 

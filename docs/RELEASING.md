@@ -9,18 +9,21 @@ authentication-bearing network traffic. Every npm version must retain both the
 
 Every pull request that changes published package behavior carries a Changeset.
 After those changes reach `main`, the `Version packages` GitHub workflow uses
-the repository's built-in `GITHUB_TOKEN` to create or update one shared
-`Version Packages` pull request. It runs the full CI command before changing
-release metadata and has no npm publishing credentials or OIDC permission.
+the repository-scoped fine-grained token stored in the `CHANGESETS_TOKEN`
+Actions secret to create or update one shared `Version Packages` pull request.
+The token can write contents and pull requests only in `Castor6/BrowserRig`, so
+CI starts automatically for the generated pull request without granting npm
+publishing credentials or OIDC permission. It expires on August 23, 2027.
 
 Review the accumulated release notes, semantic-version bump, CI result, and
 generated `package.json` and `CHANGELOG.md` changes. Merge the version pull
 request only when that exact set of changes is ready for a release candidate.
 The merge changes release metadata but does not publish npm, create a tag, or
-create a GitHub Release. GitHub Actions must be allowed to create pull requests
-in the repository settings; no personal access token is required. GitHub marks
-CI triggered by a `GITHUB_TOKEN`-created pull request as approval-required, so a
-maintainer must select **Approve workflows to run** before merging it.
+create a GitHub Release. Renew `CHANGESETS_TOKEN` before it expires, preserve
+the same repository and permission restrictions, and never print or commit its
+value. A missing or expired secret must fail the workflow rather than falling
+back to `GITHUB_TOKEN`, whose generated pull requests require manual workflow
+approval.
 
 ## Build and inspect a release candidate
 

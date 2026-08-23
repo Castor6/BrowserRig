@@ -664,9 +664,7 @@ export const finalizeGitHubRelease = async (
       throw new Error(`workflow run ${run.id} release candidate artifact has an unsafe size`)
     }
 
-    const archiveResponse = await client.request(`${repositoryPath}/actions/artifacts/${artifact.id}/zip`, {
-      headers: { Accept: "application/octet-stream" },
-    })
+    const archiveResponse = await client.request(`${repositoryPath}/actions/artifacts/${artifact.id}/zip`)
     const candidate = readReleaseCandidateArchive(new Uint8Array(await archiveResponse.arrayBuffer()))
     const expectedArtifactName = `${candidateArtifactPrefix}${candidate.manifest.commit}`
     if (artifact.name !== expectedArtifactName) {

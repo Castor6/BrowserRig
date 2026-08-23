@@ -8,11 +8,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Castor6/browserrig.git"
+    "url": "git+https://github.com/Castor6/BrowserRig.git"
   },
-  "homepage": "https://github.com/Castor6/browserrig#readme",
+  "homepage": "https://github.com/Castor6/BrowserRig#readme",
   "bugs": {
-    "url": "https://github.com/Castor6/browserrig/issues"
+    "url": "https://github.com/Castor6/BrowserRig/issues"
   },
   "packageManager": "pnpm@11.18.0",
   "engines": {
@@ -60,6 +60,8 @@
     "check:extension-release": "tsx scripts/check-extension-release.ts",
     "package:npm": "tsx scripts/package-npm.ts",
     "package:extension": "pnpm build:extension && tsx scripts/package-extension.ts",
+    "release:github": "tsx scripts/finalize-github-release.ts",
+    "release:manifest": "tsx scripts/release-manifest.ts",
     "changeset": "changeset",
     "ci": "pnpm typecheck && pnpm test && pnpm build && pnpm package:extension",
     "prepack": "pnpm build",

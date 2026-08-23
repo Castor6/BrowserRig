@@ -114,7 +114,7 @@ credit decisions, or transferred to the publisher. See `docs/PRIVACY.md`.
 
 Use this public privacy-policy URL:
 
-`https://github.com/Castor6/browserrig/blob/main/docs/PRIVACY.md`
+`https://github.com/Castor6/BrowserRig/blob/main/docs/PRIVACY.md`
 
 ## Dashboard Field Map
 
@@ -129,8 +129,8 @@ Use this public privacy-policy URL:
 | Screenshots | `docs/chrome-web-store/screenshot-1-1280x800.png` through `screenshot-5-1280x800.png` |
 | Small promo tile | `docs/chrome-web-store/small-promo-440x280.png` |
 | Top promo tile | `docs/chrome-web-store/top-promo-1400x560.png` |
-| Homepage URL | `https://github.com/Castor6/browserrig` |
-| Support URL | `https://github.com/Castor6/browserrig/issues` |
+| Homepage URL | `https://github.com/Castor6/BrowserRig` |
+| Support URL | `https://github.com/Castor6/BrowserRig/issues` |
 | Adult content | Off |
 
 The YouTube promotional video is optional and should remain empty for the

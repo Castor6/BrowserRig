@@ -5,7 +5,7 @@ Effective August 22, 2026
 BrowserRig is a local browser driver for user-authorized automation. This
 policy describes the BrowserRig browser extension and the local BrowserRig
 driver it connects to. Support and policy questions can be filed in the
-[BrowserRig issue tracker](https://github.com/Castor6/browserrig/issues).
+[BrowserRig issue tracker](https://github.com/Castor6/BrowserRig/issues).
 
 ## Data The Extension Can Access
 
@@ -97,4 +97,4 @@ controls.
 
 Material changes to BrowserRig's data handling will be reflected in this
 policy and the Chrome Web Store listing. Contact the maintainers through the
-[BrowserRig issue tracker](https://github.com/Castor6/browserrig/issues).
+[BrowserRig issue tracker](https://github.com/Castor6/BrowserRig/issues).

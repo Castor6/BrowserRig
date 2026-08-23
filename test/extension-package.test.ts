@@ -8,17 +8,23 @@ import { extensionVersion, isChromeExtensionVersion, makeExtensionArchive } from
 
 describe("Chrome Web Store extension package", () => {
   it("pins the independent BrowserRig Store identity", async () => {
-    const manifest = JSON.parse(await fs.readFile(path.join(process.cwd(), "extension", "manifest.json"), "utf8")) as {
+    const extensionRoot = path.join(process.cwd(), "extension")
+    const [manifestText, packageText] = await Promise.all([
+      fs.readFile(path.join(extensionRoot, "manifest.json"), "utf8"),
+      fs.readFile(path.join(extensionRoot, "package.json"), "utf8"),
+    ])
+    const manifest = JSON.parse(manifestText) as {
       readonly key: string
       readonly version: string
     }
+    const packageJson = JSON.parse(packageText) as { readonly version: string }
     const digest = crypto.createHash("sha256").update(Buffer.from(manifest.key, "base64")).digest().subarray(0, 16)
     const extensionId = [...digest]
       .flatMap((byte) => [byte >> 4, byte & 0x0f])
       .map((nibble) => String.fromCharCode(97 + nibble))
       .join("")
 
-    expect(manifest.version).toBe("0.1.0")
+    expect(manifest.version).toBe(packageJson.version)
     expect(extensionId).toBe("dbobcmjamjdknplkplgdihdnmdjklpin")
   })
 

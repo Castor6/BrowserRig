@@ -50,15 +50,73 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-      - run: npm install --global npm@latest
+      - run: npm install --global npm@11.18.0
       - run: pnpm install --frozen-lockfile
       - run: pnpm run ci
       - run: pnpm package:npm
+      - run: >-
+          pnpm release:manifest
+          --commit ${{ github.event.pull_request.merge_commit_sha || github.sha }}
       - uses: actions/upload-artifact@v7
         with:
-          name: browserrig-release-candidate-${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          name: browserrig-release-candidate-v1-${{ github.event.pull_request.merge_commit_sha || github.sha }}
           path: |
             artifacts/browserrig-*.tgz
             artifacts/browserrig-extension-*.zip
+            artifacts/release-manifest.json
+            artifacts/SHA256SUMS
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
+
+  stage-npm:
+    if: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        github.event.pull_request.merged == true &&
+        github.event.pull_request.base.ref == 'main' &&
+        github.event.pull_request.head.ref == 'changeset-release/main' &&
+        github.event.pull_request.head.repo.full_name == github.repository
+      }}
+    needs: package
+    runs-on: ubuntu-latest
+    environment: npm-staging
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - run: npm install --global npm@11.18.0
+      - uses: actions/download-artifact@v8
+        with:
+          name: browserrig-release-candidate-v1-${{ github.event.pull_request.merge_commit_sha }}
+          path: artifacts
+      - id: candidate
+        name: Verify the immutable release candidate
+        run: |
+          result="$(node scripts/release-manifest.ts --verify --artifacts artifacts)"
+          npm_artifact="$(node --input-type=module -e '
+            const value = JSON.parse(process.argv[1])
+            if (value.manifest.commit !== process.argv[2]) {
+              throw new Error("Release manifest commit does not match this workflow")
+            }
+            console.log(value.npmArtifactPath)
+          ' "$result" "${{ github.event.pull_request.merge_commit_sha }}")"
+          case "$npm_artifact" in
+            "$GITHUB_WORKSPACE"/artifacts/browserrig-*.tgz) ;;
+            *) echo "Release manifest returned an unsafe npm artifact path" >&2; exit 1 ;;
+          esac
+          echo "npm-artifact=$npm_artifact" >> "$GITHUB_OUTPUT"
+      - name: Stage npm package for maintainer approval
+        run: >-
+          npm stage publish "${{ steps.candidate.outputs.npm-artifact }}"
+          --access public
+          --provenance
+          --registry=https://registry.npmjs.org

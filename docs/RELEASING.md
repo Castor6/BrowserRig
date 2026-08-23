@@ -41,9 +41,13 @@ The expected local artifacts are:
 - `artifacts/browserrig-<version>.tgz`
 - `artifacts/browserrig-extension-<version>.zip`
 
-The manual `Prepare release candidate` GitHub workflow performs the same CI and
-packaging steps, is pinned to `main`, and uploads both files for review. It does
-not publish either artifact.
+Merging the repository-owned `Version Packages` pull request automatically
+starts the `Prepare release candidate` GitHub workflow at the exact merge
+commit. The workflow performs the same CI and packaging steps and uploads both
+files for review for 14 days. A manual dispatch pinned to `main` remains
+available for rebuilding a missing or failed candidate; enter `BrowserRig` when
+prompted. Neither path publishes either artifact, creates a tag, or creates a
+GitHub Release.
 
 Before release, inspect the npm tarball and confirm that it contains
 `package.json`, `README.md`, `LICENSE`, `DISCLOSURE`, `dist/`,

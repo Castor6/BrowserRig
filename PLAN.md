@@ -287,8 +287,11 @@ require a new extension capture protocol and permission model.
   one shared `Version Packages` pull request that batches version and changelog
   updates. It authenticates with the encrypted, repository-scoped
   `CHANGESETS_TOKEN` secret so generated pull-request CI starts automatically.
-  A maintainer decides when to merge it; the workflow never publishes npm,
-  creates tags, or creates GitHub Releases.
+  A maintainer decides when to merge it. Merging that repository-owned branch
+  automatically builds npm and extension release-candidate artifacts at the
+  exact merge commit for inspection, while a manual rebuild path remains
+  available. Neither workflow publishes npm, creates tags, or creates GitHub
+  Releases.
 - Until the first Store review completes, the browser extension is loaded
   unpacked from the npm package's `extension/dist` directory or a source build.
   The `0.0.1` bootstrap package created the independent draft; the current shim

@@ -1,6 +1,11 @@
 name: Prepare release candidate
 
 on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
   workflow_dispatch:
     inputs:
       confirm_package:
@@ -17,12 +22,26 @@ concurrency:
 
 jobs:
   package:
-    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_package == 'BrowserRig' }}
+    if: >-
+      ${{
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.merged == true &&
+          github.event.pull_request.base.ref == 'main' &&
+          github.event.pull_request.head.ref == 'changeset-release/main' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        ) || (
+          github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/main' &&
+          inputs.confirm_package == 'BrowserRig'
+        )
+      }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
       - uses: pnpm/action-setup@v6
         with:
           version: 11.18.0
@@ -37,7 +56,7 @@ jobs:
       - run: pnpm package:npm
       - uses: actions/upload-artifact@v7
         with:
-          name: browserrig-release-candidate-${{ github.sha }}
+          name: browserrig-release-candidate-${{ github.event.pull_request.merge_commit_sha || github.sha }}
           path: |
             artifacts/browserrig-*.tgz
             artifacts/browserrig-extension-*.zip

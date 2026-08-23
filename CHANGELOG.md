@@ -1,5 +1,12 @@
 # BrowserRig
 
+## 0.2.2
+
+### Patch Changes
+
+- f8f5543: Support Node.js 22.22.0 and newer without exposing bundled dependency version branches.
+- 9e6a33b: Recognize ARIA main landmarks in compact snapshots and clarify semantic snapshot scoping in the agent skill.
+
 ## 0.2.1
 
 ### Patch Changes

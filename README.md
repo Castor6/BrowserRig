@@ -45,8 +45,8 @@ the result, logs, warnings, and a summary of what changed.
 
 ## Quick Start
 
-BrowserRig requires Node.js 22.22.2+, 24.15.0+, or 26+, and a Chromium-family
-browser such as Chrome, Brave, Edge, Arc, or Chromium.
+BrowserRig requires Node.js 22.22.0 or newer and a Chromium-family browser such
+as Chrome, Brave, Edge, Arc, or Chromium.
 
 Setup has two required parts: connect BrowserRig to the agent runtime you use,
 then load the included browser extension. DeepSeek Harness uses the native DSH

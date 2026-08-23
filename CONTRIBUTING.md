@@ -7,7 +7,7 @@ model and regression coverage.
 
 ## Development setup
 
-Use Node.js 22.22.2+, 24.15.0+, or 26+ and pnpm 11:
+Use Node.js 22.22.0 or newer and pnpm 11:
 
 ```bash
 pnpm install --frozen-lockfile

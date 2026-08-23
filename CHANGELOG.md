@@ -1,5 +1,12 @@
 # BrowserRig
 
+## 0.2.1
+
+### Patch Changes
+
+- c044337: Track the refreshed packaged extension with an independent Chrome Web Store version.
+- 6811647: Correct package repository metadata for secure npm trusted publishing.
+
 ## 0.2.0
 
 ### Minor Changes

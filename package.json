@@ -57,14 +57,17 @@
     "build:cli": "tsx scripts/build-cli.ts",
     "build": "pnpm build:cli && pnpm build:extension",
     "build:extension": "tsx scripts/build-extension.ts",
+    "check:extension-release": "tsx scripts/check-extension-release.ts",
     "package:npm": "tsx scripts/package-npm.ts",
     "package:extension": "pnpm build:extension && tsx scripts/package-extension.ts",
     "changeset": "changeset",
     "ci": "pnpm typecheck && pnpm test && pnpm build && pnpm package:extension",
     "prepack": "pnpm build",
     "smoke": "tsx scripts/smoke.ts",
+    "sync:extension-version": "tsx scripts/sync-extension-version.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "version-packages": "changeset version && pnpm sync:extension-version"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.1",

@@ -33,3 +33,4 @@ jobs:
         with:
           commitMode: github-api
           github-token: ${{ secrets.CHANGESETS_TOKEN }}
+          version: pnpm version-packages

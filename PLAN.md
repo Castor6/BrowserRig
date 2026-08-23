@@ -287,6 +287,14 @@ require a new extension capture protocol and permission model.
   one shared `Version Packages` pull request that batches version and changelog
   updates. It authenticates with the encrypted, repository-scoped
   `CHANGESETS_TOKEN` secret so generated pull-request CI starts automatically.
+  The private `browserrig-extension` workspace package participates in the same
+  Changesets plan without being published to npm. Extension changes declare a
+  relative bump for both the private extension package and `browserrig`, because
+  the built extension also ships in the npm tarball. CI rejects missing release
+  intent, a smaller npm bump, and direct version edits, while the version
+  workflow calculates the exact versions and synchronizes the extension result
+  into `extension/manifest.json`. Store-listing-only artwork changes neither
+  plan.
   A maintainer decides when to merge it. Merging that repository-owned branch
   automatically builds npm and extension release-candidate artifacts at the
   exact merge commit for inspection, while a manual rebuild path remains
@@ -294,8 +302,9 @@ require a new extension capture protocol and permission model.
   Releases.
 - Until the first Store review completes, the browser extension is loaded
   unpacked from the npm package's `extension/dist` directory or a source build.
-  The `0.0.1` bootstrap package created the independent draft; the current shim
-  version is `0.1.0`.
+  The `0.0.1` bootstrap package created the independent draft; the versioned
+  Store baseline is `0.1.0` and later versions are derived from extension
+  Changesets.
 - The production-origin allowlist and committed public manifest key pin Store
   Item ID `dbobcmjamjdknplkplgdihdnmdjklpin`. Test a production relay against a
   same-ID unpacked build before Store submission; never broaden this to an
@@ -303,10 +312,13 @@ require a new extension capture protocol and permission model.
 - Extension and npm releases are independently versioned. The extension hello
   reports an explicit protocol version, and compatibility rather than exact
   package-version equality determines whether the local driver may use it.
+  GitHub tags and Releases follow the npm version and record the extension and
+  protocol versions as component metadata.
 - Browser data crosses only the loopback connection unless an authorized local
   caller sends returned data elsewhere. The default endpoint is
   `127.0.0.1:19990`.
-- Extension source changes require rebuilding and reloading the unpacked
+- Extension source and packaged-asset changes require a
+  `browserrig-extension` Changeset, rebuilding, and reloading the unpacked
   extension. Relay-only changes do not.
 - `pnpm package:extension` produces the deterministic
   `browserrig-extension-<version>.zip` Chrome Web Store review artifact.

@@ -7,23 +7,43 @@ authentication-bearing network traffic. Every npm version must retain both the
 
 ## Prepare the next package version
 
-Every pull request that changes published package behavior carries a Changeset.
+Every pull request that changes npm package behavior carries a `browserrig`
+Changeset. Because `extension/dist` ships in that npm package, every pull
+request that changes packaged extension code, manifest metadata, icons, or
+build output carries entries for both `browserrig` and
+`browserrig-extension`. The latter is a private workspace package used only to
+calculate the Store version; it is never published to npm. Changes limited to
+Store listing assets under `docs/chrome-web-store/` need neither entry. Feature
+pull requests declare `patch`, `minor`, or `major` bumps without editing either
+exact extension version. Because npm ships the extension, its relative bump
+must be at least as large as the extension bump; CI enforces that relationship.
+
 After those changes reach `main`, the `Version packages` GitHub workflow uses
 the repository-scoped fine-grained token stored in the `CHANGESETS_TOKEN`
 Actions secret to create or update one shared `Version Packages` pull request.
+Its custom version command applies all pending Changesets, updates changelogs,
+and copies the calculated private extension version into
+`extension/manifest.json`. Pull-request CI rejects packaged extension changes
+without an extension Changeset and rejects hand-edited extension versions.
 The token can write contents and pull requests only in `Castor6/BrowserRig`, so
 CI starts automatically for the generated pull request without granting npm
 publishing credentials or OIDC permission. It expires on August 23, 2027.
 
-Review the accumulated release notes, semantic-version bump, CI result, and
-generated `package.json` and `CHANGELOG.md` changes. Merge the version pull
-request only when that exact set of changes is ready for a release candidate.
+Review the accumulated release notes, npm and extension version bumps, CI
+result, generated package metadata and changelogs, and synchronized extension
+manifest. Merge the version pull request only when that exact set of changes
+is ready for a release candidate.
 The merge changes release metadata but does not publish npm, create a tag, or
 create a GitHub Release. Renew `CHANGESETS_TOKEN` before it expires, preserve
 the same repository and permission restrictions, and never print or commit its
 value. A missing or expired secret must fail the workflow rather than falling
 back to `GITHUB_TOKEN`, whose generated pull requests require manual workflow
 approval.
+
+Git tags and GitHub Releases use the `browserrig` npm version, such as
+`v0.2.0`. Each Release records the independently calculated extension version
+and protocol version. An extension package change therefore advances both npm
+and extension release plans, while Store-listing-only artwork advances neither.
 
 ## Build and inspect a release candidate
 

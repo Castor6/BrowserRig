@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v6
         with:
           version: 11.18.0
@@ -21,4 +23,9 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - if: github.event_name == 'pull_request'
+        run: >-
+          pnpm check:extension-release
+          --base ${{ github.event.pull_request.base.sha }}
+          ${{ github.event.pull_request.head.ref == 'changeset-release/main' && '--allow-version-update' || '' }}
       - run: pnpm run ci

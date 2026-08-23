@@ -179,6 +179,8 @@ class ReleaseApiMock {
       })
     }
     if (method === "GET" && url.pathname === "/repos/Castor6/BrowserRig/actions/artifacts/55/zip") {
+      const accept = new Headers(init.headers).get("Accept")
+      if (accept !== "application/vnd.github+json") return jsonResponse({}, 415)
       return bytesResponse(this.fixture.archive)
     }
     if (method === "GET" && url.pathname === "/repos/Castor6/BrowserRig/releases") {

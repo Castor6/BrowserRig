@@ -5,9 +5,11 @@ import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 
 import {
-  changesetDeclaresRelease,
+  changesetReleaseType,
   hasExtensionPayloadChanges,
+  highestChangesetReleaseType,
   missingExtensionChangesetPackages,
+  releaseTypeAtLeast,
 } from "../scripts/check-extension-release.js"
 import { compareExtensionVersions, jsonWithoutVersion, readExtensionVersions } from "../scripts/extension-version.js"
 import { syncExtensionVersion } from "../scripts/sync-extension-version.js"
@@ -36,9 +38,12 @@ describe("extension Changesets versioning", () => {
 
   it("recognizes independent package release intent in Changeset frontmatter", () => {
     const changeset = '---\n"browserrig": minor\n"browserrig-extension": patch\n---\n\nRefresh icons.\n'
-    expect(changesetDeclaresRelease(changeset, "browserrig-extension")).toBe(true)
-    expect(changesetDeclaresRelease(changeset, "browserrig")).toBe(true)
-    expect(changesetDeclaresRelease(changeset, "another-package")).toBe(false)
+    expect(changesetReleaseType(changeset, "browserrig-extension")).toBe("patch")
+    expect(changesetReleaseType(changeset, "browserrig")).toBe("minor")
+    expect(changesetReleaseType(changeset, "another-package")).toBeNull()
+    expect(highestChangesetReleaseType([changeset], "browserrig")).toBe("minor")
+    expect(releaseTypeAtLeast("minor", "patch")).toBe(true)
+    expect(releaseTypeAtLeast("patch", "minor")).toBe(false)
     expect(missingExtensionChangesetPackages([changeset])).toEqual([])
     expect(missingExtensionChangesetPackages(['---\n"browserrig-extension": patch\n---\n'])).toEqual(["browserrig"])
   })

@@ -1,5 +1,6 @@
 ---
+"browserrig": patch
 "browserrig-extension": patch
 ---
 
-Refresh the packaged extension icons with the BrowserRig artwork.
+Track the refreshed packaged extension with an independent Chrome Web Store version.

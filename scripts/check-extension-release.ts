@@ -14,18 +14,39 @@ import {
 const execFileAsync = promisify(execFile)
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const npmPackageName = "browserrig"
+const releaseRanks = { patch: 0, minor: 1, major: 2 } as const
+export type ChangesetReleaseType = keyof typeof releaseRanks
 
-export function changesetDeclaresRelease(text: string, packageName: string): boolean {
+export function changesetReleaseType(text: string, packageName: string): ChangesetReleaseType | null {
   const frontmatter = /^---\s*\n([\s\S]*?)\n---(?:\s*\n|$)/.exec(text)?.[1]
-  return frontmatter?.split("\n").some((line) => {
+  for (const line of frontmatter?.split("\n") ?? []) {
     const match = /^\s*[\"']?([^\"']+)[\"']?\s*:\s*(patch|minor|major)\s*$/.exec(line)
-    return match?.[1] === packageName
-  }) ?? false
+    if (match?.[1] === packageName) return match[2] as ChangesetReleaseType
+  }
+  return null
+}
+
+export function highestChangesetReleaseType(
+  changesets: readonly string[],
+  packageName: string,
+): ChangesetReleaseType | null {
+  let highest: ChangesetReleaseType | null = null
+  for (const changeset of changesets) {
+    const releaseType = changesetReleaseType(changeset, packageName)
+    if (releaseType && (highest === null || releaseRanks[releaseType] > releaseRanks[highest])) {
+      highest = releaseType
+    }
+  }
+  return highest
+}
+
+export function releaseTypeAtLeast(candidate: ChangesetReleaseType, required: ChangesetReleaseType): boolean {
+  return releaseRanks[candidate] >= releaseRanks[required]
 }
 
 export function missingExtensionChangesetPackages(changesets: readonly string[]): string[] {
   return [npmPackageName, extensionPackageName].filter((packageName) =>
-    !changesets.some((changeset) => changesetDeclaresRelease(changeset, packageName))
+    highestChangesetReleaseType(changesets, packageName) === null
   )
 }
 
@@ -95,6 +116,18 @@ async function checkExtensionRelease(base: string, allowVersionUpdate: boolean):
     throw new Error(
       `Extension package content changed without Changeset entries for ${missingPackages.join(" and ")}. ` +
       "Run pnpm changeset and select patch, minor, or major for both shipped packages.",
+    )
+  }
+  const npmReleaseType = highestChangesetReleaseType(changesets, npmPackageName)
+  const extensionReleaseType = highestChangesetReleaseType(changesets, extensionPackageName)
+  if (
+    npmReleaseType &&
+    extensionReleaseType &&
+    !releaseTypeAtLeast(npmReleaseType, extensionReleaseType)
+  ) {
+    throw new Error(
+      `The ${npmPackageName} ${npmReleaseType} bump must be at least the ` +
+      `${extensionPackageName} ${extensionReleaseType} bump because npm ships the extension.`,
     )
   }
 }

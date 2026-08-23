@@ -15,7 +15,8 @@ build output carries entries for both `browserrig` and
 calculate the Store version; it is never published to npm. Changes limited to
 Store listing assets under `docs/chrome-web-store/` need neither entry. Feature
 pull requests declare `patch`, `minor`, or `major` bumps without editing either
-exact extension version.
+exact extension version. Because npm ships the extension, its relative bump
+must be at least as large as the extension bump; CI enforces that relationship.
 
 After those changes reach `main`, the `Version packages` GitHub workflow uses
 the repository-scoped fine-grained token stored in the `CHANGESETS_TOKEN`

@@ -251,9 +251,10 @@ local Node relay.
   both `browserrig-extension` and `browserrig`, because `extension/dist` also
   ships inside the npm tarball. Use `patch` for fixes and asset updates,
   `minor` for backward-compatible capabilities, and `major` for breaking
-  behavior. Store-listing-only assets under `docs/chrome-web-store/` require
-  neither entry. The private extension package exists only to calculate the
-  Store version and must never be published to npm.
+  behavior. The `browserrig` bump must be at least as large as the extension
+  bump. Store-listing-only assets under `docs/chrome-web-store/` require neither
+  entry. The private extension package exists only to calculate the Store
+  version and must never be published to npm.
 - Do not edit `extension/package.json` or the `version` field in
   `extension/manifest.json` in a feature pull request. The `Version Packages`
   workflow owns both exact versions and synchronizes them after applying all

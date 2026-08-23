@@ -1,5 +1,17 @@
 # BrowserRig
 
+## 0.2.0
+
+### Minor Changes
+
+- 2a33968: Ship BrowserRig as an installable DeepSeek Harness bundle with native,
+  session-isolated browser tools, built-in operating guidance, and a
+  self-contained package-local CLI runtime.
+
+### Patch Changes
+
+- f88679b: Refresh the extension icons and Chrome Web Store artwork with the new BrowserRig branding.
+
 BrowserRig is an independent, MIT-licensed fork of
 `@opencode-ai/browser-control`. The upstream changelog is retained below as
 project lineage; those entries describe upstream releases, not BrowserRig

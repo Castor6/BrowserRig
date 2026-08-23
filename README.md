@@ -1,5 +1,7 @@
 # BrowserRig
 
+![BrowserRig — Agents, meet your real browser](docs/chrome-web-store/top-promo-1400x560.png)
+
 BrowserRig lets trusted coding agents run Playwright against your existing
 Chromium-family browser. It uses your real browser profile, including logged-in
 sessions and installed extensions, instead of launching a separate headless

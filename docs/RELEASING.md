@@ -32,17 +32,17 @@ publishing credentials or OIDC permission. It expires on August 23, 2027.
 Review the accumulated release notes, npm and extension version bumps, CI
 result, generated package metadata and changelogs, and synchronized extension
 manifest. Merge the version pull request only when that exact set of changes
-is ready to enter npm's staged-publishing review. Do not merge a second version
-pull request until the first staged version has been approved and its GitHub
-Release has been finalized.
+is ready to become public. Merging it is the explicit and irreversible npm
+publication approval. Do not merge a second version pull request until the
+first publication and its GitHub Release have been finalized.
 
-The merge builds one immutable candidate and submits its exact npm tarball to
-npm's private staging area. It does not make the package public: a maintainer
-must still inspect and approve it with npm 2FA. Renew `CHANGESETS_TOKEN` before
-it expires, preserve the same repository and permission restrictions, and
-never print or commit its value. A missing or expired secret must fail the
-workflow rather than falling back to `GITHUB_TOKEN`, whose generated pull
-requests require manual workflow approval.
+The merge rebuilds and verifies one immutable candidate, then publishes its
+exact npm tarball through short-lived OIDC credentials. The release workflow
+reruns full CI before publication; no separate npm approval follows a merge.
+Renew `CHANGESETS_TOKEN` before it expires, preserve the same repository and
+permission restrictions, and never print or commit its value. A missing or
+expired secret must fail the workflow rather than falling back to
+`GITHUB_TOKEN`, whose generated pull requests require manual workflow approval.
 
 Git tags and GitHub Releases use the `browserrig` npm version, such as
 `v0.2.0`. Each Release records the independently calculated extension version
@@ -69,13 +69,14 @@ The expected local artifacts are:
 - `artifacts/SHA256SUMS`
 
 Merging the repository-owned `Version Packages` pull request automatically
-starts the `Prepare release candidate` GitHub workflow at the exact merge
+starts the `Publish npm release` GitHub workflow at the exact merge
 commit. The workflow performs the same CI and packaging steps, records the
 component versions and checksums, retains the four candidate files for 90 days,
-and sends the exact npm tarball to npm staged publishing. A manual dispatch
-pinned to `main` remains available for rebuilding a missing or failed
-candidate; enter `BrowserRig` when prompted. The manual path never stages npm,
-and neither path publishes the extension to the Chrome Web Store.
+and publishes the exact npm tarball through the repository's trusted OIDC
+identity. A manual dispatch pinned to `main` remains available for rebuilding a
+missing or failed candidate; enter `BrowserRig` when prompted. The manual path
+never publishes npm, and neither path publishes the extension to the Chrome Web
+Store.
 
 Before release, inspect the npm tarball and confirm that it contains
 `package.json`, `README.md`, `LICENSE`, `DISCLOSURE`, `dist/`,
@@ -132,47 +133,51 @@ therefore be performed by the maintainer in an interactive npm session with 2FA:
 ## Later npm releases
 
 Configure npm Trusted Publishing once for the exact public repository,
-workflow, and GitHub environment. Grant only staged-publish permission:
+workflow, and GitHub environment. Grant direct-publish permission without a
+long-lived token. When migrating from the previous stage-only relationship,
+list and revoke that single existing relationship first:
+
+```bash
+npm trust list browserrig --registry=https://registry.npmjs.org
+npm trust revoke browserrig --id <trust-id> \
+  --registry=https://registry.npmjs.org
+```
+
+Then create the direct-publish relationship:
 
 ```bash
 npm trust github browserrig \
   --repo Castor6/BrowserRig \
   --file release.yml \
-  --env npm-staging \
-  --allow-stage-publish
+  --env npm-publishing \
+  --allow-publish \
+  --registry=https://registry.npmjs.org
 ```
 
-The `Prepare release candidate` workflow uses short-lived OIDC credentials; it
-must not receive an `NPM_TOKEN`, direct `npm publish` permission, or a bypass-2FA
-credential. In npm package settings, require 2FA and disallow traditional
-tokens after the trusted publisher is working.
+The `Publish npm release` workflow uses short-lived OIDC credentials; it must
+not receive an `NPM_TOKEN` or bypass-2FA credential. Keep account-level 2FA
+enabled and disallow traditional publishing tokens after the trusted
+publisher is working. Merging the reviewed `Version Packages` pull request is
+the sole human publication gate; after the workflow's full CI, packaging,
+manifest, and artifact checks pass, it runs `npm publish` directly with
+provenance.
 
-After a successful version-PR merge, review the staged tarball with
-`npm stage view` or `npm stage download`, then approve it with maintainer 2FA:
-
-```bash
-npm stage list browserrig
-npm stage view <stage-id>
-npm stage download <stage-id>
-npm stage approve <stage-id>
-```
-
-OIDC cannot list, inspect, approve, reject, or otherwise bypass this human gate.
-If the staging job loses its response or fails at the final `npm stage publish`
-step, do not blindly rerun it: first use `npm stage list browserrig` and
-`npm stage view <stage-id>` interactively. A version already accepted into the
-staging area cannot be submitted again; approve the matching candidate or
-reject it with 2FA before deciding whether a rerun is safe.
+If the publishing job loses its response or reports an ambiguous failure, do
+not blindly bump or republish. First query the exact version from the official
+registry and compare its tarball integrity with the retained candidate. npm
+versions are immutable; an already published version must be finalized or
+recovered, never rebuilt under the same version. The GitHub finalizer inspects
+completed failed publish runs for this recovery case, but proceeds only when
+the retained candidate and public npm tarball match exactly.
 
 The separate `Publish GitHub release` workflow checks every 30 minutes (and can
-be dispatched manually for an immediate check). Once the approved version is
+be dispatched manually for an immediate check). Once the published version is
 visible on the public registry, it downloads the registry tarball, requires its
 integrity to match the retained candidate, creates tag `v<npm-version>` at the
 candidate commit, and publishes a GitHub Release containing the original npm
 tarball, extension ZIP, manifest, and checksums. Existing tags, releases, or
 assets must match exactly; the finalizer never overwrites them. Direct OIDC
-publishing and bypass-2FA tokens are not acceptable release paths for this
-package.
+publishing is the required release path; bypass-2FA tokens are not acceptable.
 
 ## Chrome Web Store
 
@@ -188,6 +193,5 @@ that clean npm install succeeds; use deferred Store publishing so an approval
 does not make the listing public automatically.
 
 References: [npm dual-use policy](https://docs.npmjs.com/policies/dual-use/),
-[npm staged publishing](https://docs.npmjs.com/staged-publishing/),
 [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/), and
 [npm provenance](https://docs.npmjs.com/generating-provenance-statements/).

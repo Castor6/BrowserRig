@@ -645,10 +645,10 @@ export const finalizeGitHubRelease = async (
   const client = makeGitHubClient(fetcher, options.token, apiBaseUrl, uploadsBaseUrl)
   const repositoryPath = `repos/${options.repository}`
   const runsResponse = await client.request(
-    `${repositoryPath}/actions/workflows/${encodeURIComponent(workflow)}/runs?status=success&event=pull_request&per_page=${maxRuns}`,
+    `${repositoryPath}/actions/workflows/${encodeURIComponent(workflow)}/runs?status=completed&event=pull_request&per_page=${maxRuns}`,
   )
   const runs = parseWorkflowRuns(await responseJson(runsResponse, "GitHub workflow runs"))
-    .filter((run) => run.status === "completed" && run.conclusion === "success" && run.event === "pull_request")
+    .filter((run) => run.status === "completed" && run.event === "pull_request")
     .sort((left, right) => right.id - left.id)
 
   for (const run of runs) {

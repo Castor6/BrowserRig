@@ -1,4 +1,4 @@
-name: Prepare release candidate
+name: Publish npm release
 
 on:
   pull_request:
@@ -68,7 +68,7 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-  stage-npm:
+  publish-npm:
     if: >-
       ${{
         github.event_name == 'pull_request' &&
@@ -79,7 +79,7 @@ jobs:
       }}
     needs: package
     runs-on: ubuntu-latest
-    environment: npm-staging
+    environment: npm-publishing
     permissions:
       contents: read
       id-token: write
@@ -114,9 +114,9 @@ jobs:
             *) echo "Release manifest returned an unsafe npm artifact path" >&2; exit 1 ;;
           esac
           echo "npm-artifact=$npm_artifact" >> "$GITHUB_OUTPUT"
-      - name: Stage npm package for maintainer approval
+      - name: Publish verified npm package
         run: >-
-          npm stage publish "${{ steps.candidate.outputs.npm-artifact }}"
+          npm publish "${{ steps.candidate.outputs.npm-artifact }}"
           --access public
           --provenance
           --registry=https://registry.npmjs.org

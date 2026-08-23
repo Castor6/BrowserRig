@@ -298,14 +298,15 @@ require a new extension capture protocol and permission model.
   A maintainer decides when to merge it. Merging that repository-owned branch
   automatically builds one immutable npm and extension release candidate at
   the exact merge commit, records its component versions and checksums, and
-  submits the exact npm tarball to npm staged publishing through a stage-only
-  OIDC trusted publisher. A manual rebuild path remains available but never
-  stages a package. The maintainer inspects and approves the staged version
-  with npm 2FA; CI cannot bypass that proof-of-presence gate. After the exact
-  tarball becomes public, a separate scheduled finalizer verifies its registry
-  integrity against the retained candidate, creates the npm-version Git tag and
-  GitHub Release, and attaches the original npm tarball, extension ZIP,
-  manifest, and checksums. It never rebuilds or overwrites a release.
+  publishes the exact npm tarball through a direct-publish OIDC trusted
+  publisher. Merging the version pull request is the explicit and irreversible
+  release approval; the workflow still reruns full CI and verifies the immutable
+  candidate before publication. A manual rebuild path remains available but
+  never publishes a package. After the exact tarball becomes public, a separate
+  scheduled finalizer verifies its registry integrity against the retained
+  candidate, creates the npm-version Git tag and GitHub Release, and attaches
+  the original npm tarball, extension ZIP, manifest, and checksums. It never
+  rebuilds or overwrites a release.
 - Until the first Store review completes, the browser extension is loaded
   unpacked from the npm package's `extension/dist` directory or a source build.
   The `0.0.1` bootstrap package created the independent draft; the versioned

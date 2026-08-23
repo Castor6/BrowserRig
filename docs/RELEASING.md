@@ -32,13 +32,17 @@ publishing credentials or OIDC permission. It expires on August 23, 2027.
 Review the accumulated release notes, npm and extension version bumps, CI
 result, generated package metadata and changelogs, and synchronized extension
 manifest. Merge the version pull request only when that exact set of changes
-is ready for a release candidate.
-The merge changes release metadata but does not publish npm, create a tag, or
-create a GitHub Release. Renew `CHANGESETS_TOKEN` before it expires, preserve
-the same repository and permission restrictions, and never print or commit its
-value. A missing or expired secret must fail the workflow rather than falling
-back to `GITHUB_TOKEN`, whose generated pull requests require manual workflow
-approval.
+is ready to enter npm's staged-publishing review. Do not merge a second version
+pull request until the first staged version has been approved and its GitHub
+Release has been finalized.
+
+The merge builds one immutable candidate and submits its exact npm tarball to
+npm's private staging area. It does not make the package public: a maintainer
+must still inspect and approve it with npm 2FA. Renew `CHANGESETS_TOKEN` before
+it expires, preserve the same repository and permission restrictions, and
+never print or commit its value. A missing or expired secret must fail the
+workflow rather than falling back to `GITHUB_TOKEN`, whose generated pull
+requests require manual workflow approval.
 
 Git tags and GitHub Releases use the `browserrig` npm version, such as
 `v0.2.0`. Each Release records the independently calculated extension version
@@ -47,12 +51,13 @@ and extension release plans, while Store-listing-only artwork advances neither.
 
 ## Build and inspect a release candidate
 
-From a clean checkout of `Castor6/browserrig` on `main`:
+From a clean checkout of `Castor6/BrowserRig` on `main`:
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm run ci
 pnpm package:npm
+pnpm release:manifest --commit "$(git rev-parse HEAD)"
 npm pack --dry-run
 ```
 
@@ -60,14 +65,17 @@ The expected local artifacts are:
 
 - `artifacts/browserrig-<version>.tgz`
 - `artifacts/browserrig-extension-<version>.zip`
+- `artifacts/release-manifest.json`
+- `artifacts/SHA256SUMS`
 
 Merging the repository-owned `Version Packages` pull request automatically
 starts the `Prepare release candidate` GitHub workflow at the exact merge
-commit. The workflow performs the same CI and packaging steps and uploads both
-files for review for 14 days. A manual dispatch pinned to `main` remains
-available for rebuilding a missing or failed candidate; enter `BrowserRig` when
-prompted. Neither path publishes either artifact, creates a tag, or creates a
-GitHub Release.
+commit. The workflow performs the same CI and packaging steps, records the
+component versions and checksums, retains the four candidate files for 90 days,
+and sends the exact npm tarball to npm staged publishing. A manual dispatch
+pinned to `main` remains available for rebuilding a missing or failed
+candidate; enter `BrowserRig` when prompted. The manual path never stages npm,
+and neither path publishes the extension to the Chrome Web Store.
 
 Before release, inspect the npm tarball and confirm that it contains
 `package.json`, `README.md`, `LICENSE`, `DISCLOSURE`, `dist/`,
@@ -102,7 +110,7 @@ without a global `browserrig` command or separately installed BrowserRig skill.
 Staged publishing cannot create a brand-new npm package. The first release must
 therefore be performed by the maintainer in an interactive npm session with 2FA:
 
-1. Create the public `Castor6/browserrig` repository and push the reviewed
+1. Create the public `Castor6/BrowserRig` repository and push the reviewed
    release commit. The `repository.url` in `package.json` must match its exact
    owner and casing for later provenance.
 2. Confirm that `browserrig` is still available and that the publishing npm
@@ -123,9 +131,23 @@ therefore be performed by the maintainer in an interactive npm session with 2FA:
 
 ## Later npm releases
 
-After the package exists, configure npm Trusted Publishing for the exact public
-repository and workflow. CI may use OIDC to run `npm stage publish`, but it must
-not publish this dual-use package directly. Review the staged tarball with
+Configure npm Trusted Publishing once for the exact public repository,
+workflow, and GitHub environment. Grant only staged-publish permission:
+
+```bash
+npm trust github browserrig \
+  --repo Castor6/BrowserRig \
+  --file release.yml \
+  --env npm-staging \
+  --allow-stage-publish
+```
+
+The `Prepare release candidate` workflow uses short-lived OIDC credentials; it
+must not receive an `NPM_TOKEN`, direct `npm publish` permission, or a bypass-2FA
+credential. In npm package settings, require 2FA and disallow traditional
+tokens after the trusted publisher is working.
+
+After a successful version-PR merge, review the staged tarball with
 `npm stage view` or `npm stage download`, then approve it with maintainer 2FA:
 
 ```bash
@@ -135,22 +157,37 @@ npm stage download <stage-id>
 npm stage approve <stage-id>
 ```
 
-Only create the Git tag and GitHub Release after the approved version is visible
-on the public registry. Direct OIDC publishing and bypass-2FA tokens are not an
-acceptable release path for this package.
+OIDC cannot list, inspect, approve, reject, or otherwise bypass this human gate.
+If the staging job loses its response or fails at the final `npm stage publish`
+step, do not blindly rerun it: first use `npm stage list browserrig` and
+`npm stage view <stage-id>` interactively. A version already accepted into the
+staging area cannot be submitted again; approve the matching candidate or
+reject it with 2FA before deciding whether a rerun is safe.
+
+The separate `Publish GitHub release` workflow checks every 30 minutes (and can
+be dispatched manually for an immediate check). Once the approved version is
+visible on the public registry, it downloads the registry tarball, requires its
+integrity to match the retained candidate, creates tag `v<npm-version>` at the
+candidate commit, and publishes a GitHub Release containing the original npm
+tarball, extension ZIP, manifest, and checksums. Existing tags, releases, or
+assets must match exactly; the finalizer never overwrites them. Direct OIDC
+publishing and bypass-2FA tokens are not acceptable release paths for this
+package.
 
 ## Chrome Web Store
 
 Follow [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md). The `0.0.1` bootstrap ZIP
-created the independent draft. The manifest key, relay pin, and tests now bind
-version `0.1.0` to Item ID `dbobcmjamjdknplkplgdihdnmdjklpin`. Verify that ID
-and a production relay handshake with the unpacked build, then upload the final
-review ZIP without changing the identity. Publish and independently verify the
-first npm version before submitting Store review because the reviewer steps
-install the local driver from the official registry. Complete the unlisted
-listing only after that clean npm install succeeds; use deferred Store
-publishing so an approval does not make the listing public automatically.
+created the independent draft. The manifest key, relay pin, and tests bind the
+current `extension/manifest.json` version to Store Item ID
+`dbobcmjamjdknplkplgdihdnmdjklpin`. Verify that ID and a production relay
+handshake with the unpacked build, then upload the final review ZIP without
+changing the identity. Publish and independently verify the first npm version
+before submitting Store review because the reviewer steps install the local
+driver from the official registry. Complete the unlisted listing only after
+that clean npm install succeeds; use deferred Store publishing so an approval
+does not make the listing public automatically.
 
 References: [npm dual-use policy](https://docs.npmjs.com/policies/dual-use/),
-[npm staged publishing](https://docs.npmjs.com/staged-publishing/), and
+[npm staged publishing](https://docs.npmjs.com/staged-publishing/),
+[npm trusted publishing](https://docs.npmjs.com/trusted-publishers/), and
 [npm provenance](https://docs.npmjs.com/generating-provenance-statements/).

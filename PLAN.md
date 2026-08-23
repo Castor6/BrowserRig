@@ -43,7 +43,7 @@ should land with unit or smoke evidence appropriate to the behavior.
 - Use the selected independent `BrowserRig` brand consistently: npm package and
   CLI `browserrig`, MCP executable `browserrig-mcp`, `BROWSERRIG_*` environment
   variables, `~/.browserrig` local state, and repository slug `browserrig`.
-  Use `Castor6/browserrig` as the independent GitHub publishing identity.
+  Use `Castor6/BrowserRig` as the independent GitHub publishing identity.
 - Rewrite first-run documentation and Store disclosures around the actual
   differentiators and the broad trusted-local permissions.
 
@@ -276,7 +276,7 @@ require a new extension capture protocol and permission model.
 
 - The independent product identity is BrowserRig across the repository, npm
   package and CLI (`browserrig`), MCP executable (`browserrig-mcp`), and Chrome
-  Web Store listing. The public repository is `Castor6/browserrig`.
+  Web Store listing. The public repository is `Castor6/BrowserRig`.
 - The `browserrig` package will be published publicly on npm. Normal setup will
   install that npm artifact; until the first release, source development uses
   `pnpm install`, `pnpm build`, and `npm link`.
@@ -296,10 +296,16 @@ require a new extension capture protocol and permission model.
   into `extension/manifest.json`. Store-listing-only artwork changes neither
   plan.
   A maintainer decides when to merge it. Merging that repository-owned branch
-  automatically builds npm and extension release-candidate artifacts at the
-  exact merge commit for inspection, while a manual rebuild path remains
-  available. Neither workflow publishes npm, creates tags, or creates GitHub
-  Releases.
+  automatically builds one immutable npm and extension release candidate at
+  the exact merge commit, records its component versions and checksums, and
+  submits the exact npm tarball to npm staged publishing through a stage-only
+  OIDC trusted publisher. A manual rebuild path remains available but never
+  stages a package. The maintainer inspects and approves the staged version
+  with npm 2FA; CI cannot bypass that proof-of-presence gate. After the exact
+  tarball becomes public, a separate scheduled finalizer verifies its registry
+  integrity against the retained candidate, creates the npm-version Git tag and
+  GitHub Release, and attaches the original npm tarball, extension ZIP,
+  manifest, and checksums. It never rebuilds or overwrites a release.
 - Until the first Store review completes, the browser extension is loaded
   unpacked from the npm package's `extension/dist` directory or a source build.
   The `0.0.1` bootstrap package created the independent draft; the versioned

@@ -87,13 +87,13 @@ session identity, handle human-only steps, and recover from browser failures.
 Install it with the [skills CLI](https://skills.sh):
 
 ```bash
-npx skills add Castor6/browserrig --skill browserrig -g
+npx skills add Castor6/BrowserRig --skill browserrig -g
 ```
 
 Choose the agents you use when prompted. The global `-g` installation makes the
 skill available across projects.
 
-`Castor6/browserrig` is BrowserRig's independent repository identity.
+`Castor6/BrowserRig` is BrowserRig's independent repository identity.
 BrowserRig does not edit agent configuration itself. To inspect or install the
 skill manually, print the exact bundled text:
 
@@ -457,7 +457,7 @@ These capabilities are dual-use. The npm package declares that classification
 and includes a concrete [`DISCLOSURE`](./DISCLOSURE) covering intended use,
 security boundaries, and prohibited unauthorized access.
 
-The [extension privacy policy](https://github.com/Castor6/browserrig/blob/main/docs/PRIVACY.md)
+The [extension privacy policy](https://github.com/Castor6/BrowserRig/blob/main/docs/PRIVACY.md)
 explains BrowserRig's local data handling, retention, user controls, and Chrome
 Web Store Limited Use commitment.
 
@@ -529,7 +529,7 @@ Join-Path (npm root --global) "browserrig/extension/dist"
 ## Development
 
 ```bash
-git clone https://github.com/Castor6/browserrig.git
+git clone https://github.com/Castor6/BrowserRig.git
 cd browserrig
 pnpm install
 pnpm build

@@ -126,14 +126,15 @@ Use this public privacy-policy URL:
 | Category | Developer Tools |
 | Language | English |
 | Store icon | `docs/chrome-web-store/icon-128.png` |
-| Screenshot | `docs/chrome-web-store/browserrig-1280x800.jpg` |
+| Screenshots | `docs/chrome-web-store/screenshot-1-1280x800.png` through `screenshot-5-1280x800.png` |
 | Small promo tile | `docs/chrome-web-store/small-promo-440x280.png` |
+| Top promo tile | `docs/chrome-web-store/top-promo-1400x560.png` |
 | Homepage URL | `https://github.com/Castor6/browserrig` |
 | Support URL | `https://github.com/Castor6/browserrig/issues` |
 | Adult content | Off |
 
-The top promotional tile and YouTube promotional video are optional and should
-remain empty for the initial release.
+The YouTube promotional video is optional and should remain empty for the
+initial release.
 
 ### Distribution
 
@@ -191,16 +192,14 @@ requires a separate explicit CLI request.
 Store assets live under `docs/chrome-web-store/`:
 
 - `icon-128.png`
-- `browserrig-1280x800.jpg`
+- `screenshot-1-1280x800.png` through `screenshot-5-1280x800.png`
 - `small-promo-440x280.png`
+- `top-promo-1400x560.png`
 
-Regenerate `small-promo-440x280.png` from the BrowserRig-branded
-`small-promo.svg`, export it as a 24-bit RGB PNG with no alpha channel, and
-capture the real runtime screenshot under the expected
-`browserrig-1280x800.jpg` name. Historical binary previews must not be uploaded
-under the new listing without checking their visible branding. Before upload,
-verify dimensions and that the screenshot and promotional tile report
-`hasAlpha: no`.
+Upload the committed BrowserRig-branded PNG assets. Historical binary previews
+must not be uploaded under the new listing without checking their visible
+branding. Before upload, verify dimensions and that every screenshot and
+promotional tile is a 24-bit RGB PNG reporting `hasAlpha: no`.
 
 Run:
 

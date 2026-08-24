@@ -272,6 +272,46 @@ describe("BrowserRig DSH adapter", () => {
     expect(rendered).not.toMatch(/own-session|other-session|secret-target|private\.example|omit-me/)
   })
 
+  it("reports a BrowserRig issue through fixed CLI arguments without exposing the mapped session", async () => {
+    const { adapter, runner, map, cwd } = await fixture([
+      processResult({
+        reportId: "browserrig--20260824T122400Z--abcdef",
+        created: true,
+        localPath: "/tmp/browserrig/issues/report.json",
+        classification: "operational",
+        occurrences: 1,
+        submission: { status: "not-eligible" },
+      }),
+    ])
+    const key = dshSessionMappingKey(runner.endpointKey(), "dsh-agent")
+    await map.set(key, "own-session")
+
+    const result = await adapter.issueReport(execContext("dsh-agent", cwd), {
+      classification: "operational",
+      component: "relay",
+      summary: "Relay recovered",
+      actual: "The first start failed.",
+      errorCode: "relay/start-failed",
+      recovery: "The retry succeeded.",
+    })
+
+    expect(runner.calls[0]?.args).toEqual([
+      "issue",
+      "report",
+      "--json",
+      "--surface=dsh",
+      "--classification=operational",
+      "--component=relay",
+      "--summary=Relay recovered",
+      "--actual=The first start failed.",
+      "--error-code=relay/start-failed",
+      "--recovery=The retry succeeded.",
+      "--session=own-session",
+    ])
+    expect(JSON.stringify(result)).not.toContain("own-session")
+    expect(JSON.stringify(result)).not.toContain("/tmp/browserrig")
+  })
+
   it("stores BrowserRig image results in DSH attachments and renders attachment blocks", async () => {
     const encoded = Buffer.from([1, 2, 3]).toString("base64")
     const { adapter, cwd } = await fixture([
@@ -309,6 +349,7 @@ describe("BrowserRig DSH adapter", () => {
       "browserrig_status",
       "browserrig_reset",
       "browserrig_journal",
+      "browserrig_issue_report",
     ])
     const executeTool = tools[0]!
     expect(executeTool.output.render({}, value as unknown as JsonValue)).toEqual(expect.arrayContaining([
@@ -376,7 +417,7 @@ describe("package-local BrowserRig CLI runner", () => {
     temporaryDirectories.push(cwd)
     const scriptPath = path.join(cwd, "fake-cli.mjs")
     await fs.writeFile(scriptPath, [
-      "process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd(), env: { session: process.env.BROWSERRIG_SESSION, targetUrl: process.env.BROWSERRIG_TARGET_URL, targetIndex: process.env.BROWSERRIG_TARGET_INDEX, port: process.env.BROWSERRIG_PORT } }))",
+      "process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd(), env: { session: process.env.BROWSERRIG_SESSION, targetUrl: process.env.BROWSERRIG_TARGET_URL, targetIndex: process.env.BROWSERRIG_TARGET_INDEX, port: process.env.BROWSERRIG_PORT, issueAutoSubmit: process.env.BROWSERRIG_ISSUE_AUTO_SUBMIT } }))",
       "process.stderr.write('diagnostic-output')",
     ].join("\n"))
     const runner = new PackageBrowserRigCliRunner(1_024, scriptPath)
@@ -385,6 +426,7 @@ describe("package-local BrowserRig CLI runner", () => {
     vi.stubEnv("BROWSERRIG_TARGET_URL", "private.example")
     vi.stubEnv("BROWSERRIG_TARGET_INDEX", "7")
     vi.stubEnv("BROWSERRIG_PORT", "29990")
+    vi.stubEnv("BROWSERRIG_ISSUE_AUTO_SUBMIT", "true")
 
     const result = await runner.run(["execute", "$(touch should-not-exist)", "; echo nope"], { cwd, signal })
       .finally(() => vi.unstubAllEnvs())
@@ -392,7 +434,7 @@ describe("package-local BrowserRig CLI runner", () => {
     expect(JSON.parse(result.stdout)).toEqual({
       argv: ["execute", "$(touch should-not-exist)", "; echo nope"],
       cwd: await fs.realpath(cwd),
-      env: { port: "29990" },
+      env: { port: "29990", issueAutoSubmit: "true" },
     })
     expect(result.stderr).toBe("diagnostic-output")
     expect(result.stdoutTruncated).toBe(false)

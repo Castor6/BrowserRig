@@ -8,6 +8,7 @@ describe("MCP tool results", () => {
     expect(mcpToolRequiresRelayCompatibility("secrets_run")).toBe(true)
     expect(mcpToolRequiresRelayCompatibility("status")).toBe(false)
     expect(mcpToolRequiresRelayCompatibility("session_current")).toBe(false)
+    expect(mcpToolRequiresRelayCompatibility("issue_report")).toBe(false)
     expect(mcpToolRequiresRelayCompatibility("skill")).toBe(false)
   })
 

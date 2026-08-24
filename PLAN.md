@@ -63,7 +63,7 @@ Verification:
 
 ### 2. Validate and launch the native DSH bundle
 
-The root `browserrig` package now contains the DSH bundle, host plugin, five
+The root `browserrig` package now contains the DSH bundle, host plugin, six
 native tools, built-in guidance, and durable per-agent session binding described
 under Recently Shipped. Keep the integration in this repository: DSH discovery,
 stars, issues, releases, and documentation should lead directly to BrowserRig,
@@ -148,10 +148,11 @@ Verification:
 
 The root npm package declares an official `dsh.bundle` patch and exports
 `browserrig/dsh`; there is no separate repository or package. The plugin
-registers code-first execute, active-tab adoption, scoped status, reset, and
-journal tools plus concise prompt guidance, so DSH users install neither a
-global BrowserRig CLI nor the standalone BrowserRig skill. The browser
-extension remains an explicit user-authorized installation.
+registers code-first execute, active-tab adoption, scoped status, reset,
+journal, and BrowserRig-owned issue-report tools plus concise prompt guidance,
+so DSH users install neither a global BrowserRig CLI nor the standalone
+BrowserRig skill. The browser extension remains an explicit user-authorized
+installation.
 
 The adapter invokes its package-local prebuilt CLI with fixed argv and validated
 bounded JSON envelopes instead of exposing shell passthrough. It forwards DSH
@@ -487,6 +488,14 @@ reconciles existing client announcements, browser grouping, and page status.
 - `browserrig skill` prints the concise, current agent workflow.
 - Each execute appends a best-effort bounded entry to
   `~/.browserrig/sessions/<id>/journal.jsonl`.
+- CLI `browserrig issue report`, MCP `issue_report`, and DSH
+  `browserrig_issue_report` share a relay-independent issue sink under
+  `~/.browserrig/issues/`. It sanitizes structured fields, references journal
+  timestamps without copying execute material, and aggregates matching
+  fingerprints. Operational records remain local; security records are never
+  public; suspected bugs may be submitted to `Castor6/BrowserRig` through an
+  installed authenticated `gh` only after the user sets
+  `BROWSERRIG_ISSUE_AUTO_SUBMIT=true`.
 - Recording supports extension `chrome.tabCapture` WebM for user-owned tabs and
   relay-owned CDP screencasting to WebM or MP4.
 

@@ -83,6 +83,20 @@ const CliJournalEnvelope = Schema.Struct({
   entries: Schema.Array(Schema.Json),
 })
 
+const CliIssueReportEnvelope = Schema.Struct({
+  reportId: Schema.String,
+  created: Schema.Boolean,
+  localPath: Schema.String,
+  classification: Schema.Literals(["operational", "suspected-bug", "security"]),
+  occurrences: Schema.Number,
+  submission: Schema.Struct({
+    status: Schema.Literals(["not-eligible", "disabled", "pending", "submitted", "unavailable", "failed", "unknown"]),
+    attemptedAt: Schema.optionalKey(Schema.String),
+    githubUrl: Schema.optionalKey(Schema.String),
+    reason: Schema.optionalKey(Schema.String),
+  }),
+})
+
 type CliExecuteEnvelope = Schema.Schema.Type<typeof CliExecuteEnvelope>
 type CliSession = Schema.Schema.Type<typeof CliSession>
 type CliErrorDetails = Schema.Schema.Type<typeof CliErrorDetails>
@@ -121,6 +135,18 @@ export interface BrowserRigExecuteValue {
 export interface BrowserRigAdapterConfig {
   readonly timeoutMs: number
   readonly maxOutputBytes: number
+}
+
+export interface BrowserRigIssueReportArguments {
+  readonly classification: "operational" | "suspected-bug" | "security"
+  readonly component: string
+  readonly summary: string
+  readonly actual: string
+  readonly error?: string | undefined
+  readonly errorCode?: string | undefined
+  readonly reproduction?: string | undefined
+  readonly expected?: string | undefined
+  readonly recovery?: string | undefined
 }
 
 interface AgentInvocation {
@@ -310,6 +336,36 @@ export class BrowserRigDshAdapter {
     const decoded = decodeJson(CliJournalEnvelope, result, "journal")
     return {
       entries: decoded.entries.map(entry => stripJournalSession(toJsonValue(entry))),
+    }
+  }
+
+  async issueReport(exec: ToolRunContext, input: BrowserRigIssueReportArguments): Promise<JsonValue> {
+    const invocation = this.invocation(exec)
+    const sessionId = await this.sessionMap.get(invocation.mappingKey, invocation.signal)
+    const args = [
+      "issue",
+      "report",
+      "--json",
+      ...cliFlag("--surface", "dsh"),
+      ...cliFlag("--classification", input.classification),
+      ...cliFlag("--component", input.component),
+      ...cliFlag("--summary", input.summary),
+      ...cliFlag("--actual", input.actual),
+      ...optionalCliFlag("--error", input.error),
+      ...optionalCliFlag("--error-code", input.errorCode),
+      ...optionalCliFlag("--reproduction", input.reproduction),
+      ...optionalCliFlag("--expected", input.expected),
+      ...optionalCliFlag("--recovery", input.recovery),
+      ...optionalCliFlag("--session", sessionId),
+    ]
+    const result = await this.runner.run(args, { cwd: invocation.cwd, signal: invocation.signal })
+    const decoded = decodeJson(CliIssueReportEnvelope, result, "issue report")
+    return {
+      reportId: decoded.reportId,
+      created: decoded.created,
+      classification: decoded.classification,
+      occurrences: decoded.occurrences,
+      submission: toJsonValue(decoded.submission),
     }
   }
 
@@ -583,11 +639,41 @@ export function createBrowserRigDshTools(options: {
     execute: (args, exec) => options.adapter.journal(exec, args.limit ?? 20),
   })
 
-  return [execute, adoptActive, status, reset, journal]
+  const issueReport = defineTool({
+    name: "browserrig_issue_report",
+    description: "Record or update a sanitized BrowserRig-owned issue report. Use operational for recoverable BrowserRig setup or lifecycle events, suspected-bug for repeated or unrecovered BrowserRig product behavior, and security for potentially sensitive findings. Ordinary locator, assertion, or changing-site failures belong in the journal, not this report. Eligible suspected-bug reports reach GitHub only when the user configured BROWSERRIG_ISSUE_AUTO_SUBMIT=true.",
+    parameters: {
+      classification: { type: "string", enum: ["operational", "suspected-bug", "security"], required: true },
+      component: { type: "string", required: true, description: "BrowserRig component, such as relay, extension, session, dsh, recording, or network." },
+      summary: { type: "string", required: true, description: "Concise BrowserRig problem summary." },
+      actual: { type: "string", required: true, description: "Observed BrowserRig behavior." },
+      error: { type: "string", description: "Optional exact safe error text." },
+      errorCode: { type: "string", description: "Optional stable lowercase BrowserRig error code." },
+      reproduction: { type: "string", description: "Optional deterministic reproduction." },
+      expected: { type: "string", description: "Optional expected BrowserRig behavior." },
+      recovery: { type: "string", description: "Optional recovery already attempted." },
+    },
+    output: {
+      schema: { type: "json" },
+      render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 2) }],
+    },
+    timeoutMs: options.config.timeoutMs,
+    execute: (args, exec) => options.adapter.issueReport(exec, args),
+  })
+
+  return [execute, adoptActive, status, reset, journal, issueReport]
 }
 
 function cliPositionalCode(code: string): string {
   return code.startsWith("-") ? ` ${code}` : code
+}
+
+function optionalCliFlag(name: string, value: string | undefined): string[] {
+  return value === undefined ? [] : cliFlag(name, value)
+}
+
+function cliFlag(name: string, value: string): string[] {
+  return [`${name}=${value}`]
 }
 
 function decodeJson<S extends Schema.ConstraintDecoder<unknown>>(

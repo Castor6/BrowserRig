@@ -67,8 +67,9 @@ local Node relay.
   `browserrig/dsh` and `cordis.patch.yml`; never split it into a separate
   `dsh-browserrig` product. Keep `src/dsh-*` as a leaf adapter so BrowserRig
   core never imports DSH. It registers only code-first execute, active adoption,
-  scoped status, reset, and journal plus concise prompt guidance; DSH users do
-  not install the standalone BrowserRig skill.
+  scoped status, reset, journal, and BrowserRig-owned issue reporting plus
+  concise prompt guidance; DSH users do not install the standalone BrowserRig
+  skill.
 - DSH invokes the exact package-local `dist/cli.js` with fixed argv, validated
   bounded JSON envelopes, and forwarded cancellation; never use PATH discovery,
   a shell, or arbitrary CLI passthrough. Strip `BROWSERRIG_SESSION`,
@@ -168,6 +169,14 @@ local Node relay.
 - The session journal (`src/session-journal.ts`) appends one JSON line per
   execute under `~/.browserrig/sessions/<id>/journal.jsonl`; writes are
   best-effort and must never fail the execute call.
+- BrowserRig issue reports are structured, sanitized, fingerprinted records
+  under `~/.browserrig/issues/`. CLI, MCP, and DSH expose one report operation;
+  none exposes a general issue manager. Operational reports remain local,
+  security reports are never public, and only `suspected-bug` reports may use
+  an installed authenticated `gh` when the user configured
+  `BROWSERRIG_ISSUE_AUTO_SUBMIT=true`. Reporting never requires or starts the
+  relay, never creates tracking files in the caller workspace, and never starts
+  GitHub authentication.
 - Relay-owned recording uses `Page.startScreencast`, immediately acknowledges
   compositor frames, activates the target to avoid background-tab throttling,
   and fits its viewport within 1280×720. Stream each distinct JPEG once in a
@@ -345,6 +354,7 @@ browserrig session list
 browserrig execute 'return { url: page.url(), title: await page.title() }'
 browserrig execute --json 'page.url()'
 browserrig journal
+browserrig issue report --classification operational --component relay --summary "Relay recovered" --actual "The retry succeeded"
 browserrig skill
 ```
 

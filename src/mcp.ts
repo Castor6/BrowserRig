@@ -6,6 +6,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import type { JsonObject } from "./protocol.ts"
 import { getObject, parseTargetSelection } from "./relay-helpers.ts"
+import { issueAutoSubmitConfig, parseIssueClassification, recordIssueReport } from "./issue-report.ts"
 import * as RelayClient from "./relay-client.ts"
 import * as RelayLifecycle from "./relay-lifecycle.ts"
 import { browserRigVersion } from "./version.ts"
@@ -87,8 +88,31 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
       destructive: false,
       idempotent: false,
       handle: () => Effect.gen(function* () {
-        const status = yield* relay.extensionStatus
-        return { endpoint: relay.endpoint, currentSession: currentSession.id, status }
+        const versionResult = yield* Effect.result(relay.version)
+        if (versionResult._tag === "Failure") {
+          if (versionResult.failure instanceof RelayClient.RelayUnreachable) {
+            return { ...RelayLifecycle.stoppedRelayStatus(relay.endpoint), currentSession: currentSession.id }
+          }
+          return yield* Effect.fail(versionResult.failure)
+        }
+        const extension = yield* relay.extensionStatus
+        const collections = RelayLifecycle.statusCollections(extension)
+        const [sessions, targets] = collections
+          ? [collections.sessions, collections.targets]
+          : yield* Effect.all([relay.sessions, relay.targets])
+        return {
+          endpoint: relay.endpoint,
+          relay: {
+            running: true,
+            version: versionResult.success.version,
+            buildId: versionResult.success.buildId ?? null,
+            stale: RelayLifecycle.relayBuildProblem(versionResult.success) !== undefined,
+          },
+          extension,
+          currentSession: currentSession.id,
+          sessions,
+          targets,
+        }
       }),
     },
     {
@@ -370,6 +394,55 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
       },
     },
     {
+      name: "issue_report",
+      description: "Record or update a sanitized BrowserRig-owned issue report. Operational reports stay local; suspected-bug reports are submitted to Castor6/BrowserRig only when BROWSERRIG_ISSUE_AUTO_SUBMIT=true. Security reports are never submitted publicly. Do not use this for ordinary locator, assertion, or changing-site failures.",
+      inputSchema: objectSchema({
+        classification: { type: "string", enum: ["operational", "suspected-bug", "security"], description: "Operational records stay local; suspected-bug is eligible for configured GitHub submission; security is always local-only." },
+        component: { type: "string", description: "BrowserRig component, such as relay, extension, session, cli, mcp, recording, or network." },
+        summary: { type: "string", description: "Concise BrowserRig problem summary." },
+        actual: { type: "string", description: "Observed BrowserRig behavior." },
+        error: { type: "string", description: "Optional exact safe error text." },
+        errorCode: { type: "string", description: "Optional stable lowercase BrowserRig error code." },
+        reproduction: { type: "string", description: "Optional deterministic reproduction." },
+        expected: { type: "string", description: "Optional expected BrowserRig behavior." },
+        recovery: { type: "string", description: "Optional recovery already attempted." },
+        session: { type: "string", description: "Optional primary affected BrowserRig session. Defaults to the current MCP session only after it has been established." },
+        relatedSessions: { type: "array", items: { type: "string" }, description: "Optional related BrowserRig sessions." },
+      }, ["classification", "component", "summary", "actual"]),
+      readOnly: false,
+      destructive: false,
+      idempotent: false,
+      handle: (input) => Effect.gen(function* () {
+        const object = requireObject(input)
+        const explicitSession = optionalStringField(object, "session")
+        const error = optionalStringField(object, "error")
+        const errorCode = optionalStringField(object, "errorCode")
+        const reproduction = optionalStringField(object, "reproduction")
+        const expected = optionalStringField(object, "expected")
+        const recovery = optionalStringField(object, "recovery")
+        const relatedSessions = optionalStringArrayField(object, "relatedSessions")
+        return yield* recordIssueReport({
+          classification: yield* Effect.try({
+            try: () => parseIssueClassification(requiredStringField(object, "classification")),
+            catch: (cause) => cause instanceof Error ? cause : new Error("Invalid issue classification", { cause }),
+          }),
+          component: requiredStringField(object, "component"),
+          summary: requiredStringField(object, "summary"),
+          actual: requiredStringField(object, "actual"),
+          ...(error ? { error } : {}),
+          ...(errorCode ? { errorCode } : {}),
+          ...(reproduction ? { reproduction } : {}),
+          ...(expected ? { expected } : {}),
+          ...(recovery ? { recovery } : {}),
+          ...(explicitSession || currentSession.established ? { primarySessionId: explicitSession ?? currentSession.id } : {}),
+          ...(relatedSessions ? { relatedSessionIds: relatedSessions } : {}),
+          surface: "mcp",
+        }, {
+          autoSubmit: yield* issueAutoSubmitConfig,
+        })
+      }),
+    },
+    {
       name: "skill",
       description: "Return the BrowserRig agent skill instructions.",
       inputSchema: emptyInputSchema,
@@ -383,13 +456,6 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
     },
   ]
 }
-
-const relayLayer = Layer.effectDiscard(
-  Effect.gen(function* () {
-    const relay = yield* RelayClient.Service
-    yield* RelayLifecycle.ensureRelay({ relay })
-  }),
-)
 
 const registerTools = Effect.gen(function* () {
   const server = yield* McpServer.McpServer
@@ -433,14 +499,11 @@ const registerTools = Effect.gen(function* () {
 })
 
 export function mcpToolRequiresRelayCompatibility(name: string): boolean {
-  return name !== "status" && name !== "session_current" && name !== "skill"
+  return name !== "status" && name !== "session_current" && name !== "issue_report" && name !== "skill"
 }
 
 export const runMcpServer: Effect.Effect<never, Error> = Layer.launch(
-  Layer.mergeAll(
-    relayLayer,
-    Layer.effectDiscard(registerTools),
-  ).pipe(
+  Layer.effectDiscard(registerTools).pipe(
     Layer.provide(McpServer.layerStdio({ name: "browserrig", version: browserRigVersion })),
     Layer.provide(NodeStdio.layer),
     Layer.provide(RelayClient.layerFetch),

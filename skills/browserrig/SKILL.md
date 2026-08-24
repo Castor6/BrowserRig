@@ -401,8 +401,39 @@ For deeper relay diagnosis, restart with `BROWSERRIG_DEBUG=1`. Debug traces
 must never include expressions, arguments, results, headers, cookies, or form
 values.
 
-Whenever BrowserRig fails, wedges, replaces a page/session, or behaves
-unexpectedly, create or update a `browserrig` project todo with the BrowserRig
-version, safe session/page context, exact error, deterministic
-reproduction, expected versus actual behavior, and recovery attempted. Never
-include credentials, form values, or private account data.
+When BrowserRig itself has a setup, relay, extension, session-lifecycle, target,
+recording, or network problem worth retaining, use BrowserRig's owned report
+sink. Never create or modify files in the caller workspace solely to track a
+BrowserRig problem. A report works even when the relay is stopped or unhealthy.
+
+Use `operational` for a recoverable BrowserRig event so it is retained locally.
+Use `suspected-bug` only when BrowserRig behavior repeats, recovery fails, or
+the evidence points to a product defect. Use `security` for potentially
+sensitive findings; security reports are never submitted publicly. Ordinary
+Playwright locator or assertion failures and changing-site DOM behavior belong
+in the session journal, not the BrowserRig issue sink.
+
+```bash
+browserrig issue report \
+  --classification operational \
+  --component relay \
+  --summary "Relay recovered after a failed start" \
+  --actual "The first start failed and the retry succeeded" \
+  --error-code relay/start-failed \
+  --recovery "Retried once"
+```
+
+In MCP, call `issue_report` with the same structured fields. BrowserRig stores
+reports under `~/.browserrig/issues/`, sanitizes and aggregates matching
+reports, and references relevant journal timestamps without copying execute
+material. If the user started the agent with
+`BROWSERRIG_ISSUE_AUTO_SUBMIT=true`, eligible `suspected-bug` reports may be
+submitted to `Castor6/BrowserRig` through an installed, authenticated `gh` CLI;
+the agent must never enable that setting itself. Missing `gh`, missing
+authentication, and submission failures never discard the local report or
+start an authentication flow.
+
+Never include credentials, form values, cookies, headers, private account data,
+or other sensitive browser content. If the report interface itself is
+unavailable, return the same concise structured report in the task response
+instead of persisting a tracking file in the caller workspace.

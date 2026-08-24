@@ -6,6 +6,12 @@ import path from "node:path"
 import process from "node:process"
 import { fileURLToPath } from "node:url"
 import { createDoctorReport, formatDoctorReport } from "./doctor.ts"
+import {
+  issueAutoSubmitConfig,
+  parseIssueClassification,
+  parseIssueSurface,
+  recordIssueReport,
+} from "./issue-report.ts"
 import { runMcpServer } from "./mcp.ts"
 import * as RelayClient from "./relay-client.ts"
 import * as RelayLifecycle from "./relay-lifecycle.ts"
@@ -913,6 +919,85 @@ const secrets = Command.make("secrets").pipe(
   Command.withSubcommands([secretsStatus, secretsRefresh, secretsRun]),
 )
 
+const issueReport = Command.make(
+  "report",
+  {
+    classification: Flag.string("classification").pipe(Flag.withDescription("Report classification: operational, suspected-bug, or security")),
+    component: Flag.string("component").pipe(Flag.withDescription("BrowserRig component, such as relay, extension, session, cli, mcp, or dsh")),
+    summary: Flag.string("summary").pipe(Flag.withDescription("Concise problem summary")),
+    actual: Flag.string("actual").pipe(Flag.withDescription("Observed BrowserRig behavior")),
+    error: Flag.string("error").pipe(Flag.optional, Flag.withDescription("Exact safe error text")),
+    errorCode: Flag.string("error-code").pipe(Flag.optional, Flag.withDescription("Stable lowercase BrowserRig error code")),
+    reproduction: Flag.string("reproduction").pipe(Flag.optional, Flag.withDescription("Deterministic reproduction steps")),
+    expected: Flag.string("expected").pipe(Flag.optional, Flag.withDescription("Expected BrowserRig behavior")),
+    recovery: Flag.string("recovery").pipe(Flag.optional, Flag.withDescription("Recovery already attempted")),
+    session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Primary affected BrowserRig session")),
+    relatedSessions: Flag.string("related-session").pipe(Flag.atMost(20), Flag.withDescription("Related BrowserRig session; repeat for multiple sessions")),
+    surface: Flag.string("surface").pipe(Flag.optional, Flag.withDescription("Reporting surface metadata: cli or dsh; defaults to cli")),
+    json: Flag.boolean("json").pipe(Flag.withDescription("Print a machine-readable report result")),
+  },
+  Effect.fn("Cli.issueReport")(function* ({
+    classification,
+    component,
+    summary,
+    actual,
+    error,
+    errorCode,
+    reproduction,
+    expected,
+    recovery,
+    session,
+    relatedSessions,
+    surface,
+    json,
+  }) {
+    const primarySessionId = optionString(session) ?? Option.getOrUndefined(yield* sessionIdConfig)
+    const errorValue = optionString(error)
+    const errorCodeValue = optionString(errorCode)
+    const reproductionValue = optionString(reproduction)
+    const expectedValue = optionString(expected)
+    const recoveryValue = optionString(recovery)
+    const result = yield* recordIssueReport({
+      classification: yield* Effect.try({
+        try: () => parseIssueClassification(classification),
+        catch: (cause) => cause instanceof Error ? cause : new Error("Invalid issue classification", { cause }),
+      }),
+      component,
+      summary,
+      actual,
+      ...(errorValue ? { error: errorValue } : {}),
+      ...(errorCodeValue ? { errorCode: errorCodeValue } : {}),
+      ...(reproductionValue ? { reproduction: reproductionValue } : {}),
+      ...(expectedValue ? { expected: expectedValue } : {}),
+      ...(recoveryValue ? { recovery: recoveryValue } : {}),
+      ...(primarySessionId ? { primarySessionId } : {}),
+      relatedSessionIds: relatedSessions,
+      surface: yield* Effect.try({
+        try: () => parseIssueSurface(optionString(surface) ?? "cli"),
+        catch: (cause) => cause instanceof Error ? cause : new Error("Invalid issue surface", { cause }),
+      }),
+    }, {
+      autoSubmit: yield* issueAutoSubmitConfig,
+    })
+    if (json) {
+      yield* Console.log(JSON.stringify(result, null, 2))
+      return
+    }
+    yield* Console.log(`${result.created ? "Recorded" : "Updated"} BrowserRig issue report ${result.reportId}`)
+    yield* Console.log(`Local report: ${result.localPath}`)
+    if (result.submission.githubUrl) {
+      yield* Console.log(`GitHub issue: ${result.submission.githubUrl}`)
+    } else if (result.submission.status !== "not-eligible" && result.submission.status !== "disabled") {
+      yield* Console.log(`GitHub submission: ${result.submission.status}${result.submission.reason ? ` (${result.submission.reason})` : ""}`)
+    }
+  }),
+).pipe(Command.withDescription("Record a structured BrowserRig issue and optionally submit an eligible report to GitHub"))
+
+const issue = Command.make("issue").pipe(
+  Command.withDescription("Record BrowserRig product and operational issues"),
+  Command.withSubcommands([issueReport]),
+)
+
 const journal = Command.make(
   "journal",
   {
@@ -987,7 +1072,7 @@ const mcp = Command.make(
 
 const browserRig = Command.make("browserrig").pipe(
   Command.withDescription("Control the user's existing browser through the BrowserRig extension"),
-  Command.withSubcommands([serve, execute, session, status, network, secrets, recording, journal, doctor, skill, mcp]),
+  Command.withSubcommands([serve, execute, session, status, network, secrets, recording, issue, journal, doctor, skill, mcp]),
 )
 
 const mainLayer = Layer.mergeAll(RelayClient.layerFetch, SessionStore.layer).pipe(

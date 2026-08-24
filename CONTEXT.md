@@ -40,6 +40,17 @@ separately install the BrowserRig skill or a global CLI; direct CLI agents
 continue to use the skill.
 _Avoid_: DSH fork, separate dsh-browserrig product, required global CLI
 
+**Issue Report**:
+A structured, sanitized BrowserRig-owned record under
+`~/.browserrig/issues/`. CLI, MCP, and DSH share one report operation that
+fingerprints repeated observations and may upgrade a local operational record
+to a suspected product bug. Reporting does not depend on the Local Driver
+Daemon. Operational records remain local; security records are never public;
+suspected bugs reach the canonical GitHub repository only when the user opted
+in through `BROWSERRIG_ISSUE_AUTO_SUBMIT=true` and `gh` is available and
+authenticated.
+_Avoid_: caller project todo, automatic telemetry, generic issue manager
+
 **Driver**:
 A deterministic BrowserRig layer that executes requests from an external
 agent without planning or calling a model.

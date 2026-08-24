@@ -49,6 +49,7 @@ export function apply(ctx: Context, config: Config): void {
       "BrowserRig controls the user's existing signed-in Chromium browser through a local extension; it is a driver, so you still decide and verify every action.",
       "Use browserrig_execute with Playwright code and follow inspect → act → verify. Prefer snapshot() before choosing locators, keep transient dependent interactions in one call, and return URL or page evidence rather than treating a click as success.",
       "Use browserrig_adopt_active when the task needs the user's current authenticated tab. For passkeys, 2FA, CAPTCHAs, payment confirmation, or other human-only steps, register handoff() before triggering the prompt and verify the result afterward.",
+      "When BrowserRig itself has a recoverable setup or lifecycle problem, call browserrig_issue_report with classification operational so BrowserRig retains a local record. Use suspected-bug only for repeated or unrecovered BrowserRig product behavior; GitHub submission occurs only when the user opted in. Use security for sensitive findings, which are never submitted publicly. Do not report ordinary locator, assertion, or changing-site failures.",
       "The plugin binds one persistent BrowserRig session to each DSH agent session. Never ask for, expose, or manage BrowserRig session ids, and do not install a separate BrowserRig skill for this DSH workflow.",
     ].join("\n\n"),
   })

@@ -67,7 +67,7 @@ dsh --profile web --dump-config
 
 This route needs neither a global `browserrig` CLI nor a separately installed
 BrowserRig skill. The bundle carries its matching package-local CLI runtime,
-five typed `browserrig_*` tools, and concise operating guidance. It binds one
+six typed `browserrig_*` tools, and concise operating guidance. It binds one
 persistent BrowserRig session to each DSH agent session without exposing or
 asking the model to remember BrowserRig session IDs.
 
@@ -199,6 +199,8 @@ browser driver or an MCP wrapper. It contributes these tools directly to DSH:
   browser state.
 - `browserrig_reset` resets that session without closing an adopted user tab.
 - `browserrig_journal` reads its recent BrowserRig execute history.
+- `browserrig_issue_report` records a sanitized BrowserRig product or
+  operational issue without exposing the internal session id.
 
 Each DSH agent session maps durably to one BrowserRig session at the configured
 relay endpoint. First use creates the mapping atomically; an explicitly missing
@@ -447,6 +449,44 @@ updating values observed at the same source. If reauthentication requires a
 human flow, log in through the browser and repeat the capture with the same
 profile name instead. Child stdout and stderr are redacted before BrowserRig
 returns them.
+
+## Report BrowserRig Problems
+
+Agents can retain a BrowserRig-owned operational record without writing a todo
+or tracking file into the caller repository:
+
+```bash
+browserrig issue report \
+  --classification operational \
+  --component relay \
+  --summary "Relay recovered after a failed start" \
+  --actual "The first start failed and the retry succeeded" \
+  --error-code relay/start-failed \
+  --recovery "Retried once"
+```
+
+CLI, MCP `issue_report`, and DSH `browserrig_issue_report` share the same local
+sink under `~/.browserrig/issues/`. Reports are sanitized, written with
+restrictive permissions, and aggregated by a stable fingerprint. Relevant
+session journal timestamps are referenced without copying execute code or
+results. Reporting does not require or start the relay.
+
+Use `operational` for recoverable BrowserRig events, `suspected-bug` for
+repeated or unrecovered BrowserRig product behavior, and `security` for
+potentially sensitive findings. Ordinary locator, assertion, and changing-site
+failures stay in the session journal. Security reports never create public
+issues.
+
+GitHub submission is off by default. A user may opt in when starting the agent:
+
+```bash
+export BROWSERRIG_ISSUE_AUTO_SUBMIT=true
+```
+
+Only eligible `suspected-bug` reports then check for an installed, authenticated
+`gh` and deduplicate against `Castor6/BrowserRig` before creating an issue.
+BrowserRig never enables this setting, starts GitHub authentication, or discards
+the local report when GitHub is unavailable.
 
 ## Safety Boundaries
 

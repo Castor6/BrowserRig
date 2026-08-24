@@ -25,7 +25,7 @@ describe("BrowserRig DSH bundle", () => {
     expect(patch).toBe("- insert:\n    - id: browserrig\n      name: browserrig/dsh\n")
   })
 
-  it("registers five native tools and scoped DSH guidance", () => {
+  it("registers six native tools and scoped DSH guidance", () => {
     const register = vi.fn()
     const section = vi.fn()
     let dispose: (() => void) | undefined
@@ -52,11 +52,12 @@ describe("BrowserRig DSH bundle", () => {
       "browserrig_status",
       "browserrig_reset",
       "browserrig_journal",
+      "browserrig_issue_report",
     ])
     expect(section).toHaveBeenCalledWith(expect.objectContaining({
       name: "tool:browserrig",
       order: 145,
-      text: expect.stringMatching(/inspect → act → verify[\s\S]*do not install a separate BrowserRig skill/),
+      text: expect.stringMatching(/inspect → act → verify[\s\S]*browserrig_issue_report[\s\S]*do not install a separate BrowserRig skill/),
     }))
 
     expect(dispose).toBeTypeOf("function")

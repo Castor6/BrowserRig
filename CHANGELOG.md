@@ -1,5 +1,11 @@
 # BrowserRig
 
+## 0.3.0
+
+### Minor Changes
+
+- 4e14a8c: Add BrowserRig-owned issue reporting across CLI, MCP, and DSH with local aggregation and opt-in GitHub submission.
+
 ## 0.2.2
 
 ### Patch Changes

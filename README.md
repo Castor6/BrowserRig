@@ -11,6 +11,8 @@ BrowserRig is the independent open-source product—not an authorization middle
 layer for another browser-agent ecosystem. It is derived from the MIT-licensed
 upstream driver while owning its CLI, npm, extension, and Store identity.
 
+## Why BrowserRig
+
 It is built for the awkward gap between browser automation and a person's daily
 browser:
 
@@ -28,6 +30,18 @@ browser:
 - **A complete local driver, not an agent wrapper.** The CLI, Playwright execute
   sessions, MCP server, recording, network capture, and human handoff remain
   available without bundling an LLM or requiring a hosted service.
+
+### How BrowserRig compares
+
+BrowserRig combines an open-source, CLI/skill-first driver with durable access
+to the signed-in browser you already use. The comparison below focuses on that
+core workflow.
+
+| Capability | BrowserRig | Kimi WebBridge | agent-browser | Chrome DevTools MCP |
+| --- | :---: | :---: | :---: | :---: |
+| Open-source core | ✅ | ❌ | ✅ | ✅ |
+| CLI / skill-first | ✅ | ✅ | ✅ | ❌<br><sub>MCP-first; tool schemas consume context</sub> |
+| Reconnect to your signed-in Chrome without another browser approval | ✅ | ✅ | ❌<br><sub>Reconnects and browser restarts can require another “Allow remote debugging?” click</sub> | ❌<br><sub>Each auto-connect attempt requires Remote Debugging approval</sub> |
 
 The extension still uses Chrome's `debugger` API to carry CDP commands. The
 difference is the transport and authorization scope: extension attachment

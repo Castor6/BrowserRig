@@ -1,5 +1,7 @@
 # BrowserRig
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 ![BrowserRig — Agents, meet your real browser](docs/chrome-web-store/top-promo-1400x560.png)
 
 BrowserRig lets trusted coding agents run Playwright against your existing

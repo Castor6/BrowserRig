@@ -156,8 +156,9 @@ _Avoid_: Debugger permission, Extension Attachment, browser-wide approval
 
 **Store Origin Pin**:
 The exact `chrome-extension://<item-id>` origin accepted by a production Local
-Driver Daemon. The independent Store draft supplies this Item ID; development
-exceptions for unpacked extensions must never broaden the release allowlist.
+Driver Daemon. The public BrowserRig Store listing supplies this Item ID;
+development exceptions for unpacked extensions must never broaden the release
+allowlist.
 _Avoid_: Extension Protocol, arbitrary extension origin, publisher private key
 
 **Control Group**:

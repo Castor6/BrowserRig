@@ -275,15 +275,22 @@ local Node relay.
   immutable candidate, uploads its npm tarball, extension ZIP, manifest, and
   checksums, then publishes that exact npm tarball through the direct-publish
   npm Trusted Publisher configured for `.github/workflows/release.yml` and the
-  `npm-publishing` environment. Never add an npm token or bypass-2FA token.
+  `npm-publishing` environment. After npm succeeds, the same workflow submits
+  the exact retained extension ZIP through Chrome Web Store API V2 with
+  `DEFAULT_PUBLISH`, using GitHub OIDC, a keyless Google service account, and
+  the `chrome-web-store-publishing` environment. Never add an npm token,
+  bypass-2FA token, Google service-account key, OAuth client secret, or refresh
+  token.
 - Treat merging `Version Packages` as the explicit, irreversible npm
-  publication approval. Review its versions, changelogs, package diff, and
-  green CI before merging; the release workflow reruns full CI, packaging,
-  manifest verification, and exact artifact checks before `npm publish`. Do
-  not merge another `Version Packages` pull request while publication or
-  GitHub finalization is in progress. If `npm publish` returns an ambiguous
-  failure, inspect the exact version and registry tarball before rerunning
-  because npm versions are immutable.
+  publication and Chrome Web Store submission approval. Review its versions,
+  changelogs, package diff, and green CI before merging; the release workflow
+  reruns full CI, packaging, manifest verification, and exact artifact checks
+  before `npm publish`, then verifies the retained candidate again before Store
+  upload. Google review remains mandatory and approval publishes the extension
+  automatically. Do not merge another `Version Packages` pull request while
+  publication, Store submission, or GitHub finalization is in progress. If
+  `npm publish` returns an ambiguous failure, inspect the exact version and
+  registry tarball before rerunning because npm versions are immutable.
   After the npm tarball is publicly visible, the scheduled GitHub
   finalizer verifies its integrity against the original candidate before it
   creates the npm-version tag and Release or uploads any assets. It must fail

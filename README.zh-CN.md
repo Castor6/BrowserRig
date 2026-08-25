@@ -55,9 +55,9 @@ BrowserRig 将开源、CLI/Skill 优先的驱动方式，与对现有已登录�
 BrowserRig 需要 Node.js 22.22.0 或更高版本，以及 Chrome、Brave、Edge、Arc
 或 Chromium 等 Chromium 系浏览器。
 
-设置分为两个必要部分：先把 BrowserRig 连接到你使用的智能体运行时，再加载随包
-提供的浏览器扩展。DeepSeek Harness 使用原生 DSH Bundle；其他编程智能体可以
-使用 CLI Skill 或 MCP 服务器。
+设置分为两个必要部分：先把 BrowserRig 连接到你使用的智能体运行时，再安装浏览器
+扩展。DeepSeek Harness 使用原生 DSH Bundle；其他编程智能体可以使用 CLI Skill
+或 MCP 服务器。
 
 ### 1. 连接你的智能体
 
@@ -133,9 +133,14 @@ claude mcp add browserrig -- browserrig-mcp
 CLI 和 MCP 客户端共用分离运行的中继，但每个执行会话都有自己的默认页面和持久
 JavaScript `state`。重启 MCP 进程不会停止中继，也不会中断正在进行的 CLI 会话。
 
-### 2. 加载扩展
+### 2. 安装扩展
 
-BrowserRig 目前将浏览器扩展以未打包扩展的形式包含在 npm 包中。
+[从 Chrome 应用商店安装 BrowserRig](https://chromewebstore.google.com/detail/browserrig/dbobcmjamjdknplkplgdihdnmdjklpin)，
+然后可按需固定工具栏按钮，以便手动附加或分离标签页。每个新版本通过 Chrome
+应用商店审核后，商店安装的扩展会自动更新。
+
+如果需要进行源码开发，或当前浏览器无法使用该商店页面，可以改为加载包内的开发
+版本：
 
 1. 输出与你所选安装方式对应的扩展目录：
 
@@ -485,9 +490,6 @@ Chrome 的调试提示条；关闭提示条将分离标签页，之后再次运�
 
 当前限制：
 
-- 扩展目前以未打包方式安装；Chrome Web Store 分发需要等审核完成后才可用。
-  独立商店草稿和生产 Origin 已固定到 BrowserRig Item ID
-  `dbobcmjamjdknplkplgdihdnmdjklpin`；首次商店发布将以不公开 Beta 开始。
 - 一个中继同一时间只使用一个已连接的浏览器 Profile 扩展。存在多个 Chrome
   Profile 时，`--active` 作用于扩展当前所连接的 Profile，以及该 Profile 最近
   聚焦的窗口。
@@ -505,19 +507,19 @@ Chrome 的调试提示条；关闭提示条将分离标签页，之后再次运�
 - **`browserrig: command not found`**：对于直接 CLI/MCP 设置，确认 npm 的
   全局二进制目录位于 `PATH`，然后再次运行全局安装。原生 DSH 设置不需要此全局
   命令。
-- **扩展已断开**：确认未打包扩展已经启用，然后从浏览器的扩展页面重新加载。扩展
-  会自动重新连接正在运行的中继。
+- **扩展已断开**：确认商店扩展已经安装并启用；如果其重连循环没有自行恢复，再从
+  浏览器的扩展页面重新加载。进行源码开发时，则重新加载未打包开发版本。
 - **另一个工具正在调试浏览器**：如果 BrowserRig 反复连接和断开，同时 Chrome
   显示另一个产品正在调试浏览器，请结束该浏览器级调试会话并重新加载 BrowserRig。
   Chrome 不允许 BrowserRig 同时附加相同目标。
 - **当前标签页由另一个调试器控制**：关闭 DevTools，或分离该标签页上的其他调试
   扩展，然后再次运行 `session adopt --active`。
-- **npm 升级后**：重新加载未打包扩展。只要报告的协议版本相同，扩展和中继版本
-  可以不同。
+- **npm 升级后**：商店安装的扩展会独立更新，无需手动重新加载。只要报告的协议
+  版本相同，扩展和中继的发布版本可以不同。
 - **中继过期警告**：运行 `browserrig doctor`，停止它识别出的旧中继进程，然后
   再次运行需要中继的命令。
 
-在 PowerShell 中，使用下面的命令输出未打包扩展路径：
+使用 PowerShell 进行开发安装时，可用下面的命令输出未打包扩展路径：
 
 ```powershell
 # DeepSeek Harness profile

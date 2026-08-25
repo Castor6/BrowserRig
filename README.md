@@ -65,8 +65,8 @@ BrowserRig requires Node.js 22.22.0 or newer and a Chromium-family browser such
 as Chrome, Brave, Edge, Arc, or Chromium.
 
 Setup has two required parts: connect BrowserRig to the agent runtime you use,
-then load the included browser extension. DeepSeek Harness uses the native DSH
-bundle; other coding agents can use the CLI skill or MCP server.
+then install the browser extension. DeepSeek Harness uses the native DSH bundle;
+other coding agents can use the CLI skill or MCP server.
 
 ### 1. Connect your agent
 
@@ -147,10 +147,15 @@ CLI and MCP clients share the detached relay, but each execute session keeps its
 own default page and persistent JavaScript `state`. Restarting an MCP process
 does not stop the relay or interrupt an active CLI session.
 
-### 2. Load the extension
+### 2. Install the extension
 
-BrowserRig currently ships its extension as an unpacked extension inside
-the npm package.
+[Install BrowserRig from the Chrome Web Store](https://chromewebstore.google.com/detail/browserrig/dbobcmjamjdknplkplgdihdnmdjklpin),
+then optionally pin its toolbar button for manual attach/detach. Store installs
+receive extension updates automatically after each new version passes Chrome
+Web Store review.
+
+For source development or a browser that cannot use the Store listing, load the
+packaged development build instead:
 
 1. Print the extension directory for the installation route you chose:
 
@@ -534,10 +539,6 @@ of Node.js filesystem and network APIs.
 
 Current limitations:
 
-- The extension is installed unpacked; Chrome Web Store distribution is not
-  available until review completes. The independent Store draft and production
-  origin are pinned to BrowserRig Item ID `dbobcmjamjdknplkplgdihdnmdjklpin`;
-  the first Store release will begin as an unlisted beta.
 - One relay uses one connected browser-profile extension at a time. With
   multiple Chrome profiles, `--active` applies to the profile whose extension
   is currently connected and that profile's last-focused window.
@@ -557,21 +558,22 @@ Current limitations:
 - **`browserrig: command not found`**: for direct CLI/MCP setup, confirm npm's
   global binary directory is on `PATH`, then rerun the global install. Native
   DSH setup does not require this global command.
-- **Extension disconnected**: confirm the unpacked extension is enabled, then
-  reload it from the browser's extensions page. The extension reconnects to a
-  running relay automatically.
+- **Extension disconnected**: confirm the Store extension is installed and
+  enabled, then reload it from the browser's extensions page if its reconnect
+  loop does not recover. For source development, reload the unpacked build.
 - **Another tool is debugging the browser**: if BrowserRig repeatedly connects
   and disconnects while Chrome shows that another product is debugging the
   browser, end that browser-wide debugging session and reload BrowserRig.
   Chrome does not let BrowserRig attach the same targets concurrently.
 - **Active tab is controlled by another debugger**: close DevTools or detach the
   other debugging extension for that tab, then rerun `session adopt --active`.
-- **After an npm upgrade**: reload the unpacked extension. Extension and relay
-  versions may differ when they use the same reported protocol version.
+- **After an npm upgrade**: a Store installation updates independently and does
+  not need to be reloaded manually. Extension and relay release versions may
+  differ when they use the same reported protocol version.
 - **Stale relay warning**: run `browserrig doctor`, stop the old relay
   process it identifies, then rerun a relay-backed command.
 
-For PowerShell, print the unpacked extension path with:
+For PowerShell development installs, print the unpacked extension path with:
 
 ```powershell
 # DeepSeek Harness profile

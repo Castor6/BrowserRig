@@ -17,8 +17,11 @@ beforeAll(async () => {
 })
 
 describe("release workflows", () => {
-  it("publishes only an immutable candidate from a merged Version Packages pull request", () => {
-    const publishJob = candidateWorkflow.slice(candidateWorkflow.indexOf("  publish-npm:"))
+  it("publishes npm only from an immutable candidate after a Version Packages merge", () => {
+    const publishJob = candidateWorkflow.slice(
+      candidateWorkflow.indexOf("  publish-npm:"),
+      candidateWorkflow.indexOf("  publish-extension:"),
+    )
 
     expect(publishJob).toContain("github.event_name == 'pull_request'")
     expect(publishJob).toContain("github.event.pull_request.merged == true")
@@ -29,7 +32,7 @@ describe("release workflows", () => {
     expect(publishJob).toContain("id-token: write")
     expect(publishJob).toContain("actions/download-artifact@v8")
     expect(publishJob).not.toMatch(/NPM_TOKEN|NODE_AUTH_TOKEN/)
-    expect(candidateWorkflow.match(/browserrig-release-candidate-v1-/g)).toHaveLength(2)
+    expect(candidateWorkflow.match(/browserrig-release-candidate-v1-/g)).toHaveLength(3)
     expect(publishJob).toContain("node scripts/release-manifest.ts --verify --artifacts artifacts")
     expect(publishJob).toContain("value.manifest.commit !== process.argv[2]")
     expect(publishJob).not.toContain("pnpm install")
@@ -38,14 +41,43 @@ describe("release workflows", () => {
     expect(publishJob.trimEnd()).toMatch(/--registry=https:\/\/registry\.npmjs\.org$/)
   })
 
+  it("submits the same verified extension candidate for automatic Store publishing", () => {
+    const publishJob = candidateWorkflow.slice(candidateWorkflow.indexOf("  publish-extension:"))
+
+    expect(publishJob).toContain("github.event_name == 'pull_request'")
+    expect(publishJob).toContain("github.event.pull_request.merged == true")
+    expect(publishJob).toContain("github.event.pull_request.head.ref == 'changeset-release/main'")
+    expect(publishJob).toContain("github.event.pull_request.head.repo.full_name == github.repository")
+    expect(publishJob).toContain("- package\n      - publish-npm")
+    expect(publishJob).toContain("environment: chrome-web-store-publishing")
+    expect(publishJob).toContain("id-token: write")
+    expect(publishJob).toContain("actions/download-artifact@v8")
+    expect(publishJob).toContain("google-github-actions/auth@v3")
+    expect(publishJob).toContain("workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}")
+    expect(publishJob).toContain("service_account: ${{ vars.CHROME_WEB_STORE_SERVICE_ACCOUNT }}")
+    expect(publishJob).toContain("access_token_scopes: https://www.googleapis.com/auth/chromewebstore")
+    expect(publishJob).toContain("create_credentials_file: false")
+    expect(publishJob).toContain("node scripts/publish-chrome-web-store.ts")
+    expect(publishJob).toContain("--commit ${{ github.event.pull_request.merge_commit_sha }}")
+    expect(publishJob).toContain("--item-id dbobcmjamjdknplkplgdihdnmdjklpin")
+    expect(publishJob).not.toContain("github.event_name == 'workflow_dispatch'")
+    expect(publishJob).not.toMatch(/credentials_json|SERVICE_ACCOUNT_KEY|REFRESH_TOKEN|CLIENT_SECRET/)
+    expect(publishJob).not.toContain("pnpm install")
+  })
+
   it("retains the complete candidate without publishing a manual rebuild", () => {
     expect(candidateWorkflow).toContain("retention-days: 90")
     expect(candidateWorkflow).toContain("artifacts/release-manifest.json")
     expect(candidateWorkflow).toContain("artifacts/SHA256SUMS")
     expect(candidateWorkflow).toContain("github.event_name == 'workflow_dispatch'")
 
-    const publishJob = candidateWorkflow.slice(candidateWorkflow.indexOf("  publish-npm:"))
-    expect(publishJob).not.toContain("github.event_name == 'workflow_dispatch'")
+    const npmPublishJob = candidateWorkflow.slice(
+      candidateWorkflow.indexOf("  publish-npm:"),
+      candidateWorkflow.indexOf("  publish-extension:"),
+    )
+    const extensionPublishJob = candidateWorkflow.slice(candidateWorkflow.indexOf("  publish-extension:"))
+    expect(npmPublishJob).not.toContain("github.event_name == 'workflow_dispatch'")
+    expect(extensionPublishJob).not.toContain("github.event_name == 'workflow_dispatch'")
   })
 
   it("finalizes from main with GitHub-only least privilege", () => {

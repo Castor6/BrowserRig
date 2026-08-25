@@ -28,79 +28,30 @@ into the extension without a concrete browser-API reason.
 Work these in order unless field evidence changes the priority. Every item
 should land with unit or smoke evidence appropriate to the behavior.
 
-### 1. Complete the independent no-click personal-browser release
+### 1. Finish DSH ecosystem validation and launch
 
-- Land `session adopt --active` in CLI and MCP. The extension must capture and
-  attach the active tab id in one protocol request; the relay still verifies the
-  target generation, binds initialization to that extension connection
-  generation, and uses the existing adoption transaction.
-- Preserve background tab creation in the user's existing profile so normal
-  automation does not steal focus.
-- Keep recording usable on no-click adopted tabs: `auto` may fall back from tab
-  capture to CDP when Chrome reports a missing Tab-Capture Grant and audio was
-  not requested. Explicit tab-capture and audio recording continue to require a
-  toolbar invocation because Chrome grants `activeTab` only on user action.
-- Use the selected independent `BrowserRig` brand consistently: npm package and
-  CLI `browserrig`, MCP executable `browserrig-mcp`, `BROWSERRIG_*` environment
-  variables, `~/.browserrig` local state, and repository slug `browserrig`.
-  Use `Castor6/BrowserRig` as the independent GitHub publishing identity.
-- Rewrite first-run documentation and Store disclosures around the actual
-  differentiators and the broad trusted-local permissions.
+The native bundle, public npm package, clean-profile installation, and repository
+discovery topics are shipped. Keep DSH discovery, stars, issues, releases, and
+documentation pointed at this repository rather than creating a separate
+`dsh-browserrig` product. The remaining launch work is runtime field evidence
+and a useful, reproducible demonstration:
 
-Verification:
-
-- Cover active attach, repeat attach, selection exclusivity, protocol
-  compatibility, and CLI/MCP wire shapes without a real browser.
-- Manually verify current-tab attach in Chrome and Brave across multiple
-  windows, a tab already occupied by DevTools, debugger-infobar dismissal,
-  competing sessions, and reset/delete of a user-owned tab.
-- Build the npm package and deterministic Chrome Web Store ZIP from a clean
-  checkout.
-- Keep the independent Chrome Web Store identity
-  `dbobcmjamjdknplkplgdihdnmdjklpin` derived from the committed manifest key,
-  and verify that an unpacked release build reports that ID and connects to the
-  production relay before every Store upload.
-
-### 2. Validate and launch the native DSH bundle
-
-The root `browserrig` package now contains the DSH bundle, host plugin, six
-native tools, built-in guidance, and durable per-agent session binding described
-under Recently Shipped. Keep the integration in this repository: DSH discovery,
-stars, issues, releases, and documentation should lead directly to BrowserRig,
-not a separate `dsh-browserrig` product.
-
-Before ecosystem launch:
-
-- Verify the packed npm artifact contains `dist/dsh.js`, its declaration file,
-  `cordis.patch.yml`, the package-local BrowserRig CLI, extension artifacts, and
-  no install lifecycle script.
-- Install that exact tarball through
-  `dsh plugin --profile <name> add <tarball>` in clean `web` and `headless`
-  profiles, inspect `--dump-config`, and boot each profile.
 - Run one real signed-in-browser workflow through DSH, including active-tab
   adoption, inspect-act-verify execution, a screenshot attachment, and session
   continuation after restarting DSH.
-- Publish the prebuilt npm release before recommending registry installation.
-  Git-source installs should not be the normal path because DSH correctly
-  requires explicit permission for dependency build scripts.
-- After those gates pass, add `dsh-plugin`, `deepseek-harness`,
-  `browser-automation`, `playwright`, and `ai-agents` topics to this repository
-  and publish a reproducible useful demo in DSH discovery channels.
-- Treat ecosystem exposure as the result of task isolation, recovery,
-  diagnostics, and signed-in-browser usefulness. Optimize for successful and
-  retained use, not marketplace impressions alone.
-
-Verification:
-
-- Extend browser-free coverage for malformed CLI output, output truncation,
-  sandbox denial, stale relay, abort during a running child process, and plugin
-  unload after work has started.
+- Publish that workflow as a reproducible demo in DSH discovery channels.
+- Add the remaining DSH-specific negative coverage for host sandbox denial and
+  stale package-local relay reporting. Malformed or truncated CLI output, child
+  cancellation, and plugin unload after work starts already have direct tests.
 - Verify no plugin call changes the saved human current session and unload never
   closes adopted tabs, deletes resumable sessions, or stops the detached relay.
 - Repeat the packaged install and signed-in-browser smoke for every advertised
   DSH profile before each ecosystem-facing release.
+- Treat ecosystem exposure as the result of task isolation, recovery,
+  diagnostics, and signed-in-browser usefulness. Optimize for successful and
+  retained use, not marketplace impressions alone.
 
-### 3. Split the relay into testable responsibilities
+### 2. Split the relay into testable responsibilities
 
 Extract cohesive modules from `makeRelay` without changing the protocol:
 
@@ -122,7 +73,7 @@ Verification:
 - Extend reconnect, OOPIF, and multi-client smoke cases to cover root detach and
   conflicting client auto-attach settings.
 
-### 4. Extend recording surfaces
+### 3. Extend recording surfaces
 
 - Add MCP recording start, stop, status, and cancel tools after the relay path is
   robust.
@@ -132,7 +83,7 @@ Verification:
 
 - Confirm CLI and MCP recording behavior match.
 
-### 5. Resolve smaller agent-experience gaps
+### 4. Resolve smaller agent-experience gaps
 
 Verification:
 
@@ -143,6 +94,18 @@ Verification:
   human-shell current session unexpectedly.
 
 ## Recently Shipped
+
+### The independent no-click BrowserRig release is public
+
+No-click active-tab adoption is available through the CLI, MCP, and DSH bundle.
+Background tab creation preserves focus, automatic no-audio recording can fall
+back to CDP when an adopted tab has no Tab-Capture Grant, and the BrowserRig
+brand, first-run documentation, Store disclosures, deterministic packaging, and
+production origin all use the independent product identity.
+
+The extension is publicly available from the
+[Chrome Web Store](https://chromewebstore.google.com/detail/browserrig/dbobcmjamjdknplkplgdihdnmdjklpin)
+under the committed Item ID `dbobcmjamjdknplkplgdihdnmdjklpin`.
 
 ### BrowserRig is a native DeepSeek Harness bundle
 
@@ -165,6 +128,13 @@ later calls continue it without exposing BrowserRig IDs to the model. First-use
 operations serialize per DSH session, unrelated sessions stay isolated, and a
 mapping is replaced only after a stable `session-not-found` response. Corrupt
 mapping files fail closed and are never overwritten.
+
+The public `browserrig@0.3.0` npm tarball contains the bundle, declaration file,
+package-local CLI, extension artifacts, and `cordis.patch.yml` with no install
+lifecycle script. That exact public tarball composes successfully after isolated
+installation into clean DSH `web` and `headless` profiles. The repository carries
+the `dsh-plugin` and `deepseek-harness` topics alongside its existing browser and
+agent discovery topics.
 
 ### Tab-capture recordings stream with intrinsic framing
 
@@ -278,9 +248,9 @@ require a new extension capture protocol and permission model.
 - The independent product identity is BrowserRig across the repository, npm
   package and CLI (`browserrig`), MCP executable (`browserrig-mcp`), and Chrome
   Web Store listing. The public repository is `Castor6/BrowserRig`.
-- The `browserrig` package will be published publicly on npm. Normal setup will
-  install that npm artifact; until the first release, source development uses
-  `pnpm install`, `pnpm build`, and `npm link`.
+- The `browserrig` package is published publicly on npm. Normal setup installs
+  that npm artifact; source development uses `pnpm install`, `pnpm build`, and
+  `npm link`.
 - BrowserRig supports Node.js 22.22.0 and newer. CI, versioning, and release
   builds use Node.js 22.22.0 so the declared runtime floor and published
   artifacts stay aligned; bundled dependency engine ranges do not become
@@ -304,19 +274,23 @@ require a new extension capture protocol and permission model.
   automatically builds one immutable npm and extension release candidate at
   the exact merge commit, records its component versions and checksums, and
   publishes the exact npm tarball through a direct-publish OIDC trusted
-  publisher. Merging the version pull request is the explicit and irreversible
-  release approval; the workflow still reruns full CI and verifies the immutable
-  candidate before publication. A manual rebuild path remains available but
-  never publishes a package. After the exact tarball becomes public, a separate
-  scheduled finalizer verifies its registry integrity against the retained
-  candidate, creates the npm-version Git tag and GitHub Release, and attaches
-  the original npm tarball, extension ZIP, manifest, and checksums. It never
-  rebuilds or overwrites a release.
-- Until the first Store review completes, the browser extension is loaded
-  unpacked from the npm package's `extension/dist` directory or a source build.
-  The `0.0.1` bootstrap package created the independent draft; the versioned
-  Store baseline is `0.1.0` and later versions are derived from extension
-  Changesets.
+  publisher. After npm succeeds, the same workflow downloads and verifies that
+  retained candidate, exchanges GitHub OIDC for a short-lived Google service
+  account token, and submits its exact extension ZIP through Chrome Web Store
+  API V2 with `DEFAULT_PUBLISH`. Store review remains mandatory; approval makes
+  the update public automatically. Merging the version pull request is the
+  explicit and irreversible release approval for both channels. A manual
+  rebuild path remains available but never publishes either artifact. After the
+  exact tarball becomes public, a separate scheduled finalizer verifies its
+  registry integrity against the retained candidate, creates the npm-version
+  Git tag and GitHub Release, and attaches the original npm tarball, extension
+  ZIP, manifest, and checksums. It never rebuilds or overwrites a release.
+- The browser extension is publicly available from the
+  [Chrome Web Store](https://chromewebstore.google.com/detail/browserrig/dbobcmjamjdknplkplgdihdnmdjklpin).
+  Store installations receive approved updates automatically. The `0.0.1`
+  bootstrap package created the independent listing; exact later Store versions
+  are derived from extension Changesets. The npm package's `extension/dist`
+  remains available for source development and Store-inaccessible browsers.
 - The production-origin allowlist and committed public manifest key pin Store
   Item ID `dbobcmjamjdknplkplgdihdnmdjklpin`. Test a production relay against a
   same-ID unpacked build before Store submission; never broaden this to an
@@ -333,9 +307,10 @@ require a new extension capture protocol and permission model.
   `browserrig-extension` Changeset, rebuilding, and reloading the unpacked
   extension. Relay-only changes do not.
 - `pnpm package:extension` produces the deterministic
-  `browserrig-extension-<version>.zip` Chrome Web Store review artifact.
-  Distribution starts as an unlisted beta before becoming public. A bundled
-  unpacked extension belongs to future managed-browser launch flows.
+  `browserrig-extension-<version>.zip` Chrome Web Store review artifact. The
+  release workflow uploads those exact retained bytes and refuses conflicting,
+  staged, warned, or taken-down Store state. A bundled unpacked extension
+  belongs to development and future managed-browser launch flows.
 
 ## Session And Tab Model
 
@@ -640,8 +615,6 @@ These items are accepted directions but are not current priorities:
   relay endpoint, if multiple profiles become a supported workflow.
 - Add stricter workspace or session ownership only if the loose shared attached
   tab pool causes concrete failures.
-- Promote the reviewed Chrome Web Store extension from unlisted beta to public
-  after one successful extension/relay compatibility cycle.
 - Bundle an unpacked extension for managed and development browser launch.
 - Add token-authenticated remote relay mode only if the relay must bind beyond
   trusted local interfaces.

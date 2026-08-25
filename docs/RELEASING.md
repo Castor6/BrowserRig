@@ -32,13 +32,16 @@ publishing credentials or OIDC permission. It expires on August 23, 2027.
 Review the accumulated release notes, npm and extension version bumps, CI
 result, generated package metadata and changelogs, and synchronized extension
 manifest. Merge the version pull request only when that exact set of changes
-is ready to become public. Merging it is the explicit and irreversible npm
-publication approval. Do not merge a second version pull request until the
-first publication and its GitHub Release have been finalized.
+is ready to become public. Merging it is the explicit and irreversible approval
+to publish npm and submit the extension to Chrome Web Store review with
+automatic publication on approval. Do not merge a second version pull request
+until the first publication and its GitHub Release have been finalized.
 
 The merge rebuilds and verifies one immutable candidate, then publishes its
-exact npm tarball through short-lived OIDC credentials. The release workflow
-reruns full CI before publication; no separate npm approval follows a merge.
+exact npm tarball through short-lived OIDC credentials. After npm succeeds, it
+uses a separate GitHub OIDC exchange to submit the exact retained extension ZIP
+through Chrome Web Store API V2. The release workflow reruns full CI before
+publication; no separate npm or Store submission approval follows a merge.
 Renew `CHANGESETS_TOKEN` before it expires, preserve the same repository and
 permission restrictions, and never print or commit its value. A missing or
 expired secret must fail the workflow rather than falling back to
@@ -69,14 +72,14 @@ The expected local artifacts are:
 - `artifacts/SHA256SUMS`
 
 Merging the repository-owned `Version Packages` pull request automatically
-starts the `Publish npm release` GitHub workflow at the exact merge
+starts the `Publish release` GitHub workflow at the exact merge
 commit. The workflow performs the same CI and packaging steps, records the
 component versions and checksums, retains the four candidate files for 90 days,
-and publishes the exact npm tarball through the repository's trusted OIDC
-identity. A manual dispatch pinned to `main` remains available for rebuilding a
-missing or failed candidate; enter `BrowserRig` when prompted. The manual path
-never publishes npm, and neither path publishes the extension to the Chrome Web
-Store.
+publishes the exact npm tarball through the repository's trusted OIDC identity,
+then uploads and submits the exact extension ZIP. A manual dispatch pinned to
+`main` remains available for rebuilding a missing or failed candidate; enter
+`BrowserRig` when prompted. The manual path never publishes npm or uploads to
+Chrome Web Store.
 
 Before release, inspect the npm tarball and confirm that it contains
 `package.json`, `README.md`, `LICENSE`, `DISCLOSURE`, `dist/`,
@@ -154,7 +157,7 @@ npm trust github browserrig \
   --registry=https://registry.npmjs.org
 ```
 
-The `Publish npm release` workflow uses short-lived OIDC credentials; it must
+The `Publish release` workflow uses short-lived OIDC credentials; it must
 not receive an `NPM_TOKEN` or bypass-2FA credential. Keep account-level 2FA
 enabled and disallow traditional publishing tokens after the trusted
 publisher is working. Merging the reviewed `Version Packages` pull request is
@@ -181,17 +184,71 @@ publishing is the required release path; bypass-2FA tokens are not acceptable.
 
 ## Chrome Web Store
 
-Follow [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md). The `0.0.1` bootstrap ZIP
-created the independent draft. The manifest key, relay pin, and tests bind the
-current `extension/manifest.json` version to Store Item ID
-`dbobcmjamjdknplkplgdihdnmdjklpin`. Verify that ID and a production relay
-handshake with the unpacked build, then upload the final review ZIP without
-changing the identity. Publish and independently verify the first npm version
-before submitting Store review because the reviewer steps install the local
-driver from the official registry. Complete the unlisted listing only after
-that clean npm install succeeds; use deferred Store publishing so an approval
-does not make the listing public automatically.
+The public listing is
+[BrowserRig on Chrome Web Store](https://chromewebstore.google.com/detail/browserrig/dbobcmjamjdknplkplgdihdnmdjklpin).
+Follow [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md) for the listing and review
+copy. The manifest key, relay pin, and tests bind release builds to Store Item
+ID `dbobcmjamjdknplkplgdihdnmdjklpin`; never upload a package under another
+identity.
+
+### One-time CI authentication setup
+
+Chrome Web Store API V2 uses a Google service account and GitHub Workload
+Identity Federation so the repository stores no refresh token, client secret,
+or service-account JSON key:
+
+1. In a dedicated Google Cloud project, enable **Chrome Web Store API** and
+   create one service account for BrowserRig publishing.
+2. In Chrome Web Store Developer Dashboard, open **Account** and add that
+   service-account email to the publisher. The Store currently permits one
+   service account per publisher.
+3. Configure a Google Cloud Workload Identity pool/provider for GitHub Actions.
+   Restrict its attribute condition and `roles/iam.workloadIdentityUser` grant
+   to `Castor6/BrowserRig`; where practical, also restrict the provider to
+   `.github/workflows/release.yml` from the protected default branch.
+4. Create the GitHub environment `chrome-web-store-publishing`. It needs these
+   environment variables, which are identifiers rather than credentials:
+
+   - `GOOGLE_WORKLOAD_IDENTITY_PROVIDER`: full provider resource name,
+     `projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>`
+   - `CHROME_WEB_STORE_SERVICE_ACCOUNT`: the service-account email added to the
+     Store publisher
+   - `CHROME_WEB_STORE_PUBLISHER_ID`: the publisher ID shown under **Publisher
+     → Settings** in the Developer Dashboard
+
+The workflow requests only `id-token: write` and a short-lived access token
+scoped to `https://www.googleapis.com/auth/chromewebstore`. Do not add a JSON
+key, OAuth refresh token, or client secret as a fallback. Keep 2-Step
+Verification enabled on the human developer account.
+
+### Automated update behavior
+
+After a reviewed `Version Packages` pull request is merged, the Store job waits
+for npm publication, downloads the same retained release candidate, verifies
+its commit and checksums, and compares its extension version with the Store:
+
+- An already-published version or the same version already pending review is a
+  successful no-op, so workflow retries are safe.
+- A newer extension ZIP is uploaded through API V2 and submitted with
+  `publishType: DEFAULT_PUBLISH`, `skipReview: false`, and
+  `blockOnWarnings: true`.
+- Google review remains mandatory. After approval, the existing public listing
+  updates automatically; the workflow does not wait for review completion.
+- Conflicting active submissions, staged revisions, rejected same-version
+  retries, policy warnings, taken-down state, version regressions, checksum
+  mismatches, and unexpected API responses fail closed for maintainer review.
+- If a release changes only npm and the candidate's extension version is
+  already public, the Store job performs no upload.
+
+Chrome Web Store API publishes with the listing's existing visibility. If a
+maintainer changes visibility in the Developer Dashboard, publish that new
+visibility manually once before expecting API publication to resume. Before
+merging an extension release, still load the release build unpacked, confirm it
+reports the pinned Item ID, and verify a production relay handshake. Browser
+clients receive the approved Store update on Chrome's own update schedule.
 
 References: [npm dual-use policy](https://docs.npmjs.com/policies/dual-use/),
 [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/), and
-[npm provenance](https://docs.npmjs.com/generating-provenance-statements/).
+[npm provenance](https://docs.npmjs.com/generating-provenance-statements/),
+[Chrome Web Store API V2](https://developer.chrome.com/docs/webstore/api), and
+[Chrome Web Store service accounts](https://developer.chrome.com/docs/webstore/service-accounts).

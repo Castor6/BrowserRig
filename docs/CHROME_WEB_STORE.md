@@ -1,8 +1,8 @@
-# Chrome Web Store Submission
+# Chrome Web Store Listing And Updates
 
 This document is the source copy for the BrowserRig Chrome Web Store
-listing and review questionnaire. The initial distribution should be
-**unlisted**.
+listing and review questionnaire. The public listing is
+[BrowserRig](https://chromewebstore.google.com/detail/browserrig/dbobcmjamjdknplkplgdihdnmdjklpin).
 
 ## Single Purpose
 
@@ -133,15 +133,14 @@ Use this public privacy-policy URL:
 | Support URL | `https://github.com/Castor6/BrowserRig/issues` |
 | Adult content | Off |
 
-The YouTube promotional video is optional and should remain empty for the
-initial release.
+The YouTube promotional video is optional and may remain empty.
 
 ### Distribution
 
 | Field | Value |
 | --- | --- |
 | Payment | Free; no in-app purchases |
-| Visibility | Unlisted |
+| Visibility | Public |
 | Regions | All regions |
 
 ### Testing instructions
@@ -212,7 +211,7 @@ SHA-256 digest with the release notes.
 
 ## Independent Listing Identity
 
-The `0.0.1` bootstrap package created the independent BrowserRig draft on
+The `0.0.1` bootstrap package created the independent BrowserRig listing on
 August 22, 2026. Its Item ID is `dbobcmjamjdknplkplgdihdnmdjklpin`. The public
 key from **Package → View public key** is committed as the manifest `key`, and
 `src/relay-helpers.ts` accepts only the matching production origin. The key
@@ -220,21 +219,26 @@ derives to the same Item ID in automated tests. It is public identity material,
 not an optional Verified CRX Uploads private key; a private upload key must
 never be committed.
 
-Before the first review submission:
+Before merging every extension release:
 
-1. Merge the reviewed `Version Packages` pull request, record its calculated
-   `<extension-version>`, load `extension/dist` unpacked, and confirm Chrome
-   reports ID `dbobcmjamjdknplkplgdihdnmdjklpin`.
+1. Record the calculated `<extension-version>`, load `extension/dist` unpacked,
+   and confirm Chrome reports ID `dbobcmjamjdknplkplgdihdnmdjklpin`.
 2. Verify that build connects to a production-mode relay and that an arbitrary
    extension origin is still rejected.
-3. Upload `browserrig-extension-<extension-version>.zip` over the bootstrap
-   package.
-4. Publish the reviewed `browserrig@<npm-version>` to the official npm registry
-   and verify the review install command from a clean environment.
-5. Complete the listing, privacy questionnaire, testing instructions, and
-   unlisted distribution fields from this document, then submit with deferred
-   publishing so Store availability remains under maintainer control after
-   review.
+3. Verify the clean npm install and reviewer commands against the release
+   candidate.
+4. Review the Store listing, privacy declarations, testing instructions, and
+   public distribution settings for any changes required by the new payload.
+
+Merging the reviewed `Version Packages` pull request builds one immutable
+candidate, publishes its npm tarball, then submits the exact retained
+`browserrig-extension-<extension-version>.zip` through Chrome Web Store API V2.
+The API request uses `DEFAULT_PUBLISH`, so Google still reviews the revision and
+makes it public automatically after approval. The workflow treats an identical
+published or pending version as a successful retry and fails closed on
+conflicting submissions, staged state, policy warnings, or artifact mismatch.
+See [`RELEASING.md`](./RELEASING.md#chrome-web-store) for the one-time service
+account, Workload Identity Federation, and GitHub environment setup.
 
 Do not ship a release that accepts arbitrary extension origins or restores the
 upstream Store ID: either choice would let code outside this project's
@@ -243,7 +247,7 @@ accept unpacked development origins, but that development exception must not
 mask the production-ID test above.
 
 Chrome references: [stable extension IDs and manifest `key`](https://developer.chrome.com/docs/extensions/reference/manifest/key),
-[first publication and deferred publishing](https://developer.chrome.com/docs/webstore/publish/),
+[publication and review](https://developer.chrome.com/docs/webstore/publish/),
 [package updates and version rules](https://developer.chrome.com/docs/webstore/update/),
 [Store distribution modes](https://developer.chrome.com/docs/webstore/cws-dashboard-distribution),
 [Manifest V3 remote-logic exceptions](https://developer.chrome.com/docs/webstore/program-policies/mv3-requirements),

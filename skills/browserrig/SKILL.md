@@ -14,6 +14,11 @@ debugging endpoint. Do not ask the user to approve an **Allow remote
 debugging?** dialog. The active tab can be attached directly from the CLI or MCP
 without clicking the extension toolbar.
 
+The normal user installation is
+[BrowserRig on Chrome Web Store](https://chromewebstore.google.com/detail/browserrig/dbobcmjamjdknplkplgdihdnmdjklpin),
+which receives approved extension updates automatically. Loading the packaged
+unpacked build is the source-development fallback, not the default setup.
+
 Use one loop throughout: **inspect, act, verify**. Inspect the real page before
 choosing locators, act through the narrowest stable control, then verify the
 result through a URL or fresh page read. Never treat a successful click or human
@@ -368,8 +373,10 @@ existence, and report the viewport, state, and interaction path actually tested.
 
 Common diagnoses:
 
-- `connected:false`: run a relay-backed command, then reload the unpacked
-  extension only if its reconnect loop does not recover.
+- `connected:false`: run a relay-backed command, confirm the Store extension is
+  installed and enabled, then reload it from the browser's extensions page only
+  if its reconnect loop does not recover. Reload the unpacked build only for a
+  source-development installation.
 - `connected:false` while Chrome says another product is debugging the browser:
   end that browser-wide debugging session before reloading BrowserRig. Chrome
   debugger ownership is exclusive for the affected targets.

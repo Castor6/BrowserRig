@@ -304,19 +304,23 @@ require a new extension capture protocol and permission model.
   automatically builds one immutable npm and extension release candidate at
   the exact merge commit, records its component versions and checksums, and
   publishes the exact npm tarball through a direct-publish OIDC trusted
-  publisher. Merging the version pull request is the explicit and irreversible
-  release approval; the workflow still reruns full CI and verifies the immutable
-  candidate before publication. A manual rebuild path remains available but
-  never publishes a package. After the exact tarball becomes public, a separate
-  scheduled finalizer verifies its registry integrity against the retained
-  candidate, creates the npm-version Git tag and GitHub Release, and attaches
-  the original npm tarball, extension ZIP, manifest, and checksums. It never
-  rebuilds or overwrites a release.
-- Until the first Store review completes, the browser extension is loaded
-  unpacked from the npm package's `extension/dist` directory or a source build.
-  The `0.0.1` bootstrap package created the independent draft; the versioned
-  Store baseline is `0.1.0` and later versions are derived from extension
-  Changesets.
+  publisher. After npm succeeds, the same workflow downloads and verifies that
+  retained candidate, exchanges GitHub OIDC for a short-lived Google service
+  account token, and submits its exact extension ZIP through Chrome Web Store
+  API V2 with `DEFAULT_PUBLISH`. Store review remains mandatory; approval makes
+  the update public automatically. Merging the version pull request is the
+  explicit and irreversible release approval for both channels. A manual
+  rebuild path remains available but never publishes either artifact. After the
+  exact tarball becomes public, a separate scheduled finalizer verifies its
+  registry integrity against the retained candidate, creates the npm-version
+  Git tag and GitHub Release, and attaches the original npm tarball, extension
+  ZIP, manifest, and checksums. It never rebuilds or overwrites a release.
+- The browser extension is publicly available from the
+  [Chrome Web Store](https://chromewebstore.google.com/detail/browserrig/dbobcmjamjdknplkplgdihdnmdjklpin).
+  Store installations receive approved updates automatically. The `0.0.1`
+  bootstrap package created the independent listing; exact later Store versions
+  are derived from extension Changesets. The npm package's `extension/dist`
+  remains available for source development and Store-inaccessible browsers.
 - The production-origin allowlist and committed public manifest key pin Store
   Item ID `dbobcmjamjdknplkplgdihdnmdjklpin`. Test a production relay against a
   same-ID unpacked build before Store submission; never broaden this to an
@@ -333,9 +337,10 @@ require a new extension capture protocol and permission model.
   `browserrig-extension` Changeset, rebuilding, and reloading the unpacked
   extension. Relay-only changes do not.
 - `pnpm package:extension` produces the deterministic
-  `browserrig-extension-<version>.zip` Chrome Web Store review artifact.
-  Distribution starts as an unlisted beta before becoming public. A bundled
-  unpacked extension belongs to future managed-browser launch flows.
+  `browserrig-extension-<version>.zip` Chrome Web Store review artifact. The
+  release workflow uploads those exact retained bytes and refuses conflicting,
+  staged, warned, or taken-down Store state. A bundled unpacked extension
+  belongs to development and future managed-browser launch flows.
 
 ## Session And Tab Model
 
@@ -640,8 +645,6 @@ These items are accepted directions but are not current priorities:
   relay endpoint, if multiple profiles become a supported workflow.
 - Add stricter workspace or session ownership only if the loose shared attached
   tab pool causes concrete failures.
-- Promote the reviewed Chrome Web Store extension from unlisted beta to public
-  after one successful extension/relay compatibility cycle.
 - Bundle an unpacked extension for managed and development browser launch.
 - Add token-authenticated remote relay mode only if the relay must bind beyond
   trusted local interfaces.

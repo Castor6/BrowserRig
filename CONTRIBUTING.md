@@ -62,8 +62,10 @@ changeset.
 After releasable changes reach `main`, the `Version packages` workflow creates
 or updates one shared `Version Packages` pull request. Additional changesets
 accumulate in that same pull request until a maintainer merges it. Merging the
-version pull request updates `package.json` and `CHANGELOG.md`; it does not
-publish either release artifact.
+version pull request is the release approval: CI rebuilds and verifies one
+immutable candidate, publishes its npm tarball, and submits the matching
+extension ZIP for Chrome Web Store review and automatic publication on
+approval.
 
 ## Reporting security issues
 

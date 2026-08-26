@@ -224,6 +224,12 @@ require a new extension capture protocol and permission model.
 - **Driver, not agent**: BrowserRig never calls models or plans tasks.
 - **User browser first**: the primary target is an already-running
   Chromium-family browser with the extension installed.
+- **Product-led upstream intake**: advance one adjacent upstream minor series
+  at a time to that series' latest patch. Review upstream pull requests, adapt
+  selected behavior serially through independently reviewed batches, and keep
+  the durable cursor, authorization, progress, and archives in
+  [`docs/upstream-sync/`](docs/upstream-sync/README.md). Never treat sync as
+  product identity, release, or source-equivalence ownership.
 - **Trusted local execution**: `execute(code)` trusts the calling agent. It is
   not an untrusted-code security boundary.
 - **Code-first control**: `execute(code)` is the primary interface. Dedicated

@@ -11,7 +11,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import util from "node:util"
 import { registerAriaSnapshotSelector } from "../src/aria-snapshot.ts"
-import { createAriaSnapshotHelper } from "../src/execute.ts"
+import { createAriaSnapshotHelper, createSnapshotHelpers } from "../src/execute.ts"
 import { getObject } from "../src/relay-helpers.ts"
 import { browserRigBuildId } from "../src/version.ts"
 
@@ -259,13 +259,18 @@ const cases: SmokeCase[] = [
       results.push({ challenge: "shadow-dom", generated: yield* inputValue(page.locator("#editField"), "shadow generated value") })
 
       yield* playwright("set ARIA redaction fixture", () =>
-        page.setContent(`<main><h2>Amount <input type="number" value="aria-secret-number"></h2><input role="heading" value="aria-secret-role"><textarea role="combobox">aria-secret-textarea</textarea><h3>Volume <div role="slider" aria-label="Volume" aria-valuenow="73" aria-valuetext="aria-secret-slider"></div></h3><h3>Quantity <div role="spinbutton" aria-label="Quantity" aria-valuenow="4" aria-valuetext="aria-secret-spin"></div></h3><div contenteditable aria-label="Editor"><svg><title>aria-secret-svg-title</title><text>aria-secret-svg-text</text></svg><img alt="aria-secret-alt" title="aria-secret-title"><span aria-label="aria-secret-label">aria-secret-editor</span><div id="aria-shadow-host"></div></div><input type="button" value="Keep label"><select aria-label="Keep select"><option selected>Keep option</option></select><iframe id="aria-editor-frame" srcdoc="<div contenteditable>aria-secret-frame</div>"></iframe></main>`),
+        page.setContent(`<main><h2>Amount <input type="number" value="aria-secret-number"></h2><input role="heading" value="aria-secret-role"><textarea role="combobox">aria-secret-textarea</textarea><h3>Volume <div role="slider" aria-label="Volume" aria-valuenow="73" aria-valuetext="aria-secret-slider"></div></h3><h3>Quantity <div role="spinbutton" aria-label="Quantity" aria-valuenow="4" aria-valuetext="aria-secret-spin"></div></h3><div contenteditable aria-label="Editor"><svg><title>aria-secret-svg-title</title><text>aria-secret-svg-text</text></svg><img alt="aria-secret-alt" title="aria-secret-title"><span aria-label="aria-secret-label">aria-secret-editor</span><div id="aria-shadow-host"></div></div><div id="aria-slot-host">aria-secret-slot-text</div><input type="button" value="Keep label"><select aria-label="Keep select"><option selected>Keep option</option></select><iframe id="aria-editor-frame" srcdoc="<div contenteditable>aria-secret-frame</div>"></iframe></main>`),
       )
       yield* playwright("attach editable shadow fixture", () =>
-        page.locator("#aria-shadow-host").evaluate((host) => {
-          host.attachShadow({ mode: "open" }).innerHTML = `<span aria-label="aria-secret-shadow-label">aria-secret-shadow-text</span>`
+        page.locator("main").evaluate((main) => {
+          main.querySelector("#aria-shadow-host")!.attachShadow({ mode: "open" }).innerHTML = `<span aria-label="aria-secret-shadow-label">aria-secret-shadow-text</span>`
+          main.querySelector("#aria-slot-host")!.attachShadow({ mode: "open" }).innerHTML = `<div contenteditable aria-label="Slotted editor"><slot></slot></div>`
         }),
       )
+      const rawAriaBefore = yield* playwright("capture raw slotted ARIA fixture", () => page.locator("main").ariaSnapshot())
+      if (!rawAriaBefore.includes("aria-secret-slot-text")) throw new Error("Raw ARIA snapshot did not expose the slotted fixture value")
+      const compactSnapshot = createSnapshotHelpers(page, { selectors: new Map() }).snapshot
+      const compactBefore = yield* playwright("capture compact snapshot boundary", () => compactSnapshot())
       const ariaSnapshot = createAriaSnapshotHelper(page)
       const [safeAria, safeFrameAria] = yield* playwright("capture concurrent redacted ARIA snapshots", () =>
         Promise.all([
@@ -283,10 +288,13 @@ const cases: SmokeCase[] = [
         ]),
       )
       const restored = `${restoredAria}\n${restoredFrameAria}`
-      for (const value of ["aria-secret-role", "aria-secret-textarea", "aria-secret-slider", "aria-secret-spin", "aria-secret-svg-text", "aria-secret-alt", "aria-secret-shadow-text", "aria-secret-frame"]) {
+      for (const value of ["aria-secret-role", "aria-secret-textarea", "aria-secret-slider", "aria-secret-spin", "aria-secret-svg-text", "aria-secret-alt", "aria-secret-shadow-text", "aria-secret-slot-text", "aria-secret-frame"]) {
         if (!restored.includes(value)) throw new Error(`ARIA snapshot value access was not restored for ${value}`)
       }
-      results.push({ challenge: "aria-redaction", snapshot: safeAria, frameSnapshot: safeFrameAria })
+      if (restoredAria !== rawAriaBefore) throw new Error("Raw ARIA snapshot was not restored exactly after guarded capture")
+      const compactAfter = yield* playwright("verify compact snapshot boundary", () => compactSnapshot())
+      if (compactAfter !== compactBefore) throw new Error("Guarded ARIA capture changed the compact snapshot surface")
+      results.push({ challenge: "aria-redaction", snapshot: safeAria, frameSnapshot: safeFrameAria, compactStable: true })
       return results
     }),
   },

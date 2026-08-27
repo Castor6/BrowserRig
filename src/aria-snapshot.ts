@@ -36,12 +36,13 @@ const redactionSelectorSource = `({
           return normalized === "" || normalized === "true" || normalized === "plaintext-only" ? true : undefined
         }
         const composedParent = (node) => {
+          if (node.assignedSlot) return node.assignedSlot
           if (node.parentNode) return node.parentNode
           const treeRoot = node.getRootNode?.()
           return treeRoot instanceof ShadowRoot ? treeRoot.host : null
         }
         const isInEditableSubtree = (node) => {
-          let current = node.nodeType === Node.TEXT_NODE ? node.parentNode : node
+          let current = node
           while (current) {
             if (current instanceof Element) {
               const explicit = explicitEditableState(current)

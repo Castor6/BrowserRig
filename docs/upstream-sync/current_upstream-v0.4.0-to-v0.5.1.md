@@ -114,7 +114,7 @@ previous batch pull request merges.
 
 | Order | Product outcome | Upstream evidence | State | Deterministic branch | BrowserRig PR | Independent review | Validation evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 01 | ARIA value privacy | [#48](https://github.com/anomalyco/browser-control/pull/48), [#52](https://github.com/anomalyco/browser-control/pull/52), [#53](https://github.com/anomalyco/browser-control/pull/53) | `Pending` | `sync/upstream-v0.5.1-01-aria-privacy` | [#24](https://github.com/Castor6/BrowserRig/pull/24) | Not started | Implementation validation complete; see evidence below. |
+| 01 | ARIA value privacy | [#48](https://github.com/anomalyco/browser-control/pull/48), [#52](https://github.com/anomalyco/browser-control/pull/52), [#53](https://github.com/anomalyco/browser-control/pull/53) | `Pending` | `sync/upstream-v0.5.1-01-aria-privacy` | [#24](https://github.com/Castor6/BrowserRig/pull/24) | Changes requested; follow-up pending | Follow-up implementation validation complete; see evidence below. |
 | 02 | Browser-context CDP routing | [#49](https://github.com/anomalyco/browser-control/pull/49) | `Pending` | `sync/upstream-v0.5.1-02-context-routing` | — | — | — |
 | 03 | Managed relay and client recovery | [#55](https://github.com/anomalyco/browser-control/pull/55), [#57](https://github.com/anomalyco/browser-control/pull/57) | `Pending` | `sync/upstream-v0.5.1-03-relay-client-recovery` | — | — | — |
 | 04 | Extension connectivity and browser-start recovery | [#47](https://github.com/anomalyco/browser-control/pull/47), [#58](https://github.com/anomalyco/browser-control/pull/58) | `Pending` | `sync/upstream-v0.5.1-04-extension-recovery` | — | — | — |
@@ -127,9 +127,10 @@ previous batch pull request merges.
 
 ### Batch 01 implementation evidence
 
-- **Implementation status:** author implementation and validation complete on
-  `sync/upstream-v0.5.1-01-aria-privacy`; pull request
-  [#24](https://github.com/Castor6/BrowserRig/pull/24) awaits independent review.
+- **Implementation status:** author follow-up implementation and validation
+  complete on `sync/upstream-v0.5.1-01-aria-privacy`; pull request
+  [#24](https://github.com/Castor6/BrowserRig/pull/24) awaits follow-up
+  independent review.
 - **Upstream commits adapted:** `045805c`, `f625957`, and `4761e61`.
 - **Changeset:** BrowserRig patch Changeset
   `.changeset/brave-owls-stop.md`.
@@ -137,7 +138,10 @@ previous batch pull request merges.
   test/execute-ergonomics.test.ts test/runtime-diagnostics.test.ts` (Vitest ran
   all 59 files and 514 tests); `pnpm build:cli`; and
   `SMOKE_CASE=local-forms pnpm smoke` against the source relay and extension
-  protocol `3`.
+  protocol `3`. The follow-up smoke regression proves a light-DOM text node
+  assigned into a shadow-root contenteditable is present in raw Playwright ARIA
+  output, omitted from guarded output, restored exactly afterward, and leaves
+  the compact snapshot surface unchanged.
 - **Smoke preflight history:** the first attempt reached no test because no
   relay was listening; the second reached no test because a bundled relay build
   did not match the source build. The source relay was then started in a
@@ -146,7 +150,9 @@ previous batch pull request merges.
 - **Not run in this batch:** the complete current smoke matrix. Batch 01 ran the
   directly relevant `local-forms` fixture; the cycle closure criteria retain the
   full-matrix requirement after all core and extension batches land.
-- **Independent review:** not started; no approval is claimed.
+- **Independent review:** the first review returned `Changes requested` because
+  assigned-slot ancestry was missing from editable composed-tree traversal.
+  The author correction is ready for follow-up review; no approval is claimed.
 
 ## Batch briefs
 

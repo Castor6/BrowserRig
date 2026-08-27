@@ -4,6 +4,7 @@ import { Effect } from "effect"
 import {
   defaultPageClosedWarning,
   ExecuteSandbox,
+  isSessionPageConnected,
   recoverSessionPage,
   runPlaywrightOperation,
   waitForPageContext,
@@ -11,6 +12,13 @@ import {
 import { BrowserRigSessions } from "../src/session-manager.ts"
 
 describe("execute lifecycle", () => {
+  it("reports a session connected only when it has a live default page", () => {
+    expect(isSessionPageConnected({ browserConnected: true, pageUrl: null, healthCheckRequired: false })).toBe(false)
+    expect(isSessionPageConnected({ browserConnected: true, pageUrl: "about:blank", healthCheckRequired: false })).toBe(true)
+    expect(isSessionPageConnected({ browserConnected: false, pageUrl: "about:blank", healthCheckRequired: false })).toBe(false)
+    expect(isSessionPageConnected({ browserConnected: true, pageUrl: "about:blank", healthCheckRequired: true })).toBe(false)
+  })
+
   it("does not report fallback-page recovery after a detached tab is successfully re-adopted", async () => {
     const targetId = "target-re-adopted"
     const targetUrl = "https://example.test/re-adopted"

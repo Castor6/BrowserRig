@@ -585,6 +585,20 @@ relay reports both values so `doctor` can identify a stale long-running relay.
 It also reports an instance id, start time, and PID; bounded managed-relay
 process-fault diagnostics are retained locally so unexpected same-build
 restarts can be distinguished from session eviction.
+Operational commands replace an older managed relay only after confirming its
+exact instance id, then wait for that process to exit before starting the
+current build. Build ordering preserves BrowserRig's deterministic content
+hash: a higher stable package version is newer, while same-version replacement
+also requires a newer artifact at the same resolved managed CLI path. Source,
+foreground, differently installed same-version, and newer relays fail closed
+with restart guidance.
+
+### Public clients tolerate extension reconnect windows
+
+`BrowserRigClient.make` gives a matching pre-existing relay the same bounded
+extension reconnect grace used after relay startup. Session summaries report
+connected only when the Playwright transport and a live default page are both
+available, and remain disconnected while a known-crashed page awaits recovery.
 
 ## Known Limitations
 

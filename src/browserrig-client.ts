@@ -154,10 +154,12 @@ export const make = Effect.fn("BrowserRigClient.make")(function* (options: MakeO
     Effect.provide(FetchHttpClient.layer),
     Effect.mapError((error) => clientError("connect", error)),
   )
+  const currentManagedEntrypoint = RelayLifecycle.managedRelayBuild(fileURLToPath(import.meta.url))
   const readiness = yield* RelayLifecycle.ensureRelay({
     relay,
     // The consumer may run under Bun; the relay is a Node application.
     start: RelayLifecycle.startManagedRelay(fileURLToPath(import.meta.url), "node", []),
+    ...(currentManagedEntrypoint ? { currentManagedEntrypoint } : {}),
   }).pipe(Effect.mapError((error) => clientError("connect", error)))
   if (readiness.buildProblem) {
     return yield* Effect.fail(new ClientError({
@@ -167,7 +169,7 @@ export const make = Effect.fn("BrowserRigClient.make")(function* (options: MakeO
   }
   yield* RelayLifecycle.ensureExtensionConnected({
     relay,
-    waitForReconnect: readiness.started,
+    waitForReconnect: true,
   }).pipe(Effect.mapError((error) => clientError("connect", error)))
 
   const ensureSession = Effect.fn("BrowserRigClient.ensureSession")(function* (

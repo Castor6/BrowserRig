@@ -385,8 +385,11 @@ Common diagnoses:
   debugger ownership is exclusive for the affected targets.
 - Incompatible extension protocol: update either the extension or npm package;
   exact extension and relay release versions do not need to match.
-- Stale relay build: operational commands reject it with restart guidance;
-  rebuild the CLI and restart the relay.
+- Stale relay build: operational commands automatically replace an older
+  detached managed relay when exact instance and build-order evidence is
+  available. Unsupported old relays, source or foreground relays, differently
+  installed same-version relays, and newer relays fail closed with restart
+  guidance.
 - `Target not found`: attach the intended tab, then select or adopt it using a
   unique URL substring or explicit index.
 - All targets disappeared: dismissing Chromium's debugging banner detaches every

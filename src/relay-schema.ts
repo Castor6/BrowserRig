@@ -262,9 +262,24 @@ export const RelayVersion = Schema.Struct({
   instanceId: Schema.optionalKey(Schema.String),
   startedAt: Schema.optionalKey(Schema.String),
   pid: Schema.optionalKey(Schema.Number),
+  managed: Schema.optionalKey(Schema.Boolean),
+  managedEntrypointId: Schema.optionalKey(Schema.String),
+  managedEntrypointModifiedAt: Schema.optionalKey(Schema.Number),
 })
 
 export interface RelayVersion extends Schema.Schema.Type<typeof RelayVersion> {}
+
+export const RelayShutdownRequest = Schema.Struct({
+  instanceId: Schema.NonEmptyString,
+})
+
+export interface RelayShutdownRequest extends Schema.Schema.Type<typeof RelayShutdownRequest> {}
+
+export const RelayShutdownResponse = Schema.Struct({
+  stopping: Schema.Literal(true),
+})
+
+export interface RelayShutdownResponse extends Schema.Schema.Type<typeof RelayShutdownResponse> {}
 
 export const NetworkContentMode = Schema.Literals(["omit", "embed"])
 

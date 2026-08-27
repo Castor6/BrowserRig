@@ -15,7 +15,7 @@ target_checked: 2026-08-27
 - **Target:** `v0.5.1`
 - **Target checked:** 2026-08-27
 - **Product recommendation:** sync selectively
-- **Cycle status:** implementation in progress (Batches 01-02 complete; Batch 03 next)
+- **Cycle status:** implementation in progress (Batches 01-02 complete; Batch 03 in progress)
 - **Execution authorization:** approved 2026-08-27 for the recorded `v0.5.1`
   target and all seven listed batches, including the conditional per-batch merge
   authority defined in [`README.md`](README.md)
@@ -116,7 +116,7 @@ previous batch pull request merges.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 01 | ARIA value privacy | [#48](https://github.com/anomalyco/browser-control/pull/48), [#52](https://github.com/anomalyco/browser-control/pull/52), [#53](https://github.com/anomalyco/browser-control/pull/53) | `Complete` | `sync/upstream-v0.5.1-01-aria-privacy` | [#24](https://github.com/Castor6/BrowserRig/pull/24), merge `824815c` | `Approve` on 2026-08-27 at `4fc3fcb`; no findings | Typecheck, 514 tests, CLI build, `local-forms` smoke, and GitHub `validate` passed; see evidence below. |
 | 02 | Browser-context CDP routing | [#49](https://github.com/anomalyco/browser-control/pull/49) | `Complete` | `sync/upstream-v0.5.1-02-context-routing` | [#27](https://github.com/Castor6/BrowserRig/pull/27), merge `72db822` | `Approve` on 2026-08-27 at `fba918d`; no findings | Typecheck, 520 tests, CLI build, six focused smoke cases, and GitHub `validate` passed; see evidence below. |
-| 03 | Managed relay and client recovery | [#55](https://github.com/anomalyco/browser-control/pull/55), [#57](https://github.com/anomalyco/browser-control/pull/57) | `Pending` | `sync/upstream-v0.5.1-03-relay-client-recovery` | — | — | — |
+| 03 | Managed relay and client recovery | [#55](https://github.com/anomalyco/browser-control/pull/55), [#57](https://github.com/anomalyco/browser-control/pull/57) | `Pending` | `sync/upstream-v0.5.1-03-relay-client-recovery` | [#29](https://github.com/Castor6/BrowserRig/pull/29) | `Approve` on 2026-08-27 at `53c4b94`; no findings | Typecheck, 529 tests, CLI build, DSH package checks, six focused smoke cases, and GitHub `validate` passed; see evidence below. |
 | 04 | Extension connectivity and browser-start recovery | [#47](https://github.com/anomalyco/browser-control/pull/47), [#58](https://github.com/anomalyco/browser-control/pull/58) | `Pending` | `sync/upstream-v0.5.1-04-extension-recovery` | — | — | — |
 | 05 | Handoff readiness and idempotent deletion | [#59](https://github.com/anomalyco/browser-control/pull/59), [#61](https://github.com/anomalyco/browser-control/pull/61) | `Pending` | `sync/upstream-v0.5.1-05-handoff-session-delete` | — | — | — |
 | 06 | Network-capture lifecycle correctness | [#65](https://github.com/anomalyco/browser-control/pull/65) | `Pending` | `sync/upstream-v0.5.1-06-network-lifecycle` | — | — | — |
@@ -204,6 +204,63 @@ previous batch pull request merges.
   `Browser.grantPermissions` rejection is a documented `chrome.debugger`
   transport-domain boundary rather than a root-selection defect; supporting
   that API would require a separately authorized extension or transport change.
+
+### Batch 03 implementation evidence
+
+- **Implementation status:** author implementation and validation complete on
+  `sync/upstream-v0.5.1-03-relay-client-recovery`; pull request
+  [#29](https://github.com/Castor6/BrowserRig/pull/29) is approved for the
+  conditional coordinator merge. Batch state remains `Pending` until the pull
+  request lands on `main`.
+- **Upstream commits adapted:** `2d05bbc` and `6994459` from upstream pull
+  requests [#55](https://github.com/anomalyco/browser-control/pull/55) and
+  [#57](https://github.com/anomalyco/browser-control/pull/57). BrowserRig keeps
+  deterministic content-hash build ids: replacement ordering uses a higher
+  stable package version or a newer artifact at the same resolved managed CLI
+  path, while exact instance confirmation, foreground/source protection, and
+  fail-closed behavior remain mandatory.
+- **Changeset:** BrowserRig patch Changeset
+  `.changeset/social-parts-chew.md`.
+- **Validation passed:** `pnpm typecheck`; `pnpm test` (59 files and 529 tests);
+  `pnpm build:cli`; focused relay lifecycle, HTTP, client, schema, and execute
+  tests (6 files and 73 tests); and focused DSH adapter, package, and session-map
+  tests (3 files and 21 tests). `pnpm package:npm` also rebuilt the CLI and
+  extension and produced `artifacts/browserrig-0.3.0.tgz` with SHA-256
+  `0dd15608c8dd37a1df6d59caf4cc798833e714b673af66a38ac6e28a5eca30dd`.
+- **Real-process relay validation:** on isolated port `63553`, an older managed
+  build at one resolved CLI path created session `batch03-retained`; the current
+  package-local CLI confirmed the exact instance and newer same-path artifact,
+  received the guarded shutdown acknowledgement, waited for the old foreground
+  scope to exit, started build `build-7600e4ed7f99f328`, and restored the
+  retained session from the durable catalog. A final guarded shutdown returned
+  HTTP 200 and released the port. Test state was moved to the system Trash.
+- **DSH package validation:** the exact tarball installed without peer warnings
+  into clean official `web` and `headless` profiles under an isolated
+  task-specific `DSH_HOME`, both with `auto-install-peers=false`. Both
+  `--dump-config` outputs registered `browserrig/dsh`; both profiles imported
+  the `browserrig/dsh` subpath and ran the package-local `dist/cli.js --help`
+  without a global BrowserRig dependency. The isolated profiles were moved to
+  the system Trash after validation.
+- **Focused smoke:** the source relay used a controlled foreground PTY because
+  `termctrl` was unavailable. `stale-client-checkout`, `reconnect-evaluate`,
+  `redirect-reconnect-evaluate`, `execute-page-recovery`,
+  `execute-page-detach-recovery`, and `session-isolation` each reported `PASS`
+  (6/6), and the post-run relay check found zero targets, child targets, CDP
+  clients, or transient sessions. The smoke runner did not self-exit after its
+  final summary and was interrupted, so the wrapper process ended with status
+  130 despite the complete passing case summary and clean resource check.
+- **Not run in this batch:** the complete current smoke matrix. Batch 03 ran
+  the six cases tied to reconnect, stale clients, page recovery, and session
+  isolation; the cycle closure criteria retain the full-matrix requirement.
+- **Independent review:** `Approve` on 2026-08-27 for final head `53c4b94`,
+  with no findings. The reviewer reran typecheck, all 529 tests, focused relay
+  and DSH tests, package and Changeset checks, cancellation and process probes,
+  and confirmed the green GitHub `validate` and clean relay aftermath.
+- **Closure risk:** the reviewer traced the smoke wrapper status 130 to an
+  existing keep-alive socket in the redirect fixture after all selected cases
+  passed and relay resources returned to zero. This does not block Batch 03,
+  but the smoke runner must exit cleanly before the cycle-wide matrix can be
+  recorded as green at closure.
 
 ## Batch briefs
 

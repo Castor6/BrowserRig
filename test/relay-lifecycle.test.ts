@@ -4,6 +4,7 @@ import * as RelayClient from "../src/relay-client.ts"
 import {
   ensureExtensionConnected,
   ensureRelay,
+  isNewerManagedBuild,
   managedRelayEntrypoint,
   managedRelayLaunch,
   relayBuildProblem,
@@ -15,12 +16,14 @@ import { sourceBuildIdForFiles } from "../src/version.ts"
 const version = { version: "0.1.0", buildId: "build-current" }
 
 function relay(options: {
-  readonly version: Effect.Effect<typeof version, RelayClient.RelayClientError>
+  readonly version: RelayClient.Interface["version"]
   readonly extensionStatus?: RelayClient.Interface["extensionStatus"]
+  readonly shutdown?: RelayClient.Interface["shutdown"]
 }): RelayClient.Interface {
   return {
     endpoint: "http://127.0.0.1:19990",
     version: options.version,
+    shutdown: options.shutdown ?? (() => Effect.die("unexpected relay shutdown")),
     extensionStatus: options.extensionStatus ?? Effect.succeed({ connected: true, version: "0.0.11", activeTargets: 0 }),
   } as RelayClient.Interface
 }
@@ -110,7 +113,7 @@ describe("relay lifecycle", () => {
     expect(starts).toBe(0)
   })
 
-  it("reports a stale relay instead of silently using it", async () => {
+  it("reports a stale relay that has no safe process identity", async () => {
     const result = await Effect.runPromise(ensureRelay({
       relay: relay({ version: Effect.succeed({ ...version, buildId: "build-old" }) }),
       buildId: "build-current",
@@ -118,6 +121,206 @@ describe("relay lifecycle", () => {
     }))
 
     expect(result.buildProblem).toContain("does not match CLI build")
+  })
+
+  it("replaces a stale managed relay with the current build", async () => {
+    const current = {
+      ...version,
+      buildId: "build-current",
+      managedEntrypointId: "managed-cli",
+      managedEntrypointModifiedAt: 200,
+    }
+    const stale = {
+      ...version,
+      buildId: "build-stale",
+      instanceId: "stale",
+      pid: 123,
+      managed: true,
+      managedEntrypointId: "managed-cli",
+      managedEntrypointModifiedAt: 100,
+    }
+    let running: typeof stale | typeof current | undefined = stale
+    let stops = 0
+    let starts = 0
+    const client = relay({
+      version: Effect.suspend(() => running ? Effect.succeed(running) : Effect.fail(unreachable())),
+      shutdown: () => Effect.sync(() => {
+        stops++
+        running = undefined
+        return { stopping: true as const }
+      }),
+    })
+
+    const result = await Effect.runPromise(ensureRelay({
+      relay: client,
+      buildId: current.buildId,
+      currentVersion: current.version,
+      currentManagedEntrypoint: { id: "managed-cli", modifiedAt: 200 },
+      start: Effect.sync(() => {
+        starts++
+        running = current
+      }),
+      retryDelayMs: 0,
+    }))
+
+    expect(result).toEqual({ version: current, started: true })
+    expect(stops).toBe(1)
+    expect(starts).toBe(1)
+  })
+
+  it("does not stop a relay instance that changed after the stale probe", async () => {
+    const stale = {
+      ...version,
+      buildId: "build-stale",
+      instanceId: "stale",
+      pid: 123,
+      managed: true,
+      managedEntrypointId: "managed-cli",
+      managedEntrypointModifiedAt: 100,
+    }
+    const current = {
+      ...version,
+      buildId: "build-current",
+      instanceId: "current",
+      pid: 456,
+      managed: true,
+      managedEntrypointId: "managed-cli",
+      managedEntrypointModifiedAt: 200,
+    }
+    let probes = 0
+    let stops = 0
+    const client = relay({
+      version: Effect.sync(() => ++probes === 1 ? stale : current),
+      shutdown: () => Effect.sync(() => {
+        stops++
+        return { stopping: true as const }
+      }),
+    })
+
+    const result = await Effect.runPromise(ensureRelay({
+      relay: client,
+      buildId: current.buildId,
+      currentVersion: current.version,
+      currentManagedEntrypoint: { id: "managed-cli", modifiedAt: 200 },
+      start: Effect.die("should not start"),
+      retryDelayMs: 0,
+    }))
+
+    expect(result).toEqual({ version: current, started: false })
+    expect(stops).toBe(0)
+  })
+
+  it("observes a concurrent replacement when stale shutdown loses the race", async () => {
+    const stale = {
+      ...version,
+      buildId: "build-stale",
+      instanceId: "stale",
+      pid: 123,
+      managed: true,
+      managedEntrypointId: "managed-cli",
+      managedEntrypointModifiedAt: 100,
+    }
+    const current = {
+      ...version,
+      buildId: "build-current",
+      instanceId: "current",
+      pid: 456,
+      managed: true,
+      managedEntrypointId: "managed-cli",
+      managedEntrypointModifiedAt: 200,
+    }
+    let probes = 0
+    const client = relay({
+      version: Effect.sync(() => ++probes <= 2 ? stale : current),
+      shutdown: () => Effect.fail(new RelayClient.RelayRejected({
+        message: "Relay shutdown does not match the active managed instance",
+        status: 409,
+        path: "/shutdown",
+        code: "invalid-request",
+      })),
+    })
+
+    const result = await Effect.runPromise(ensureRelay({
+      relay: client,
+      buildId: current.buildId,
+      currentVersion: current.version,
+      currentManagedEntrypoint: { id: "managed-cli", modifiedAt: 200 },
+      start: Effect.die("should not start"),
+      retryDelayMs: 0,
+    }))
+
+    expect(result).toEqual({ version: current, started: false })
+  })
+
+  it("does not replace a managed relay with an older CLI build", async () => {
+    const newer = {
+      ...version,
+      buildId: "build-newer",
+      instanceId: "newer",
+      pid: 456,
+      managed: true,
+      managedEntrypointId: "managed-cli",
+      managedEntrypointModifiedAt: 200,
+    }
+    let shutdowns = 0
+    const client = relay({
+      version: Effect.succeed(newer),
+      shutdown: () => Effect.sync(() => {
+        shutdowns++
+        return { stopping: true as const }
+      }),
+    })
+
+    const result = await Effect.runPromise(ensureRelay({
+      relay: client,
+      buildId: "build-older",
+      currentVersion: newer.version,
+      currentManagedEntrypoint: { id: "managed-cli", modifiedAt: 100 },
+      start: Effect.die("should not start"),
+      retryDelayMs: 0,
+    }))
+
+    expect(result.buildProblem).toContain("does not match CLI build")
+    expect(shutdowns).toBe(0)
+  })
+
+  it("orders BrowserRig content-hash builds only with safe managed build evidence", () => {
+    const running = {
+      version: "0.3.0",
+      buildId: "build-running",
+      managed: true,
+      managedEntrypointId: "same-cli-path",
+      managedEntrypointModifiedAt: 100,
+    }
+    expect(isNewerManagedBuild({
+      currentBuildId: "build-current",
+      currentVersion: "0.3.0",
+      currentManagedEntrypoint: { id: "same-cli-path", modifiedAt: 101 },
+      running,
+    })).toBe(true)
+    expect(isNewerManagedBuild({
+      currentBuildId: "build-current",
+      currentVersion: "0.3.0",
+      currentManagedEntrypoint: { id: "other-cli-path", modifiedAt: 101 },
+      running,
+    })).toBe(false)
+    expect(isNewerManagedBuild({
+      currentBuildId: "build-current",
+      currentVersion: "0.3.0",
+      currentManagedEntrypoint: { id: "same-cli-path", modifiedAt: 99 },
+      running,
+    })).toBe(false)
+    expect(isNewerManagedBuild({
+      currentBuildId: "build-current",
+      currentVersion: "0.4.0",
+      running: { ...running, version: "0.3.0" },
+    })).toBe(true)
+    expect(isNewerManagedBuild({
+      currentBuildId: "source-current",
+      currentVersion: "0.0.0-dev",
+      currentManagedEntrypoint: { id: "same-cli-path", modifiedAt: 101 },
+      running: { ...running, version: "0.0.0-dev", buildId: "source-running" },
+    })).toBe(false)
   })
 
   it("waits for the extension to reconnect after relay startup", async () => {

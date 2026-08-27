@@ -12,6 +12,25 @@ declare global {
 export const browserRigVersion: string = globalThis.__BROWSERRIG_VERSION__ ?? "0.0.0-dev"
 export const browserRigBuildId: string = globalThis.__BROWSERRIG_BUILD_ID__ ?? sourceBuildId()
 
+export type BuildArtifactMetadata = {
+  readonly id: string
+  readonly modifiedAt: number
+}
+
+export function buildArtifactMetadata(filePath: string): BuildArtifactMetadata | undefined {
+  try {
+    const realPath = fs.realpathSync(filePath)
+    const stat = fs.statSync(realPath)
+    if (!stat.isFile() || !Number.isFinite(stat.mtimeMs)) return undefined
+    return {
+      id: crypto.createHash("sha256").update(realPath).digest("hex").slice(0, 24),
+      modifiedAt: stat.mtimeMs,
+    }
+  } catch {
+    return undefined
+  }
+}
+
 export function sourceBuildIdForFiles(files: readonly { readonly name: string; readonly content: string | Buffer }[]): string {
   const hash = crypto.createHash("sha256")
   for (const file of [...files].sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0)) {

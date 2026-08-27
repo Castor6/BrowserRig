@@ -4,7 +4,12 @@ import path from "node:path"
 import process from "node:process"
 import * as RelayClient from "./relay-client.ts"
 import type { ExtensionStatus, RelayVersion } from "./relay-schema.ts"
-import { browserRigBuildId } from "./version.ts"
+import {
+  browserRigBuildId,
+  browserRigVersion,
+  buildArtifactMetadata,
+  type BuildArtifactMetadata,
+} from "./version.ts"
 
 export type RelayReadiness = {
   readonly version: RelayVersion
@@ -16,9 +21,13 @@ export type EnsureRelayOptions = {
   readonly relay: RelayClient.Interface
   readonly start?: Effect.Effect<void, Error>
   readonly buildId?: string
+  readonly currentVersion?: string
+  readonly currentManagedEntrypoint?: BuildArtifactMetadata
   readonly retryTimes?: number
   readonly retryDelayMs?: number
 }
+
+class RelayStillRunning extends Error {}
 
 export class RelayStartFailed extends Schema.TaggedErrorClass<RelayStartFailed>()(
   "RelayLifecycle.RelayStartFailed",
@@ -54,11 +63,58 @@ export function relayBuildProblem(version: RelayVersion, buildId = browserRigBui
 
 export const ensureRelay = Effect.fn("RelayLifecycle.ensureRelay")(function* (options: EnsureRelayOptions) {
   const buildId = options.buildId ?? browserRigBuildId
+  const currentVersion = options.currentVersion ?? browserRigVersion
+  const currentManagedEntrypoint = options.currentManagedEntrypoint ?? managedRelayBuild()
   const probe = options.relay.version
   const initial = yield* Effect.result(probe)
   if (initial._tag === "Success") {
     const buildProblem = relayBuildProblem(initial.success, buildId)
-    return { version: initial.success, started: false, ...(buildProblem ? { buildProblem } : {}) } satisfies RelayReadiness
+    if (!buildProblem) {
+      return { version: initial.success, started: false } satisfies RelayReadiness
+    }
+
+    const restart = yield* prepareStaleRelayRestart({
+      relay: options.relay,
+      version: initial.success,
+      currentBuildId: buildId,
+      currentVersion,
+      currentManagedEntrypoint,
+    })
+    if (restart._tag === "Unsupported") {
+      return { version: initial.success, started: false, buildProblem } satisfies RelayReadiness
+    }
+    if (restart._tag === "Changed") {
+      const replacementProblem = relayBuildProblem(restart.version, buildId)
+      return {
+        version: restart.version,
+        started: false,
+        ...(replacementProblem ? { buildProblem: replacementProblem } : {}),
+      } satisfies RelayReadiness
+    }
+
+    const replacement = yield* waitForRelayExitOrReplacement({
+      relay: options.relay,
+      version: initial.success,
+      ...(options.retryTimes === undefined ? {} : { retryTimes: options.retryTimes }),
+      ...(options.retryDelayMs === undefined ? {} : { retryDelayMs: options.retryDelayMs }),
+    })
+    if (replacement) {
+      const replacementProblem = relayBuildProblem(replacement, buildId)
+      return {
+        version: replacement,
+        started: false,
+        ...(replacementProblem ? { buildProblem: replacementProblem } : {}),
+      } satisfies RelayReadiness
+    }
+
+    yield* options.start ?? startManagedRelay()
+    const version = yield* waitForRelayReady(options)
+    const replacementProblem = relayBuildProblem(version, buildId)
+    return {
+      version,
+      started: true,
+      ...(replacementProblem ? { buildProblem: replacementProblem } : {}),
+    } satisfies RelayReadiness
   }
   const relayWasAbsent = isRelayUnreachable(initial.failure)
   if (!relayWasAbsent && !isRelayStarting(initial.failure)) {
@@ -66,7 +122,13 @@ export const ensureRelay = Effect.fn("RelayLifecycle.ensureRelay")(function* (op
   }
 
   if (relayWasAbsent) yield* options.start ?? startManagedRelay()
-  const version = yield* probe.pipe(
+  const version = yield* waitForRelayReady(options)
+  const buildProblem = relayBuildProblem(version, buildId)
+  return { version, started: relayWasAbsent, ...(buildProblem ? { buildProblem } : {}) } satisfies RelayReadiness
+})
+
+function waitForRelayReady(options: EnsureRelayOptions): Effect.Effect<RelayVersion, Error | RelayClient.RelayClientError> {
+  return options.relay.version.pipe(
     Effect.retry({
       times: options.retryTimes ?? 200,
       schedule: Schedule.spaced(options.retryDelayMs ?? 50),
@@ -80,9 +142,118 @@ export const ensureRelay = Effect.fn("RelayLifecycle.ensureRelay")(function* (op
       })
       : error),
   )
-  const buildProblem = relayBuildProblem(version, buildId)
-  return { version, started: relayWasAbsent, ...(buildProblem ? { buildProblem } : {}) } satisfies RelayReadiness
-})
+}
+
+function prepareStaleRelayRestart(options: {
+  readonly relay: RelayClient.Interface
+  readonly version: RelayVersion
+  readonly currentBuildId: string
+  readonly currentVersion: string
+  readonly currentManagedEntrypoint: BuildArtifactMetadata | undefined
+}): Effect.Effect<
+  | { readonly _tag: "Stopped" }
+  | { readonly _tag: "Changed"; readonly version: RelayVersion }
+  | { readonly _tag: "Unsupported" },
+  Error | RelayClient.RelayClientError
+> {
+  return Effect.gen(function* () {
+    const confirmed = yield* Effect.result(options.relay.version)
+    if (confirmed._tag === "Failure") {
+      if (isRelayUnreachable(confirmed.failure)) return { _tag: "Stopped" } as const
+      return yield* Effect.fail(confirmed.failure)
+    }
+    if (!isSameRelayInstance(options.version, confirmed.success)) {
+      return { _tag: "Changed", version: confirmed.success } as const
+    }
+    const instanceId = confirmed.success.instanceId
+    const shutdown = options.relay.shutdown
+    if (
+      confirmed.success.managed !== true
+      || !instanceId
+      || !shutdown
+      || !isNewerManagedBuild({
+        currentBuildId: options.currentBuildId,
+        currentVersion: options.currentVersion,
+        ...(options.currentManagedEntrypoint
+          ? { currentManagedEntrypoint: options.currentManagedEntrypoint }
+          : {}),
+        running: confirmed.success,
+      })
+    ) {
+      return { _tag: "Unsupported" } as const
+    }
+    yield* shutdown(instanceId).pipe(
+      Effect.catch((error) => isRelayUnreachable(error) || isRelayInstanceChanged(error)
+        ? Effect.void
+        : Effect.fail(error)),
+    )
+    return { _tag: "Stopped" } as const
+  })
+}
+
+function waitForRelayExitOrReplacement(options: {
+  readonly relay: RelayClient.Interface
+  readonly version: RelayVersion
+  readonly retryTimes?: number
+  readonly retryDelayMs?: number
+}): Effect.Effect<RelayVersion | undefined, Error | RelayClient.RelayClientError> {
+  return options.relay.version.pipe(
+    Effect.flatMap((version) => isSameRelayInstance(options.version, version)
+      ? Effect.fail(new RelayStillRunning("Stale BrowserRig relay is still running"))
+      : Effect.succeed(version)),
+    Effect.catch((error) => isRelayUnreachable(error) ? Effect.succeed(undefined) : Effect.fail(error)),
+    Effect.retry({
+      times: options.retryTimes ?? 200,
+      schedule: Schedule.spaced(options.retryDelayMs ?? 50),
+      while: (error) => error instanceof RelayStillRunning || isRelayStarting(error),
+    }),
+  )
+}
+
+function isSameRelayInstance(left: RelayVersion, right: RelayVersion): boolean {
+  if (left.instanceId || right.instanceId) {
+    return left.instanceId !== undefined && left.instanceId === right.instanceId
+  }
+  return left.pid !== undefined && right.pid !== undefined && left.pid === right.pid
+}
+
+export function isNewerManagedBuild(options: {
+  readonly currentBuildId: string
+  readonly currentVersion: string
+  readonly currentManagedEntrypoint?: BuildArtifactMetadata
+  readonly running: RelayVersion
+}): boolean {
+  if (!options.currentBuildId.startsWith("build-") || !options.running.buildId?.startsWith("build-")) {
+    return false
+  }
+  const versionOrder = compareStableVersions(options.currentVersion, options.running.version)
+  if (versionOrder === undefined || versionOrder < 0) return false
+  if (versionOrder > 0) return true
+  return options.currentManagedEntrypoint !== undefined
+    && options.currentManagedEntrypoint.id === options.running.managedEntrypointId
+    && options.currentManagedEntrypoint.modifiedAt > (options.running.managedEntrypointModifiedAt ?? Number.POSITIVE_INFINITY)
+}
+
+function compareStableVersions(left: string, right: string): number | undefined {
+  const leftParts = parseStableVersion(left)
+  const rightParts = parseStableVersion(right)
+  if (!leftParts || !rightParts) return undefined
+  for (let index = 0; index < leftParts.length; index++) {
+    const difference = leftParts[index]! - rightParts[index]!
+    if (difference !== 0) return Math.sign(difference)
+  }
+  return 0
+}
+
+function parseStableVersion(value: string): readonly [number, number, number] | undefined {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value)
+  if (!match) return undefined
+  return [Number(match[1]), Number(match[2]), Number(match[3])]
+}
+
+function isRelayInstanceChanged(error: unknown): boolean {
+  return error instanceof RelayClient.RelayRejected && error.status === 409
+}
 
 export const ensureExtensionConnected = Effect.fn("RelayLifecycle.ensureExtensionConnected")(function* (options: {
   readonly relay: RelayClient.Interface
@@ -180,6 +351,11 @@ export function managedRelayEntrypoint(entrypoint: string): string {
     return path.join(path.dirname(entrypoint), "cli.ts")
   }
   return entrypoint
+}
+
+export function managedRelayBuild(entrypoint = process.argv[1]): BuildArtifactMetadata | undefined {
+  if (!entrypoint) return undefined
+  return buildArtifactMetadata(managedRelayEntrypoint(entrypoint))
 }
 
 function isRelayUnreachable(error: unknown): error is RelayClient.RelayUnreachable {

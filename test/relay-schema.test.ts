@@ -268,7 +268,17 @@ describe("relay-schema", () => {
   })
 
   it("decodes relay versions from current and older builds", () => {
-    expect(decodeRelayVersion({ version: "0.1.0", buildId: "2026-07-04T02:00:00.000Z" }).buildId).toBe("2026-07-04T02:00:00.000Z")
+    const current = decodeRelayVersion({
+      version: "0.1.0",
+      buildId: "2026-07-04T02:00:00.000Z",
+      managed: true,
+      managedEntrypointId: "managed-cli",
+      managedEntrypointModifiedAt: 42,
+    })
+    expect(current.buildId).toBe("2026-07-04T02:00:00.000Z")
+    expect(current.managed).toBe(true)
+    expect(current.managedEntrypointId).toBe("managed-cli")
+    expect(current.managedEntrypointModifiedAt).toBe(42)
     expect(decodeRelayVersion({ version: "0.1.0" }).buildId).toBeUndefined()
   })
 

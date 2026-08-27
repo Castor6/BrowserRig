@@ -58,7 +58,7 @@ import { RecordingRelay } from "./recording-relay.ts"
 import { appendManagedRelayProcessLog } from "./relay-log.ts"
 import { boundedToken, runtimeFailureKind, summarizeDiagnosticUrl, summarizeRuntimeEvaluate } from "./runtime-diagnostics.ts"
 import { shouldExposeChildTarget, TargetRegistry, type RootTargetChange, type TargetOwnershipChange } from "./target-registry.ts"
-import { browserRigVersion } from "./version.ts"
+import { browserRigVersion, buildArtifactMetadata } from "./version.ts"
 
 export type { RelayServer } from "./relay-types.ts"
 
@@ -67,6 +67,7 @@ export const startRelay = Effect.fn("Relay.start")(function* (options: {
   readonly port?: number
   readonly releaseTargetGraceMs?: number
   readonly sessionCatalogPath?: string | null
+  readonly shutdown?: () => void
 } = {}) {
   yield* installRelayProcessGuard
   return yield* Effect.acquireRelease(makeRelay(options), (server) => {
@@ -151,6 +152,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
   readonly port?: number
   readonly releaseTargetGraceMs?: number
   readonly sessionCatalogPath?: string | null
+  readonly shutdown?: () => void
 } = {}) {
   const host = options.host ?? defaultHost
   const port = options.port ?? defaultPort
@@ -525,11 +527,26 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     const method = target && pageStatusSessionId(target) ? "tabs.group" : "tabs.ungroup"
     Effect.runPromise(Effect.ignore(sendToExtension({ method, params: { tabId } }))).catch(() => {})
   }
+  const managed = options.shutdown !== undefined
+    && (yield* Config.boolean("BROWSERRIG_MANAGED_RELAY").pipe(Config.withDefault(false)))
+  const managedEntrypoint = managed && process.argv[1] ? buildArtifactMetadata(process.argv[1]) : undefined
   const relayRequestHandler = createHttpRequestHandler({
     host,
     port,
     browserId,
-    relayInstance: { id: browserId, startedAt: new Date().toISOString(), pid: process.pid },
+    relayInstance: {
+      id: browserId,
+      startedAt: new Date().toISOString(),
+      pid: process.pid,
+      managed,
+      ...(managedEntrypoint
+        ? {
+            managedEntrypointId: managedEntrypoint.id,
+            managedEntrypointModifiedAt: managedEntrypoint.modifiedAt,
+          }
+        : {}),
+    },
+    shutdown: options.shutdown ?? (() => {}),
     registry,
     recordingRelay,
     sessions,

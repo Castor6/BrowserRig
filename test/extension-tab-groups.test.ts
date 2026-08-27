@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest"
-import { isBrowserRigGroupTitle, isCurrentBrowserRigGroupTitle, isLegacyBrowserRigGroupTitle, shouldUngroupBrowserRigTab, tabGroupTitle, tabGroupVisibleTitle } from "../extension/src/tab-groups.ts"
+import { describe, expect, it, vi } from "vitest"
+import { finalizeBrowserRigGrouping, isBrowserRigGroupTitle, isCurrentBrowserRigGroupTitle, isLegacyBrowserRigGroupTitle, shouldUngroupBrowserRigTab, tabGroupTitle, tabGroupVisibleTitle } from "../extension/src/tab-groups.ts"
 
 describe("isBrowserRigGroupTitle", () => {
   it("matches the current and legacy BrowserRig group titles", () => {
@@ -42,5 +42,32 @@ describe("shouldUngroupBrowserRigTab", () => {
     expect(shouldUngroupBrowserRigTab("reading-list")).toBe(false)
     expect(shouldUngroupBrowserRigTab("control")).toBe(false)
     expect(shouldUngroupBrowserRigTab(undefined)).toBe(false)
+  })
+})
+
+describe("finalizeBrowserRigGrouping", () => {
+  it("updates a group while the originating connection is current", async () => {
+    const update = vi.fn(async () => {})
+    const rollback = vi.fn(async () => {})
+
+    await finalizeBrowserRigGrouping({ assertCurrent: () => {}, update, rollback })
+
+    expect(update).toHaveBeenCalledOnce()
+    expect(rollback).not.toHaveBeenCalled()
+  })
+
+  it("rolls back a group created by a replaced connection", async () => {
+    const replacement = new Error("connection replaced")
+    const update = vi.fn(async () => {})
+    const rollback = vi.fn(async () => {})
+
+    await expect(finalizeBrowserRigGrouping({
+      assertCurrent: () => { throw replacement },
+      update,
+      rollback,
+    })).rejects.toBe(replacement)
+
+    expect(rollback).toHaveBeenCalledOnce()
+    expect(update).not.toHaveBeenCalled()
   })
 })

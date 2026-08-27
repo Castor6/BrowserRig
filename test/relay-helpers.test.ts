@@ -76,6 +76,16 @@ describe("validateWebSocketOrigin", () => {
     })).toBeDefined()
   })
 
+  it("matches Chromium's UTF-16LE path hashing on Windows", () => {
+    const extensionPath = "C:\\Users\\USER\\AppData\\Roaming\\npm\\node_modules\\browserrig\\extension\\dist"
+    expect(chromeExtensionOriginForPath(extensionPath, "win32")).toBe(
+      "chrome-extension://fbeepfnmlkifeghhffgbnindggamjkkb",
+    )
+    expect(chromeExtensionOriginForPath(`c${extensionPath.slice(1)}`, "win32")).toBe(
+      "chrome-extension://fbeepfnmlkifeghhffgbnindggamjkkb",
+    )
+  })
+
   it("rejects web origins for the extension endpoint", () => {
     expect(validateWebSocketOrigin({ origin: undefined, requireChromeExtension: true })).toBeDefined()
     expect(validateWebSocketOrigin({ origin: "https://example.com", requireChromeExtension: true })).toBeDefined()

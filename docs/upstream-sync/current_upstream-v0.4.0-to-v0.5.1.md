@@ -114,7 +114,7 @@ previous batch pull request merges.
 
 | Order | Product outcome | Upstream evidence | State | Deterministic branch | BrowserRig PR | Independent review | Validation evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 01 | ARIA value privacy | [#48](https://github.com/anomalyco/browser-control/pull/48), [#52](https://github.com/anomalyco/browser-control/pull/52), [#53](https://github.com/anomalyco/browser-control/pull/53) | `Pending` | `sync/upstream-v0.5.1-01-aria-privacy` | [#24](https://github.com/Castor6/BrowserRig/pull/24) | Changes requested; follow-up pending | Follow-up implementation validation complete; see evidence below. |
+| 01 | ARIA value privacy | [#48](https://github.com/anomalyco/browser-control/pull/48), [#52](https://github.com/anomalyco/browser-control/pull/52), [#53](https://github.com/anomalyco/browser-control/pull/53) | `Pending` | `sync/upstream-v0.5.1-01-aria-privacy` | [#24](https://github.com/Castor6/BrowserRig/pull/24) | `Approve` on 2026-08-27 at `4fc3fcb`; no findings | Typecheck, 514 tests, CLI build, `local-forms` smoke, and GitHub `validate` passed; see evidence below. |
 | 02 | Browser-context CDP routing | [#49](https://github.com/anomalyco/browser-control/pull/49) | `Pending` | `sync/upstream-v0.5.1-02-context-routing` | — | — | — |
 | 03 | Managed relay and client recovery | [#55](https://github.com/anomalyco/browser-control/pull/55), [#57](https://github.com/anomalyco/browser-control/pull/57) | `Pending` | `sync/upstream-v0.5.1-03-relay-client-recovery` | — | — | — |
 | 04 | Extension connectivity and browser-start recovery | [#47](https://github.com/anomalyco/browser-control/pull/47), [#58](https://github.com/anomalyco/browser-control/pull/58) | `Pending` | `sync/upstream-v0.5.1-04-extension-recovery` | — | — | — |
@@ -129,8 +129,8 @@ previous batch pull request merges.
 
 - **Implementation status:** author follow-up implementation and validation
   complete on `sync/upstream-v0.5.1-01-aria-privacy`; pull request
-  [#24](https://github.com/Castor6/BrowserRig/pull/24) awaits follow-up
-  independent review.
+  [#24](https://github.com/Castor6/BrowserRig/pull/24) is approved for the
+  conditional coordinator merge.
 - **Upstream commits adapted:** `045805c`, `f625957`, and `4761e61`.
 - **Changeset:** BrowserRig patch Changeset
   `.changeset/brave-owls-stop.md`.
@@ -152,7 +152,11 @@ previous batch pull request merges.
   full-matrix requirement after all core and extension batches land.
 - **Independent review:** the first review returned `Changes requested` because
   assigned-slot ancestry was missing from editable composed-tree traversal.
-  The author correction is ready for follow-up review; no approval is claimed.
+  After the author correction, the same independent reviewer returned `Approve`
+  on 2026-08-27 for final head `4fc3fcb` with no findings. The reviewer reran
+  typecheck, all 514 unit tests, diff checks, and independent Chrome CDP probes
+  for privacy, raw restoration, compact snapshots, frame lifecycles, and
+  concurrent callers; GitHub `validate` was also green.
 
 ## Batch briefs
 

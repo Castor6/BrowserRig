@@ -15,7 +15,7 @@ target_checked: 2026-08-27
 - **Target:** `v0.5.1`
 - **Target checked:** 2026-08-27
 - **Product recommendation:** sync selectively
-- **Cycle status:** implementation in progress (Batches 01-03 complete; Batch 04 next)
+- **Cycle status:** implementation in progress (Batches 01-03 complete; Batch 04 in progress)
 - **Execution authorization:** approved 2026-08-27 for the recorded `v0.5.1`
   target and all seven listed batches, including the conditional per-batch merge
   authority defined in [`README.md`](README.md)

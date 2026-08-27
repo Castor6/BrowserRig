@@ -22,3 +22,19 @@ export function isBrowserRigGroupTitle(title: string | undefined): boolean {
 export function shouldUngroupBrowserRigTab(groupTitle: string | undefined): boolean {
   return isBrowserRigGroupTitle(groupTitle)
 }
+
+export async function finalizeBrowserRigGrouping(options: {
+  readonly assertCurrent: () => void
+  readonly update: () => Promise<void>
+  readonly rollback: () => Promise<void>
+}): Promise<void> {
+  try {
+    options.assertCurrent()
+  } catch (error) {
+    // chrome.tabs.group mutates before it resolves, so a stale command must
+    // remove that anonymous group before the newer per-tab command can run.
+    await options.rollback().catch(() => {})
+    throw error
+  }
+  await options.update()
+}

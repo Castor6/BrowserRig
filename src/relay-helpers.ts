@@ -12,8 +12,12 @@ export const defaultHost = "127.0.0.1"
 export const defaultPort = 19990
 export const chromeWebStoreExtensionOrigin = "chrome-extension://dbobcmjamjdknplkplgdihdnmdjklpin"
 
-export function chromeExtensionOriginForPath(extensionPath: string): string {
-  const digest = crypto.createHash("sha256").update(extensionPath).digest()
+export function chromeExtensionOriginForPath(extensionPath: string, platform: NodeJS.Platform = process.platform): string {
+  const normalizedPath = platform === "win32" && /^[a-z]:/.test(extensionPath)
+    ? extensionPath.charAt(0).toUpperCase() + extensionPath.slice(1)
+    : extensionPath
+  const pathBytes = platform === "win32" ? Buffer.from(normalizedPath, "utf16le") : normalizedPath
+  const digest = crypto.createHash("sha256").update(pathBytes).digest()
   let extensionId = ""
   for (const byte of digest.subarray(0, 16)) {
     extensionId += String.fromCharCode(97 + (byte >> 4), 97 + (byte & 0x0f))

@@ -95,6 +95,15 @@ Verification:
 
 ## Recently Shipped
 
+### Browser startup and delayed tab groups do not strand connectivity
+
+The extension registers a global browser-start listener that repairs its alarm
+and requests a relay connection whenever Chromium starts the profile. Handshake
+readiness waits only for attached-debugger inventory; potentially suspended tab
+group cleanup runs afterward, reports failures through relay diagnostics, and
+serializes the latest ownership intent per tab without weakening active-tab
+generation binding.
+
 ### The independent no-click BrowserRig release is public
 
 No-click active-tab adoption is available through the CLI, MCP, and DSH bundle.

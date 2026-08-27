@@ -376,10 +376,11 @@ existence, and report the viewport, state, and interaction path actually tested.
 
 Common diagnoses:
 
-- `connected:false`: run a relay-backed command, confirm the Store extension is
+- `connected:false`: run a relay-backed command and allow the extension's
+  browser-start or alarm wake-up to reconnect. Confirm the Store extension is
   installed and enabled, then reload it from the browser's extensions page only
-  if its reconnect loop does not recover. Reload the unpacked build only for a
-  source-development installation.
+  if that loop does not recover. Reload the unpacked build only for a source-
+  development installation.
 - `connected:false` while Chrome says another product is debugging the browser:
   end that browser-wide debugging session before reloading BrowserRig. Chrome
   debugger ownership is exclusive for the affected targets.

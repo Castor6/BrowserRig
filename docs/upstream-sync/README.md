@@ -19,7 +19,8 @@ branches or starting an agent.
 - **Latest completed upstream sync:** `v0.4.0` (bootstrap source baseline;
   predates this archive process)
 - **Active cycle:** [`v0.4.0 -> v0.5.1`](current_upstream-v0.4.0-to-v0.5.1.md)
-- **Active cycle status:** implementation in progress; authorized 2026-08-27
+- **Active cycle status:** implementation in progress; Batch 04 Brave reload
+  waived by the user on 2026-08-28
 - **BrowserRig package version:** independent from the upstream sync cursor
 
 "Completed through `vX.Y.Z`" means every upstream pull request reachable in

@@ -15,7 +15,7 @@ target_checked: 2026-08-27
 - **Target:** `v0.5.1`
 - **Target checked:** 2026-08-27
 - **Product recommendation:** sync selectively
-- **Cycle status:** implementation in progress (Batch 01 complete; Batch 02 in progress)
+- **Cycle status:** implementation in progress (Batches 01-02 complete; Batch 03 next)
 - **Execution authorization:** approved 2026-08-27 for the recorded `v0.5.1`
   target and all seven listed batches, including the conditional per-batch merge
   authority defined in [`README.md`](README.md)
@@ -115,7 +115,7 @@ previous batch pull request merges.
 | Order | Product outcome | Upstream evidence | State | Deterministic branch | BrowserRig PR | Independent review | Validation evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 01 | ARIA value privacy | [#48](https://github.com/anomalyco/browser-control/pull/48), [#52](https://github.com/anomalyco/browser-control/pull/52), [#53](https://github.com/anomalyco/browser-control/pull/53) | `Complete` | `sync/upstream-v0.5.1-01-aria-privacy` | [#24](https://github.com/Castor6/BrowserRig/pull/24), merge `824815c` | `Approve` on 2026-08-27 at `4fc3fcb`; no findings | Typecheck, 514 tests, CLI build, `local-forms` smoke, and GitHub `validate` passed; see evidence below. |
-| 02 | Browser-context CDP routing | [#49](https://github.com/anomalyco/browser-control/pull/49) | `Pending` | `sync/upstream-v0.5.1-02-context-routing` | [#27](https://github.com/Castor6/BrowserRig/pull/27) | `Approve` on 2026-08-27 at `fba918d`; no findings | Typecheck, 520 tests, CLI build, six focused smoke cases, and GitHub `validate` passed; see evidence below. |
+| 02 | Browser-context CDP routing | [#49](https://github.com/anomalyco/browser-control/pull/49) | `Complete` | `sync/upstream-v0.5.1-02-context-routing` | [#27](https://github.com/Castor6/BrowserRig/pull/27), merge `72db822` | `Approve` on 2026-08-27 at `fba918d`; no findings | Typecheck, 520 tests, CLI build, six focused smoke cases, and GitHub `validate` passed; see evidence below. |
 | 03 | Managed relay and client recovery | [#55](https://github.com/anomalyco/browser-control/pull/55), [#57](https://github.com/anomalyco/browser-control/pull/57) | `Pending` | `sync/upstream-v0.5.1-03-relay-client-recovery` | — | — | — |
 | 04 | Extension connectivity and browser-start recovery | [#47](https://github.com/anomalyco/browser-control/pull/47), [#58](https://github.com/anomalyco/browser-control/pull/58) | `Pending` | `sync/upstream-v0.5.1-04-extension-recovery` | — | — | — |
 | 05 | Handoff readiness and idempotent deletion | [#59](https://github.com/anomalyco/browser-control/pull/59), [#61](https://github.com/anomalyco/browser-control/pull/61) | `Pending` | `sync/upstream-v0.5.1-05-handoff-session-delete` | — | — | — |
@@ -162,9 +162,8 @@ previous batch pull request merges.
 
 - **Implementation status:** implementation and author validation complete on
   `sync/upstream-v0.5.1-02-context-routing`; pull request
-  [#27](https://github.com/Castor6/BrowserRig/pull/27) is approved for the
-  conditional coordinator merge. The ledger remains `Pending` until the pull
-  request lands on `main`.
+  [#27](https://github.com/Castor6/BrowserRig/pull/27) merged to `main` as
+  `72db822` on 2026-08-27.
 - **Upstream commit adapted:** `f12441c` from upstream pull request
   [#49](https://github.com/anomalyco/browser-control/pull/49), manually fitted
   to BrowserRig's `browserRigSessionId` ownership, per-client visibility, root

@@ -21,6 +21,7 @@ import * as NetworkCapture from "./network-capture.ts"
 import type { AuthenticatedJsonOutcome, AuthenticatedJsonRequest, ExecuteAftermath, ExecuteLogEntry, ExecuteLogSummary, ExecuteMedia } from "./relay-schema.ts"
 import type { SessionTarget } from "./relay-types.ts"
 import { executionContextFailureDiagnostic, runtimeFailureKind } from "./runtime-diagnostics.ts"
+import { ariaSnapshotWithoutTextControlValues, registerAriaSnapshotSelector } from "./aria-snapshot.ts"
 
 const nodeModules = { fs, path, os, crypto, url, util, events, stream, buffer, http, https, zlib }
 const nodeModuleAliases = Object.keys(nodeModules).join(", ")
@@ -689,6 +690,10 @@ export class ExecuteSandbox {
         label: "Create a browser context for session adoption",
         run: () => browser.newContext(),
       }))
+      yield* Effect.tryPromise({
+        try: () => registerAriaSnapshotSelector(context),
+        catch: (cause) => cause instanceof Error ? cause : new Error("Register ARIA snapshot selector", { cause }),
+      })
       const selected = yield* Effect.tryPromise({
         try: () => waitForPageTarget({ context, targetId: target.targetId, timeoutMs: sessionPageHealthCheckTimeoutMs }),
         catch: (cause) => cause instanceof Error ? cause : new Error("Select page for session adoption", { cause }),
@@ -744,6 +749,7 @@ export class ExecuteSandbox {
       }
     }
     const context = this.browser.contexts()[0] ?? (await this.browser.newContext())
+    await registerAriaSnapshotSelector(context)
     installDownloadCapabilityGuards(context)
     const targetSelection = options.targetSelection
     const page = await this.getSessionPage({ context, ...(targetSelection ? { targetSelection } : {}) })
@@ -1224,7 +1230,9 @@ function ghostCursorOptions(options: ShowGhostCursorOptions | undefined): GhostC
 export function createAriaSnapshotHelper(page: Pick<Page, "locator">): AriaSnapshotHelper {
   return async (target, options) => {
     const locator = target === undefined ? page.locator("body") : typeof target === "string" ? page.locator(target) : target
-    return await locator.ariaSnapshot({ timeout: options?.timeout ?? defaultAriaSnapshotTimeoutMs })
+    return await ariaSnapshotWithoutTextControlValues(locator, {
+      timeout: options?.timeout ?? defaultAriaSnapshotTimeoutMs,
+    })
   }
 }
 

@@ -258,32 +258,153 @@ describe("fillInputs", () => {
   })
 })
 
+function ariaSnapshotFixture(options: {
+  readonly snapshot?: string
+  readonly captureError?: Error
+  readonly cleanupError?: Error
+} = {}) {
+  const ariaSnapshot = options.captureError
+    ? vi.fn().mockRejectedValue(options.captureError)
+    : vi.fn().mockResolvedValue(options.snapshot ?? "- main")
+  const waitFor = options.cleanupError
+    ? vi.fn().mockRejectedValue(options.cleanupError)
+    : vi.fn().mockResolvedValue(undefined)
+  const frame = { locator: vi.fn(() => ({ waitFor })) }
+  const unrelatedWaitFor = vi.fn().mockRejectedValue(new Error("Frame was detached"))
+  const unrelatedFrame = { locator: vi.fn(() => ({ waitFor: unrelatedWaitFor })) }
+  const dispose = vi.fn().mockResolvedValue(undefined)
+  const ownerFrame = vi.fn().mockResolvedValue(frame)
+  const context = {}
+  const ownerPage = { context: () => context, frames: () => [frame, unrelatedFrame] }
+  const locator = {
+    elementHandle: vi.fn().mockResolvedValue({ dispose, ownerFrame }),
+    locator: vi.fn(() => ({ ariaSnapshot })),
+    page: vi.fn(() => ownerPage),
+  } as unknown as Locator
+  const page = { locator: vi.fn(() => locator) } as unknown as Pick<Page, "locator">
+  return { ariaSnapshot, dispose, frame, locator, ownerFrame, page, unrelatedFrame, waitFor }
+}
+
 describe("ariaSnapshot helper", () => {
   it("uses a bounded default timeout for the default body target", async () => {
-    const ariaSnapshot = vi.fn().mockResolvedValue("snapshot")
-    const locator = { ariaSnapshot } as unknown as Locator
-    const page = { locator: vi.fn(() => locator) } as unknown as Pick<Page, "locator">
+    const fixture = ariaSnapshotFixture({ snapshot: '- textbox "Password"' })
 
-    await expect(createAriaSnapshotHelper(page)()).resolves.toBe("snapshot")
-    expect(page.locator).toHaveBeenCalledWith("body")
-    expect(ariaSnapshot).toHaveBeenCalledWith({ timeout: defaultAriaSnapshotTimeoutMs })
+    await expect(createAriaSnapshotHelper(fixture.page)()).resolves.toBe('- textbox "Password"')
+    expect(fixture.page.locator).toHaveBeenCalledWith("body")
+    expect(fixture.ownerFrame).toHaveBeenCalledOnce()
+    expect(fixture.dispose).toHaveBeenCalledOnce()
+    expect(fixture.ariaSnapshot).toHaveBeenCalledWith({ timeout: defaultAriaSnapshotTimeoutMs })
+    const activation = vi.mocked(fixture.locator.locator).mock.calls[0]?.[0]
+    expect(activation).toMatch(/^browserrigariaredact[a-f0-9]+=on_[a-f0-9]+$/)
+    if (typeof activation !== "string") throw new Error("Expected redaction selector activation")
+    expect(fixture.frame.locator).toHaveBeenCalledWith(activation.replace("=on_", "=off_"))
+    expect(fixture.waitFor).toHaveBeenCalledWith({ state: "attached", timeout: 1_000 })
+  })
+
+  it("reuses the selector engine for the same browser context", async () => {
+    const fixture = ariaSnapshotFixture()
+    const helper = createAriaSnapshotHelper(fixture.page)
+
+    await helper()
+    await helper()
+
+    const activations = vi.mocked(fixture.locator.locator).mock.calls.map(([selector]) => selector)
+    expect(activations).toHaveLength(2)
+    const [first, second] = activations
+    if (typeof first !== "string" || typeof second !== "string") throw new Error("Expected redaction selector activations")
+    expect(first.split("=")[0]).toBe(second.split("=")[0])
+    expect(first).not.toBe(second)
+  })
+
+  it("keeps selector names and tokens unique across duplicate module instances", async () => {
+    const duplicateUrl = new URL("../src/aria-snapshot.ts?duplicate-test", import.meta.url).href
+    const duplicate = await import(duplicateUrl) as typeof import("../src/aria-snapshot.ts")
+    const fixture = ariaSnapshotFixture()
+
+    await Promise.all([
+      createAriaSnapshotHelper(fixture.page)(),
+      duplicate.ariaSnapshotWithoutTextControlValues(fixture.locator, { timeout: defaultAriaSnapshotTimeoutMs }),
+    ])
+
+    const activations = vi.mocked(fixture.locator.locator).mock.calls.map(([selector]) => selector)
+    expect(activations).toHaveLength(2)
+    if (!activations.every((activation) => typeof activation === "string")) throw new Error("Expected redaction selector activations")
+    const parts = activations.map((activation) => activation.split("=on_"))
+    expect(new Set(parts.map(([name]) => name)).size).toBe(2)
+    expect(new Set(parts.map(([, token]) => token)).size).toBe(2)
   })
 
   it("preserves selector and locator targets and accepts a short timeout", async () => {
-    const selectorSnapshot = vi.fn().mockResolvedValue("selector")
-    const selectorLocator = { ariaSnapshot: selectorSnapshot } as unknown as Locator
-    const page = { locator: vi.fn(() => selectorLocator) } as unknown as Pick<Page, "locator">
-    const helper = createAriaSnapshotHelper(page)
+    const selector = ariaSnapshotFixture({ snapshot: '- main "Selector"' })
+    const helper = createAriaSnapshotHelper(selector.page)
 
-    await expect(helper("main", { timeout: 250 })).resolves.toBe("selector")
-    expect(page.locator).toHaveBeenCalledWith("main")
-    expect(selectorSnapshot).toHaveBeenCalledWith({ timeout: 250 })
+    await expect(helper("main", { timeout: 250 })).resolves.toBe('- main "Selector"')
+    expect(selector.page.locator).toHaveBeenCalledWith("main")
+    expect(selector.ariaSnapshot).toHaveBeenCalledWith({ timeout: 250 })
 
-    const locatorSnapshot = vi.fn().mockResolvedValue("locator")
-    const locator = { ariaSnapshot: locatorSnapshot } as unknown as Locator
-    await expect(helper(locator, { timeout: 400 })).resolves.toBe("locator")
-    expect(locatorSnapshot).toHaveBeenCalledWith({ timeout: 400 })
-    expect(page.locator).toHaveBeenCalledTimes(1)
+    const direct = ariaSnapshotFixture({ snapshot: '- button "Locator"' })
+    await expect(helper(direct.locator, { timeout: 400 })).resolves.toBe('- button "Locator"')
+    expect(direct.ariaSnapshot).toHaveBeenCalledWith({ timeout: 400 })
+    expect(selector.page.locator).toHaveBeenCalledTimes(1)
+  })
+
+  it("restores isolated-world value access when snapshot capture fails", async () => {
+    const captureError = new Error("target detached")
+    const fixture = ariaSnapshotFixture({ captureError })
+
+    await expect(createAriaSnapshotHelper(fixture.page)()).rejects.toThrow(captureError)
+    expect(fixture.waitFor).toHaveBeenCalledOnce()
+  })
+
+  it("does not return a snapshot when isolated-world cleanup cannot be confirmed", async () => {
+    const fixture = ariaSnapshotFixture({
+      snapshot: '- textbox "Password"',
+      cleanupError: new Error("frame wedged"),
+    })
+
+    await expect(createAriaSnapshotHelper(fixture.page)()).rejects.toThrow(
+      "BrowserRig could not confirm ARIA snapshot value-redaction cleanup",
+    )
+  })
+
+  it("does not clean an unrelated frame", async () => {
+    const fixture = ariaSnapshotFixture({ snapshot: '- textbox "Password"' })
+
+    await expect(createAriaSnapshotHelper(fixture.page)()).resolves.toBe('- textbox "Password"')
+    expect(fixture.unrelatedFrame.locator).not.toHaveBeenCalled()
+  })
+
+  it("treats a destroyed activation context as already cleaned", async () => {
+    const fixture = ariaSnapshotFixture({
+      snapshot: '- textbox "Password"',
+      cleanupError: new Error("Frame was detached"),
+    })
+
+    await expect(createAriaSnapshotHelper(fixture.page)()).resolves.toBe('- textbox "Password"')
+    expect(fixture.waitFor).toHaveBeenCalledOnce()
+  })
+
+  it("retries stale cleanup tokens before returning a later snapshot", async () => {
+    const fixture = ariaSnapshotFixture({ snapshot: '- textbox "Password"' })
+    fixture.waitFor.mockRejectedValueOnce(new Error("frame wedged"))
+    const helper = createAriaSnapshotHelper(fixture.page)
+
+    await expect(helper()).rejects.toThrow("BrowserRig could not confirm ARIA snapshot value-redaction cleanup")
+    await expect(helper()).resolves.toBe('- textbox "Password"')
+    expect(fixture.waitFor).toHaveBeenCalledTimes(3)
+  })
+
+  it("preserves capture and cleanup failures", async () => {
+    const captureError = new Error("target detached")
+    const cleanupError = new Error("frame wedged")
+    const fixture = ariaSnapshotFixture({ captureError, cleanupError })
+
+    const error = await createAriaSnapshotHelper(fixture.page)().catch((cause: unknown) => cause)
+    expect(error).toBeInstanceOf(AggregateError)
+    expect(error).toMatchObject({
+      message: "BrowserRig could not confirm ARIA snapshot value-redaction cleanup",
+      errors: expect.arrayContaining([captureError, cleanupError]),
+    })
   })
 })
 

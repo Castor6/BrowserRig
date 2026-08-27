@@ -15,7 +15,7 @@ target_checked: 2026-08-27
 - **Target:** `v0.5.1`
 - **Target checked:** 2026-08-27
 - **Product recommendation:** sync selectively
-- **Cycle status:** implementation in progress (Batches 01-03 complete; Batch 04 in progress)
+- **Cycle status:** implementation in progress (Batches 01-03 complete; Batch 04 author work ready for independent review)
 - **Execution authorization:** approved 2026-08-27 for the recorded `v0.5.1`
   target and all seven listed batches, including the conditional per-batch merge
   authority defined in [`README.md`](README.md)
@@ -117,7 +117,7 @@ previous batch pull request merges.
 | 01 | ARIA value privacy | [#48](https://github.com/anomalyco/browser-control/pull/48), [#52](https://github.com/anomalyco/browser-control/pull/52), [#53](https://github.com/anomalyco/browser-control/pull/53) | `Complete` | `sync/upstream-v0.5.1-01-aria-privacy` | [#24](https://github.com/Castor6/BrowserRig/pull/24), merge `824815c` | `Approve` on 2026-08-27 at `4fc3fcb`; no findings | Typecheck, 514 tests, CLI build, `local-forms` smoke, and GitHub `validate` passed; see evidence below. |
 | 02 | Browser-context CDP routing | [#49](https://github.com/anomalyco/browser-control/pull/49) | `Complete` | `sync/upstream-v0.5.1-02-context-routing` | [#27](https://github.com/Castor6/BrowserRig/pull/27), merge `72db822` | `Approve` on 2026-08-27 at `fba918d`; no findings | Typecheck, 520 tests, CLI build, six focused smoke cases, and GitHub `validate` passed; see evidence below. |
 | 03 | Managed relay and client recovery | [#55](https://github.com/anomalyco/browser-control/pull/55), [#57](https://github.com/anomalyco/browser-control/pull/57) | `Complete` | `sync/upstream-v0.5.1-03-relay-client-recovery` | [#29](https://github.com/Castor6/BrowserRig/pull/29), merge `d6e5939` | `Approve` on 2026-08-27 at `53c4b94`; no findings | Typecheck, 529 tests, CLI build, DSH package checks, six focused smoke cases, and GitHub `validate` passed; see evidence below. |
-| 04 | Extension connectivity and browser-start recovery | [#47](https://github.com/anomalyco/browser-control/pull/47), [#58](https://github.com/anomalyco/browser-control/pull/58) | `Pending` | `sync/upstream-v0.5.1-04-extension-recovery` | — | — | — |
+| 04 | Extension connectivity and browser-start recovery | [#47](https://github.com/anomalyco/browser-control/pull/47), [#58](https://github.com/anomalyco/browser-control/pull/58) | `Pending` | `sync/upstream-v0.5.1-04-extension-recovery` | [#31](https://github.com/Castor6/BrowserRig/pull/31) | Not started | Typecheck, 536 tests, CLI and extension builds, extension release/package checks, eight focused smoke cases, and constrained Chrome live recovery passed; required Brave unpacked reload was unavailable on this host. See evidence below. |
 | 05 | Handoff readiness and idempotent deletion | [#59](https://github.com/anomalyco/browser-control/pull/59), [#61](https://github.com/anomalyco/browser-control/pull/61) | `Pending` | `sync/upstream-v0.5.1-05-handoff-session-delete` | — | — | — |
 | 06 | Network-capture lifecycle correctness | [#65](https://github.com/anomalyco/browser-control/pull/65) | `Pending` | `sync/upstream-v0.5.1-06-network-lifecycle` | — | — | — |
 | 07 | Runtime and build dependency compatibility | [#54](https://github.com/anomalyco/browser-control/pull/54), [#62](https://github.com/anomalyco/browser-control/pull/62), [#63](https://github.com/anomalyco/browser-control/pull/63) | `Pending` | `sync/upstream-v0.5.1-07-dependencies` | — | — | — |
@@ -260,6 +260,68 @@ previous batch pull request merges.
   passed and relay resources returned to zero. This does not block Batch 03,
   but the smoke runner must exit cleanly before the cycle-wide matrix can be
   recorded as green at closure.
+
+### Batch 04 implementation evidence
+
+- **Implementation status:** author implementation and available validation are
+  complete on `sync/upstream-v0.5.1-04-extension-recovery`; pull request
+  [#31](https://github.com/Castor6/BrowserRig/pull/31) is ready for independent
+  review. The independent review has not started, so the ledger state remains
+  `Pending`.
+- **Upstream commits adapted:** `ba7f5b5` and `83904e5` from upstream pull
+  requests [#47](https://github.com/anomalyco/browser-control/pull/47) and
+  [#58](https://github.com/anomalyco/browser-control/pull/58). BrowserRig now
+  completes extension readiness after debugger inventory, runs tab-group cleanup
+  afterward, serializes current per-tab grouping intent, reports extension
+  diagnostics, repairs Windows path-derived migration origins correctly, and
+  registers a global `runtime.onStartup` activation. Active-tab presentation
+  remains bound to the generation that selected the tab.
+- **Boundaries preserved:** the BrowserRig manifest key and Store Item ID
+  `dbobcmjamjdknplkplgdihdnmdjklpin`, extension protocol `3`, product and
+  purple group identity, active-tab/no-click adoption, debugger-detach page
+  status ownership, relay target ownership, exact extension versions, and
+  release packaging remain BrowserRig-owned. Neither `extension/package.json`
+  nor `extension/manifest.json` changed; the Store archive retains BrowserRig's
+  public identity key by design.
+- **Failure reproduction:** the pre-change focused baseline passed 36 tests.
+  Five upstream-derived regressions then failed: browser-start activation and
+  handshake helpers were absent, stale grouping could not roll back, and a
+  suspended restored-tab `tabs.group` command kept relay status disconnected.
+  The implemented tests now pass, including current-socket rollback, serialized
+  group-to-ungroup ordering, relay readiness, extension log forwarding, and
+  Windows UTF-16LE path hashing.
+- **Changeset:** patch entries for both `browserrig-extension` and `browserrig`
+  in `.changeset/hip-places-tie.md`.
+- **Validation passed:** `pnpm typecheck`; `pnpm test` (59 files and 536 tests);
+  the five focused extension/relay/package test files (43 tests);
+  `pnpm build:cli`; `pnpm build:extension`; `pnpm check:extension-release
+  --base origin/main`; and `pnpm package:extension`. The deterministic Store ZIP
+  was `artifacts/browserrig-extension-0.1.1.zip`, SHA-256
+  `5aa67c909dbdaf650f135e559de972b00edc5cc8f271da8fc6c1e348170a9c4f`.
+  Its manifest still derives the BrowserRig Store ID, and the built background
+  contains the global startup listener. GitHub `validate` passed at author head
+  `c661492`.
+- **Focused smoke:** `stale-client-checkout`, `raw-first-checkout`,
+  `reconnect-evaluate`, `redirect-reconnect-evaluate`, `oopif-reconnect`,
+  `dedicated-worker`, `session-isolation`, and `multi-client` passed 8/8 against
+  the source relay with protocol `3`; every case returned targets, child
+  targets, and CDP clients to zero. As in Batch 03, the runner did not self-exit
+  after its complete summary and was interrupted, so the wrapper status was 130.
+- **Live recovery evidence and limitation:** the host had no Brave installation
+  or bundle in the running-app list, `/Applications`, user Applications, or
+  Spotlight. The only available Chromium-family browser was Google Chrome 151,
+  where the BrowserRig Store extension `0.1.1` was enabled with the correct Item
+  ID. Toggling it off and on restored protocol-`3` connectivity. A named
+  relay-owned session then survived an exact managed-relay shutdown and restart:
+  the target ID and page DOM were re-announced and retained, while JavaScript
+  `state` reset with the documented warning; `doctor` remained green. The test
+  session and tab were deleted, the relay was stopped, and the extension stayed
+  enabled. This validates the relay/re-announcement side but is not the required
+  source `extension/dist` reload in Brave; that browser-specific check remains
+  for a host with Brave installed.
+- **Not run in this batch:** the complete current smoke matrix. Batch 04 ran the
+  eight startup/reconnect, visibility, worker, and multi-client cases tied to its
+  paths; cycle closure retains the full-matrix requirement.
 
 ## Batch briefs
 

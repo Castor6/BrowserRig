@@ -115,7 +115,7 @@ previous batch pull request merges.
 | Order | Product outcome | Upstream evidence | State | Deterministic branch | BrowserRig PR | Independent review | Validation evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 01 | ARIA value privacy | [#48](https://github.com/anomalyco/browser-control/pull/48), [#52](https://github.com/anomalyco/browser-control/pull/52), [#53](https://github.com/anomalyco/browser-control/pull/53) | `Complete` | `sync/upstream-v0.5.1-01-aria-privacy` | [#24](https://github.com/Castor6/BrowserRig/pull/24), merge `824815c` | `Approve` on 2026-08-27 at `4fc3fcb`; no findings | Typecheck, 514 tests, CLI build, `local-forms` smoke, and GitHub `validate` passed; see evidence below. |
-| 02 | Browser-context CDP routing | [#49](https://github.com/anomalyco/browser-control/pull/49) | `Pending` | `sync/upstream-v0.5.1-02-context-routing` | [#27](https://github.com/Castor6/BrowserRig/pull/27) | `not started` | Typecheck, 520 tests, CLI build, six focused smoke cases, and GitHub `validate` passed; see evidence below. |
+| 02 | Browser-context CDP routing | [#49](https://github.com/anomalyco/browser-control/pull/49) | `Pending` | `sync/upstream-v0.5.1-02-context-routing` | [#27](https://github.com/Castor6/BrowserRig/pull/27) | `Approve` on 2026-08-27 at `fba918d`; no findings | Typecheck, 520 tests, CLI build, six focused smoke cases, and GitHub `validate` passed; see evidence below. |
 | 03 | Managed relay and client recovery | [#55](https://github.com/anomalyco/browser-control/pull/55), [#57](https://github.com/anomalyco/browser-control/pull/57) | `Pending` | `sync/upstream-v0.5.1-03-relay-client-recovery` | — | — | — |
 | 04 | Extension connectivity and browser-start recovery | [#47](https://github.com/anomalyco/browser-control/pull/47), [#58](https://github.com/anomalyco/browser-control/pull/58) | `Pending` | `sync/upstream-v0.5.1-04-extension-recovery` | — | — | — |
 | 05 | Handoff readiness and idempotent deletion | [#59](https://github.com/anomalyco/browser-control/pull/59), [#61](https://github.com/anomalyco/browser-control/pull/61) | `Pending` | `sync/upstream-v0.5.1-05-handoff-session-delete` | — | — | — |
@@ -162,8 +162,8 @@ previous batch pull request merges.
 
 - **Implementation status:** implementation and author validation complete on
   `sync/upstream-v0.5.1-02-context-routing`; pull request
-  [#27](https://github.com/Castor6/BrowserRig/pull/27) is ready for independent
-  review. The ledger remains `Pending` until that review approves and the pull
+  [#27](https://github.com/Castor6/BrowserRig/pull/27) is approved for the
+  conditional coordinator merge. The ledger remains `Pending` until the pull
   request lands on `main`.
 - **Upstream commit adapted:** `f12441c` from upstream pull request
   [#49](https://github.com/anomalyco/browser-control/pull/49), manually fitted
@@ -198,7 +198,13 @@ previous batch pull request merges.
 - **Not run in this batch:** the complete current smoke matrix. Batch 02 ran the
   six cases tied to visibility, alias, OOPIF, and worker routing; the cycle
   closure criteria retain the full-matrix requirement after all batches land.
-- **Independent review:** not started.
+- **Independent review:** `Approve` on 2026-08-27 for final implementation head
+  `fba918d`, with no findings. The reviewer reran typecheck, all 520 unit tests,
+  focused router and relay tests, diff and Changeset checks, and verified the
+  green GitHub `validate`. It confirmed that the live
+  `Browser.grantPermissions` rejection is a documented `chrome.debugger`
+  transport-domain boundary rather than a root-selection defect; supporting
+  that API would require a separately authorized extension or transport change.
 
 ## Batch briefs
 

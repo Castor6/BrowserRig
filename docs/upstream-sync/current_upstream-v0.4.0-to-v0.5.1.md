@@ -1,7 +1,7 @@
 ---
 title: Upstream Sync v0.4.0 to v0.5.1
 description: Product decision, execution authorization, and serial batch ledger for adopting selected upstream changes through v0.5.1.
-status: planned
+status: implementing
 upstream_from: v0.4.0
 upstream_to: v0.5.1
 target_checked: 2026-08-27
@@ -15,15 +15,17 @@ target_checked: 2026-08-27
 - **Target:** `v0.5.1`
 - **Target checked:** 2026-08-27
 - **Product recommendation:** sync selectively
-- **Cycle status:** planned
-- **Execution authorization:** pending explicit user approval
-- **Implementation started:** no
+- **Cycle status:** implementation in progress (Batch 01)
+- **Execution authorization:** approved 2026-08-27 for the recorded `v0.5.1`
+  target and all seven listed batches, including the conditional per-batch merge
+  authority defined in [`README.md`](README.md)
+- **Implementation started:** yes, 2026-08-27 (Batch 01)
 
-This documentation pull request records the recommendation and proposed
-batches. It does not authorize an implementation branch. Before Batch 01, the
-user must explicitly approve this target, batch scope, and the conditional merge
-authority defined in [`README.md`](README.md). Record the approval date and
-scope here before execution starts.
+The user approved this cycle on 2026-08-27 with scope limited to the recorded
+`v0.4.0 -> v0.5.1` target and the seven batches in this ledger. The approval
+includes the conditional batch merge authority defined in
+[`README.md`](README.md), but does not authorize product expansion, publication,
+or merging a `Version Packages` pull request.
 
 ## Review snapshot
 
@@ -112,7 +114,7 @@ previous batch pull request merges.
 
 | Order | Product outcome | Upstream evidence | State | Deterministic branch | BrowserRig PR | Independent review | Validation evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 01 | ARIA value privacy | [#48](https://github.com/anomalyco/browser-control/pull/48), [#52](https://github.com/anomalyco/browser-control/pull/52), [#53](https://github.com/anomalyco/browser-control/pull/53) | `Pending` | `sync/upstream-v0.5.1-01-aria-privacy` | — | — | — |
+| 01 | ARIA value privacy | [#48](https://github.com/anomalyco/browser-control/pull/48), [#52](https://github.com/anomalyco/browser-control/pull/52), [#53](https://github.com/anomalyco/browser-control/pull/53) | `Pending` | `sync/upstream-v0.5.1-01-aria-privacy` | [#24](https://github.com/Castor6/BrowserRig/pull/24) | `Approve` on 2026-08-27 at `4fc3fcb`; no findings | Typecheck, 514 tests, CLI build, `local-forms` smoke, and GitHub `validate` passed; see evidence below. |
 | 02 | Browser-context CDP routing | [#49](https://github.com/anomalyco/browser-control/pull/49) | `Pending` | `sync/upstream-v0.5.1-02-context-routing` | — | — | — |
 | 03 | Managed relay and client recovery | [#55](https://github.com/anomalyco/browser-control/pull/55), [#57](https://github.com/anomalyco/browser-control/pull/57) | `Pending` | `sync/upstream-v0.5.1-03-relay-client-recovery` | — | — | — |
 | 04 | Extension connectivity and browser-start recovery | [#47](https://github.com/anomalyco/browser-control/pull/47), [#58](https://github.com/anomalyco/browser-control/pull/58) | `Pending` | `sync/upstream-v0.5.1-04-extension-recovery` | — | — | — |
@@ -122,6 +124,39 @@ previous batch pull request merges.
 | — | Public Secret Profile SDK workers | [#60](https://github.com/anomalyco/browser-control/pull/60) | `Deferred` | — | — | — | Reconsider on concrete SDK demand. |
 | — | Temporary cross-host direction | [#44](https://github.com/anomalyco/browser-control/pull/44), [#46](https://github.com/anomalyco/browser-control/pull/46) | `Skipped` | — | — | — | Preserve loopback-only boundary. |
 | — | Upstream release mechanics | [#45](https://github.com/anomalyco/browser-control/pull/45), [#56](https://github.com/anomalyco/browser-control/pull/56), [#64](https://github.com/anomalyco/browser-control/pull/64), [#66](https://github.com/anomalyco/browser-control/pull/66) | `Skipped` | — | — | — | BrowserRig owns its versions and release pipeline. |
+
+### Batch 01 implementation evidence
+
+- **Implementation status:** author follow-up implementation and validation
+  complete on `sync/upstream-v0.5.1-01-aria-privacy`; pull request
+  [#24](https://github.com/Castor6/BrowserRig/pull/24) is approved for the
+  conditional coordinator merge.
+- **Upstream commits adapted:** `045805c`, `f625957`, and `4761e61`.
+- **Changeset:** BrowserRig patch Changeset
+  `.changeset/brave-owls-stop.md`.
+- **Validation passed:** `pnpm typecheck`; `pnpm test --
+  test/execute-ergonomics.test.ts test/runtime-diagnostics.test.ts` (Vitest ran
+  all 59 files and 514 tests); `pnpm build:cli`; and
+  `SMOKE_CASE=local-forms pnpm smoke` against the source relay and extension
+  protocol `3`. The follow-up smoke regression proves a light-DOM text node
+  assigned into a shadow-root contenteditable is present in raw Playwright ARIA
+  output, omitted from guarded output, restored exactly afterward, and leaves
+  the compact snapshot surface unchanged.
+- **Smoke preflight history:** the first attempt reached no test because no
+  relay was listening; the second reached no test because a bundled relay build
+  did not match the source build. The source relay was then started in a
+  controlled foreground PTY, the selected case passed, and the relay was
+  stopped.
+- **Not run in this batch:** the complete current smoke matrix. Batch 01 ran the
+  directly relevant `local-forms` fixture; the cycle closure criteria retain the
+  full-matrix requirement after all core and extension batches land.
+- **Independent review:** the first review returned `Changes requested` because
+  assigned-slot ancestry was missing from editable composed-tree traversal.
+  After the author correction, the same independent reviewer returned `Approve`
+  on 2026-08-27 for final head `4fc3fcb` with no findings. The reviewer reran
+  typecheck, all 514 unit tests, diff checks, and independent Chrome CDP probes
+  for privacy, raw restoration, compact snapshots, frame lifecycles, and
+  concurrent callers; GitHub `validate` was also green.
 
 ## Batch briefs
 

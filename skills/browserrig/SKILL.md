@@ -199,7 +199,10 @@ Use the least expensive view that answers the question:
   checked immediately and must match exactly one element; use a Locator for
   Playwright auto-waiting or semantic landmarks.
 - `ariaSnapshot(target?, { timeout })` returns Playwright's detailed YAML aria
-  tree when the compact snapshot omits needed structure.
+  tree when the compact snapshot omits needed structure. Native text-control
+  values, custom ARIA range values, and editable content are omitted so they do
+  not enter tool output. Concurrent guarded snapshots are supported; await them
+  before running other operations on the same page.
 - `screenshotWithLabels({ page, path? })` adds visual labels and metadata when
   layout matters.
 

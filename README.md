@@ -363,7 +363,9 @@ of silently targeting a different control.
 
 Other inspection helpers include:
 
-- `ariaSnapshot()` for a deeper accessibility-tree view
+- `ariaSnapshot()` for a deeper accessibility-tree view with native text-control
+  values, custom ARIA range values, and editable content omitted; concurrent
+  guarded snapshots are supported, but await them before other same-page work
 - `screenshotWithLabels()` for an annotated screenshot and element metadata
 - `fillInput()` and `fillInputs()` when browser extensions interfere with
   Playwright's normal `locator.fill()`

@@ -1,7 +1,7 @@
 ---
 title: Upstream Sync v0.4.0 to v0.5.1
 description: Product decision, execution authorization, and serial batch ledger for adopting selected upstream changes through v0.5.1.
-status: planned
+status: implementing
 upstream_from: v0.4.0
 upstream_to: v0.5.1
 target_checked: 2026-08-27
@@ -15,15 +15,17 @@ target_checked: 2026-08-27
 - **Target:** `v0.5.1`
 - **Target checked:** 2026-08-27
 - **Product recommendation:** sync selectively
-- **Cycle status:** planned
-- **Execution authorization:** pending explicit user approval
-- **Implementation started:** no
+- **Cycle status:** implementation in progress (Batch 01)
+- **Execution authorization:** approved 2026-08-27 for the recorded `v0.5.1`
+  target and all seven listed batches, including the conditional per-batch merge
+  authority defined in [`README.md`](README.md)
+- **Implementation started:** yes, 2026-08-27 (Batch 01)
 
-This documentation pull request records the recommendation and proposed
-batches. It does not authorize an implementation branch. Before Batch 01, the
-user must explicitly approve this target, batch scope, and the conditional merge
-authority defined in [`README.md`](README.md). Record the approval date and
-scope here before execution starts.
+The user approved this cycle on 2026-08-27 with scope limited to the recorded
+`v0.4.0 -> v0.5.1` target and the seven batches in this ledger. The approval
+includes the conditional batch merge authority defined in
+[`README.md`](README.md), but does not authorize product expansion, publication,
+or merging a `Version Packages` pull request.
 
 ## Review snapshot
 

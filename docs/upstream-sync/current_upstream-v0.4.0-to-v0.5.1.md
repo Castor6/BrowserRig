@@ -15,7 +15,7 @@ target_checked: 2026-08-27
 - **Target:** `v0.5.1`
 - **Target checked:** 2026-08-27
 - **Product recommendation:** sync selectively
-- **Cycle status:** all seven batches complete; closure prerequisites in progress
+- **Cycle status:** all seven batches complete; smoke closure prerequisite approved for merge
 - **Execution authorization:** approved 2026-08-27 for the recorded `v0.5.1`
   target and all seven listed batches, including the conditional per-batch merge
   authority defined in [`README.md`](README.md)
@@ -635,6 +635,60 @@ candidate for publication.
   and extension builds, release-intent, exact artifact, license, clean-profile,
   and four-version MCP checks. GitHub `validate` was green. The user-scoped
   Brave waiver was accepted for this batch without changing the global rule.
+
+## Closure prerequisite: smoke fixture cleanup
+
+- **Status:** approved for conditional coordinator merge on
+  `test/smoke-fixture-cleanup`; pull request
+  [#39](https://github.com/Castor6/BrowserRig/pull/39). This is a cycle-closure
+  prerequisite, not Batch 08; all seven implementation batch rows remain
+  `Complete`.
+- **Root cause reproduced:** the focused redirect, handoff navigation, handoff
+  target detach, network-capture, and download selection passed 5/5 and returned
+  relay targets, child targets, and CDP clients to zero, but its wrapper remained
+  alive after the green summary. Four smoke-owned HTTP fixture connections to
+  Chrome remained established because `server.close()` waited for active
+  keep-alive sockets while `boundedCleanup` reported success after five seconds
+  without waiting for the callbacks to settle. Manual interruption produced the
+  known wrapper status `130`.
+- **Implementation evidence:** initial commit `110ec92` gives each smoke-owned
+  fixture server a short graceful drain, closes only that server's idle and
+  active connections when needed, waits for its close callback, and verifies
+  both its listener and connection count reached zero. Review follow-up commit
+  `60a35e5` retains the fulfilled Promise for the server's lifecycle, so
+  concurrent and later repeated cleanup share one Promise and one underlying
+  `server.close()` call. A rejected Promise is removed only to permit an
+  explicit retry after repairing a transient fixture-server failure. Redirect,
+  handoff, network-capture, and download fixtures use the same Effect finalizer,
+  whose failure terminates the smoke wrapper nonzero instead of being ignored.
+  BrowserRig runtime, extension, and public behavior are unchanged.
+- **Validation passed:** `pnpm typecheck`; the six-test focused fixture cleanup
+  suite; and `pnpm test` (60 files and 558 tests). The focused suite covers
+  graceful completion, forced cleanup, concurrent and repeated Promise identity,
+  one close call after success, repaired retry after a real connection-inventory
+  error, nonzero Effect-finalizer wrapper exit, failure reporting, and a child
+  wrapper that exits naturally without `process.exit`.
+  The five directly affected live cases passed 5/5 and their wrapper exited
+  naturally with status `0`. The exact 23-case `SMOKE_CASE` command required by
+  `AGENTS.md` then exited naturally with status `0` and summary
+  `pass: 23, fail: 0, expectedFail: 0, unexpectedPass: 0`. Afterward no smoke
+  process, fixture listener, or fixture connection remained; the relay reported
+  zero targets, child targets, and CDP clients. All smoke-created sessions and
+  tabs were cleaned up, and the controlled source relay was stopped. GitHub
+  `validate` passed before review at author head `b173f34` and again after the
+  author follow-up at final head `5069611`.
+- **Changeset:** none. The change is test infrastructure only and has no shipped
+  package or extension behavior impact.
+- **Independent review:** `Changes requested` on 2026-08-28 for author head
+  `9197b72`. Successful cleanup discarded its cached promise, so a later repeat
+  called `server.close()` a second time instead of preserving one lifecycle-wide
+  close operation. The negative-timeout test also did not exercise a real close
+  or verification failure, and the ledger still called the ready pull request a
+  draft. After author follow-up `60a35e5`, the same independent reviewer returned
+  `Approve` on 2026-08-28 for final head `5069611` with no findings. The reviewer
+  reran typecheck, all 558 tests, focused cleanup tests, the five affected live
+  cases, and the exact 23-case matrix, confirming natural status-0 exits, clean
+  resource aftermath, and green GitHub `validate`.
 
 ## Batch briefs
 

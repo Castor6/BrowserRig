@@ -1,6 +1,6 @@
 import { NodeStdio } from "@effect/platform-node"
 import { Config, Context, Effect, Layer, Option } from "effect"
-import { McpSchema, McpServer } from "effect/unstable/ai"
+import { McpProtocol, McpSchema, McpServer } from "effect/unstable/ai"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -504,7 +504,16 @@ export function mcpToolRequiresRelayCompatibility(name: string): boolean {
 
 export const runMcpServer: Effect.Effect<never, Error> = Layer.launch(
   Layer.effectDiscard(registerTools).pipe(
-    Layer.provide(McpServer.layerStdio({ name: "browserrig", version: browserRigVersion })),
+    Layer.provide(McpServer.layerStdio({
+      name: "browserrig",
+      version: browserRigVersion,
+      protocols: [
+        McpProtocol.v2025_06_18,
+        McpProtocol.v2025_11_25,
+        McpProtocol.v2025_03_26,
+        McpProtocol.v2024_11_05,
+      ],
+    })),
     Layer.provide(NodeStdio.layer),
     Layer.provide(RelayClient.layerFetch),
   ),

@@ -624,9 +624,12 @@ candidate for publication.
 - **Environment gaps recorded:** `termctrl` was unavailable, so the live relay
   and smoke runner used bounded PTY sessions instead. Brave was not installed
   on the validation host (only Google Chrome `151.0.7922.174` was available),
-  so the AGENTS-required unpacked-extension reload in Brave was not run; Store
-  packaging, extension release checks, and live protocol-3 Chrome smoke passed.
-  The source relay was stopped afterward.
+  so the unpacked-extension reload in Brave was not run; Store packaging,
+  extension release checks, and live protocol-3 Chrome smoke passed. The user's
+  2026-08-28 direction to continue this upstream-sync cycle without Brave
+  validation is recorded as a one-time Batch 07 acceptance waiver as well as
+  the earlier Batch 04 waiver; the global repository rule remains unchanged for
+  future extension shim work. The source relay was stopped afterward.
 - **Independent review:** not started.
 
 ## Batch briefs

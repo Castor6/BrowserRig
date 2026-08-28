@@ -14,7 +14,7 @@ import { registerAriaSnapshotSelector } from "../src/aria-snapshot.ts"
 import { createAriaSnapshotHelper, createSnapshotHelpers } from "../src/execute.ts"
 import { getObject } from "../src/relay-helpers.ts"
 import { browserRigBuildId } from "../src/version.ts"
-import { closeSmokeFixtureServer } from "./smoke-fixture-server.ts"
+import { closeSmokeFixtureServerEffect } from "./smoke-fixture-server.ts"
 
 const endpointUrl = process.env.BROWSERRIG_ENDPOINT ?? "http://127.0.0.1:19990"
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
@@ -1834,7 +1834,7 @@ const scopedRedirectFixture = Effect.fnUntraced(function* (marker: string) {
       }),
       catch: (cause) => new Error("start redirect fixture", { cause }),
     }),
-    (fixture) => closeFixtureServer("close redirect fixture", fixture.server),
+    (fixture) => closeSmokeFixtureServerEffect("close redirect fixture", fixture.server),
   )
 })
 
@@ -1873,7 +1873,7 @@ const scopedHandoffFixture = Effect.fnUntraced(function* (marker: string) {
       }),
       catch: (cause) => new Error("start handoff fixture", { cause }),
     }),
-    (fixture) => closeFixtureServer("close handoff fixture", fixture.server),
+    (fixture) => closeSmokeFixtureServerEffect("close handoff fixture", fixture.server),
   )
 })
 
@@ -1916,7 +1916,7 @@ const scopedDownloadFixture = Effect.fnUntraced(function* (marker: string) {
       }),
       catch: (cause) => new Error("start download fixture", { cause }),
     }),
-    (fixture) => closeFixtureServer("close download fixture", fixture.server),
+    (fixture) => closeSmokeFixtureServerEffect("close download fixture", fixture.server),
   )
 })
 
@@ -1954,7 +1954,7 @@ const scopedNetworkFixture = Effect.fnUntraced(function* (marker: string) {
       }),
       catch: (cause) => new Error("start network fixture", { cause }),
     }),
-    (fixture) => closeFixtureServer("close network fixture", fixture.server),
+    (fixture) => closeSmokeFixtureServerEffect("close network fixture", fixture.server),
   )
 })
 
@@ -2100,18 +2100,6 @@ function boundedCleanup(label: string, run: () => PromiseLike<unknown>, timeoutM
       )
     })
   }).pipe(Effect.withSpan(`Smoke.cleanup.${label}`))
-}
-
-function closeFixtureServer(label: string, server: http.Server): Effect.Effect<void> {
-  return Effect.tryPromise({
-    try: () => closeSmokeFixtureServer(server),
-    catch: (cause) => new Error(label, { cause }),
-  }).pipe(
-    Effect.withSpan(`Smoke.cleanup.${label}`),
-    // Scoped finalizers cannot return typed errors. A fixture cleanup failure
-    // is a smoke failure, so surface it as a defect instead of ignoring it.
-    Effect.orDie,
-  )
 }
 
 type RunBrowserRigOptions = {

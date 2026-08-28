@@ -1,4 +1,5 @@
 import type http from "node:http"
+import { Effect } from "effect"
 
 const fixtureClosures = new WeakMap<http.Server, Promise<void>>()
 
@@ -16,11 +17,29 @@ export function closeSmokeFixtureServer(
     return existing
   }
 
-  const closing = closeAndVerifySmokeFixtureServer(server, options).finally(() => {
-    fixtureClosures.delete(server)
-  })
+  const closing = closeAndVerifySmokeFixtureServer(server, options)
   fixtureClosures.set(server, closing)
+  void closing.then(undefined, () => {
+    // A failed close may be retried after the caller repairs a transient
+    // fixture-server error. Keep successful closures cached for the server's
+    // lifetime so repeated cleanup never invokes server.close() again.
+    if (fixtureClosures.get(server) === closing) {
+      fixtureClosures.delete(server)
+    }
+  })
   return closing
+}
+
+export function closeSmokeFixtureServerEffect(label: string, server: http.Server): Effect.Effect<void> {
+  return Effect.tryPromise({
+    try: () => closeSmokeFixtureServer(server),
+    catch: (cause) => new Error(label, { cause }),
+  }).pipe(
+    Effect.withSpan(`Smoke.cleanup.${label}`),
+    // Scoped finalizers cannot return typed errors. A fixture cleanup failure
+    // is a smoke failure, so surface it as a defect instead of ignoring it.
+    Effect.orDie,
+  )
 }
 
 async function closeAndVerifySmokeFixtureServer(

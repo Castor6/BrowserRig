@@ -638,10 +638,10 @@ candidate for publication.
 
 ## Closure prerequisite: smoke fixture cleanup
 
-- **Status:** in progress on `test/smoke-fixture-cleanup`; draft pull request
-  [#39](https://github.com/Castor6/BrowserRig/pull/39). This is a cycle-closure
-  prerequisite, not Batch 08; all seven implementation batch rows remain
-  `Complete`.
+- **Status:** in progress on `test/smoke-fixture-cleanup`; open, ready-for-review
+  pull request [#39](https://github.com/Castor6/BrowserRig/pull/39). This is a
+  cycle-closure prerequisite, not Batch 08; all seven implementation batch rows
+  remain `Complete`.
 - **Root cause reproduced:** the focused redirect, handoff navigation, handoff
   target detach, network-capture, and download selection passed 5/5 and returned
   relay targets, child targets, and CDP clients to zero, but its wrapper remained
@@ -671,6 +671,13 @@ candidate for publication.
   `validate` passed at author head `b173f34`.
 - **Changeset:** none. The change is test infrastructure only and has no shipped
   package or extension behavior impact.
+- **Independent review:** `Changes requested` on 2026-08-28 for author head
+  `9197b72`. Successful cleanup discarded its cached promise, so a later repeat
+  called `server.close()` a second time instead of preserving one lifecycle-wide
+  close operation. The negative-timeout test also did not exercise a real close
+  or verification failure, and the ledger still called the ready pull request a
+  draft. Author follow-up and validation are in progress; independent follow-up
+  review remains pending, and no approval is recorded yet.
 
 ## Batch briefs
 

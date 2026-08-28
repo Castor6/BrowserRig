@@ -33,6 +33,7 @@ describe("smoke fixture server cleanup", () => {
 
   it("forces only the fixture server connections closed after the grace period", async () => {
     const server = http.createServer(() => undefined)
+    const close = vi.spyOn(server, "close")
     await listen(server)
     const socket = net.connect(addressPort(server), "127.0.0.1")
     socket.on("error", () => undefined)
@@ -49,7 +50,10 @@ describe("smoke fixture server cleanup", () => {
 
     expect(server.listening).toBe(false)
     await expect(connectionCount(server)).resolves.toBe(0)
-    await expect(closeSmokeFixtureServer(server)).resolves.toBeUndefined()
+    const repeatedClose = closeSmokeFixtureServer(server)
+    expect(repeatedClose).toBe(firstClose)
+    await expect(repeatedClose).resolves.toBeUndefined()
+    expect(close).toHaveBeenCalledOnce()
   })
 
   it("lets a wrapper process exit naturally after cleaning an active fixture connection", async () => {
@@ -97,6 +101,66 @@ describe("smoke fixture server cleanup", () => {
     )
     expect(server.listening).toBe(true)
     await closeSmokeFixtureServer(server)
+  })
+
+  it("reports a connection inventory error and permits a repaired retry", async () => {
+    const server = http.createServer((_request, response) => response.end())
+    const close = vi.spyOn(server, "close")
+    const getConnections = vi.spyOn(server, "getConnections")
+    getConnections.mockImplementationOnce((callback) => {
+      callback(new Error("fixture connection inventory failed"), 0)
+      return server
+    })
+    await listen(server)
+
+    const failedClose = closeSmokeFixtureServer(server)
+    await expect(failedClose).rejects.toThrow("fixture connection inventory failed")
+    const retriedClose = closeSmokeFixtureServer(server)
+    expect(retriedClose).not.toBe(failedClose)
+    await expect(retriedClose).resolves.toBeUndefined()
+    expect(closeSmokeFixtureServer(server)).toBe(retriedClose)
+    expect(close).toHaveBeenCalledTimes(2)
+  })
+
+  it("makes an Effect finalizer cleanup failure exit its wrapper nonzero", async () => {
+    const helperUrl = new URL("../scripts/smoke-fixture-server.ts", import.meta.url).href
+    const script = `
+      import { NodeRuntime } from "@effect/platform-node"
+      import { Effect } from "effect"
+      import http from "node:http"
+      import { closeSmokeFixtureServerEffect } from ${JSON.stringify(helperUrl)}
+
+      const server = http.createServer((_request, response) => response.end())
+      await new Promise((resolve, reject) => {
+        server.once("error", reject)
+        server.listen(0, "127.0.0.1", resolve)
+      })
+      server.getConnections = (callback) => {
+        callback(new Error("fixture finalizer inventory failed"), 0)
+        return server
+      }
+      Effect.scoped(
+        Effect.acquireRelease(
+          Effect.succeed(server),
+          (fixture) => closeSmokeFixtureServerEffect("close failing fixture", fixture),
+        ),
+      ).pipe(Effect.asVoid, NodeRuntime.runMain)
+    `
+
+    const failure = await execFilePromise(process.execPath, [
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "--eval",
+      script,
+    ], { timeout: 5_000 }).then(
+      () => undefined,
+      (cause: unknown) => cause,
+    )
+
+    expect(failure).toBeInstanceOf(Error)
+    const details = failure as Error & { readonly code?: unknown }
+    expect(details.code).toBe(1)
   })
 })
 

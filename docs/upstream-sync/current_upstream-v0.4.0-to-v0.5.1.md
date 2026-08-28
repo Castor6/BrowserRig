@@ -15,7 +15,7 @@ target_checked: 2026-08-27
 - **Target:** `v0.5.1`
 - **Target checked:** 2026-08-27
 - **Product recommendation:** sync selectively
-- **Cycle status:** implementation in progress (Batches 01-06 complete; Batch 07 implementation in progress)
+- **Cycle status:** implementation in progress (Batches 01-06 complete; Batch 07 author implementation complete and independent review pending)
 - **Execution authorization:** approved 2026-08-27 for the recorded `v0.5.1`
   target and all seven listed batches, including the conditional per-batch merge
   authority defined in [`README.md`](README.md)
@@ -120,7 +120,7 @@ previous batch pull request merges.
 | 04 | Extension connectivity and browser-start recovery | [#47](https://github.com/anomalyco/browser-control/pull/47), [#58](https://github.com/anomalyco/browser-control/pull/58) | `Complete` | `sync/upstream-v0.5.1-04-extension-recovery` | [#31](https://github.com/Castor6/BrowserRig/pull/31), merge `bf235f2` | `Approve` on 2026-08-28 at `a7aea52`; no findings, Brave reload waived for this batch | Typecheck, 536 tests, CLI and extension builds, extension release/package checks, eight focused smoke cases, and constrained Chrome live recovery passed; see evidence below. |
 | 05 | Handoff readiness and idempotent deletion | [#59](https://github.com/anomalyco/browser-control/pull/59), [#61](https://github.com/anomalyco/browser-control/pull/61) | `Complete` | `sync/upstream-v0.5.1-05-handoff-session-delete` | [#33](https://github.com/Castor6/BrowserRig/pull/33), merge `e79f95e` | `Approve` on 2026-08-28 at `cbdc29e`; no findings | Follow-up typecheck, 548 tests, CLI build, and four focused smoke cases passed; see evidence below. |
 | 06 | Network-capture lifecycle correctness | [#65](https://github.com/anomalyco/browser-control/pull/65) | `Complete` | `sync/upstream-v0.5.1-06-network-lifecycle` | [#35](https://github.com/Castor6/BrowserRig/pull/35), merge `2181194` | `Approve` on 2026-08-28 at `1206c82`; no findings | Typecheck, 552 tests, CLI build, six focused smoke cases, and GitHub `validate` passed at author implementation head; see evidence below. |
-| 07 | Runtime and build dependency compatibility | [#54](https://github.com/anomalyco/browser-control/pull/54), [#62](https://github.com/anomalyco/browser-control/pull/62), [#63](https://github.com/anomalyco/browser-control/pull/63) | `Pending` | `sync/upstream-v0.5.1-07-dependencies` | — | — | — |
+| 07 | Runtime and build dependency compatibility | [#54](https://github.com/anomalyco/browser-control/pull/54), [#62](https://github.com/anomalyco/browser-control/pull/62), [#63](https://github.com/anomalyco/browser-control/pull/63) | `Pending` | `sync/upstream-v0.5.1-07-dependencies` | [#37](https://github.com/Castor6/BrowserRig/pull/37) | `Not started` | Frozen install, typecheck, 552 tests, CLI and extension builds, Store/package verification, exact DSH profile installs, and all 23 smoke cases passed; the known fixture keep-alive exit gap remains for closure. See evidence below. |
 | — | Public Secret Profile SDK workers | [#60](https://github.com/anomalyco/browser-control/pull/60) | `Deferred` | — | — | — | Reconsider on concrete SDK demand. |
 | — | Temporary cross-host direction | [#44](https://github.com/anomalyco/browser-control/pull/44), [#46](https://github.com/anomalyco/browser-control/pull/46) | `Skipped` | — | — | — | Preserve loopback-only boundary. |
 | — | Upstream release mechanics | [#45](https://github.com/anomalyco/browser-control/pull/45), [#56](https://github.com/anomalyco/browser-control/pull/56), [#64](https://github.com/anomalyco/browser-control/pull/64), [#66](https://github.com/anomalyco/browser-control/pull/66) | `Skipped` | — | — | — | BrowserRig owns its versions and release pipeline. |
@@ -523,6 +523,111 @@ the baseline npm tarball was `browserrig-0.3.0.tgz` with SHA-256
 `bfa7fd71dd7b3f096306bcb3230ece063e14c3c937077c8a8b9213410ef19f09`.
 These establish a known-good comparison point; neither artifact is a release
 candidate for publication.
+
+### Batch 07 implementation evidence
+
+- **Implementation status:** author implementation and validation complete on
+  `sync/upstream-v0.5.1-07-dependencies`; pull request
+  [#37](https://github.com/Castor6/BrowserRig/pull/37) is ready for an
+  independent review. The ledger state remains `Pending`; no merge,
+  publication, independent review, or cycle closure was performed.
+- **Upstream evidence reviewed:** complete pull-request descriptions, file
+  lists, diffs, tests, and lockfile changes for upstream
+  [#54](https://github.com/anomalyco/browser-control/pull/54),
+  [#62](https://github.com/anomalyco/browser-control/pull/62), and
+  [#63](https://github.com/anomalyco/browser-control/pull/63), represented by
+  commits `7874e37`, `b26536f`, and `7f91927`. BrowserRig generated its own
+  pnpm `11.20.0` lockfile from its manifest; no upstream lockfile content was
+  copied.
+- **Compatibility failures reproduced before source adaptation:** TypeScript
+  `7.0.2` rejected the removed Effect `Schema.TaggedErrorClass`, self-namespace
+  declarations, the updated Chrome alarm shape, WebSocket send narrowing,
+  `ArrayBufferLike` recording bytes, and the MCP SDK's protocol-version type.
+  Effect RC also made bare `Flag.boolean` values required, which the first live
+  smoke attempt exposed as missing `--read-only` and `--json` errors. The CLI
+  build's license gate then rejected unused Redis barrel inputs because the
+  published `@redis/*` subpackages do not carry package-local license files.
+  Each failure was fixed at the compatibility boundary rather than by weakening
+  type, CLI, bundle, or license validation.
+
+| Surface | Final BrowserRig disposition | Compatibility evidence and preserved boundary |
+| --- | --- | --- |
+| Effect runtime | `adopt`: `effect`, `@effect/platform-node`, and `@effect/platform-node-shared` are aligned at exact `4.0.0-rc.111`; the optional public Effect peer is aligned. | Removed tagged-error APIs were migrated to `Schema.TaggedError`. CLI boolean flags now retain their prior explicit-false semantics. CLI/MCP Node adapters use direct Effect subpath imports, so executable bundles remain self-contained without pulling unused Redis implementations; library Effect remains external for application composition. Effect v4 and the local `effect-smol` checkout remain the API source of truth. |
+| Playwright | `adopt`: manifest and lock use stock `playwright-core` `^1.62.1` / `1.62.1`. | Full unit and smoke coverage preserved BrowserRig's CDP visibility, target ownership, context routing, handoff, session recovery, and adopted-tab behavior. Playwright remains externalized. |
+| WebSocket | `adopt`: `ws` `^8.21.3` / `8.21.3`. | Relay and extension behavior continues to use BrowserRig's custom JSON-over-websocket protocol; `ws` remains externalized. MCP negotiation was verified separately from the extension protocol. |
+| Parser | `adopt`: `acorn` `^8.18.0` / `8.18.0`. | Code-first execute parsing, AST restrictions, and guardrails retained their existing tests and smoke coverage; Acorn remains externalized. |
+| Package manager | `adopt`: exact pnpm `11.20.0` in `packageManager` and all four CI/release workflows. | A frozen install passed with BrowserRig's regenerated lockfile. The Node floor stayed `>=22.22.0` in the package and `22.22.0` in workflows. |
+| TypeScript and platform types | `adopt`: TypeScript `7.0.2`, Chrome types `0.2.7`, and Node types manifest `^26.2.0` / lock `26.4.0`; `already-covered`: WS types remain `8.18.1`. | Public root namespaces were expressed with direct namespace exports, extension sends use safe narrowing and owned `ArrayBuffer` bytes, the Chrome fixture includes the new alarm field, and MCP explicitly accepts `2025-11-25`, `2025-06-18`, `2025-03-26`, and `2024-11-05` while preferring the established `2025-06-18` fallback. |
+| Build tools | `adopt`: direct esbuild `0.28.2` and tsx `4.23.12`; `already-covered`: the `node22` target. | CLI and MCP bundles carry their Effect runtime, the library entry externalizes packages, browser/protocol packages remain external, and the final npm artifact contains every required bundled-dependency license. The RC platform's obsolete direct `ioredis` development peer was removed; transitive Redis code is not present in executable bundles. |
+| Test and release tools | `adopt`: Vitest `4.1.11` and Changesets `3.0.1`; `already-covered`: fflate `0.8.3`. | All 59 test files and 552 tests passed, Changesets status parsed all pending entries, deterministic Store ZIP packaging passed, and the existing Changesets/OIDC Trusted Publishing workflows remain BrowserRig-owned. |
+| BrowserRig-only DSH packages and Schemastery | `already-covered`: retain the existing Cordis/DSH peers and Schemastery dependency. | Exact-tarball installation in official profiles proved that package-local `dist/cli.js`, the `browserrig/dsh` export, and `autoInstallPeers: false` remain valid without a global BrowserRig install. |
+| Node floor, identity, versions, release metadata, and upstream lockfile | `skip`: do not adopt upstream's `>=22.19.0` floor, product/package identity, exact versions, changelog, Store metadata, release mechanics, or lockfile. | Final artifacts retain Node `>=22.22.0`, BrowserRig protocol `3`, extension `0.1.1`, Store identity, npm package `0.3.0`, DSH exports, and BrowserRig's release workflows. Exact package/extension versions and changelogs were not edited. |
+
+- **Published-impact record:** patch Changeset
+  `.changeset/fiery-streets-yell.md` names both `browserrig` and
+  `browserrig-extension`. The dependency update changes the shipped CLI/MCP
+  runtime and regenerated extension JavaScript, so both packaged surfaces need
+  a patch entry; no exact target version was selected.
+- **Offline validation passed:** pnpm `11.20.0` frozen install on Node
+  `22.22.0`; `pnpm typecheck`; `pnpm test` (59 files, 552 tests);
+  `pnpm build:cli`; `pnpm build:extension`; and
+  `pnpm check:extension-release -- --base dbf67bb`. The explicit `--base` is
+  required by the release-intent checker; an earlier invocation without it
+  reached only the usage guard and was corrected.
+- **Exact artifacts passed:** `pnpm package:extension` produced
+  `browserrig-extension-0.1.1.zip` with SHA-256
+  `a83de6277b99f813d84624f9b5944f825b1350adbbcdcdfaf7a79c70bcbfd32b`;
+  `pnpm package:npm` produced `browserrig-0.3.0.tgz` with SHA-256
+  `6027ffadb72918acca30bac818adef020b3cd63a4b4637465f71d489287a3777`.
+  Release-manifest creation and verification passed against those exact files.
+  The extension archive contains exactly the nine reviewed MV3 files with no
+  source maps. Its generated JavaScript/manifest hashes are `735ed105...717b`,
+  `ae21d69...3fcfe`, `05b2d6de...7afd`, and `ffaa5675...402b` for background,
+  content script, offscreen, and manifest respectively.
+- **Bundle and license verification passed:** the npm tarball contains CLI,
+  MCP, library, DSH, declarations, packaged extension, and seven license files:
+  `detect-libc` `2.1.2`, Effect `4.0.0-rc.111`, both Effect Node platform
+  packages `4.0.0-rc.111`, `msgpackr` `2.0.6`, `msgpackr-extract` `3.0.4`, and
+  `node-gyp-build-optional-packages` `5.2.2`. No Redis implementation is bundled.
+- **Exact DSH artifact validation passed:** focused DSH tests passed (3 files,
+  22 tests). The exact final tarball installed without peer warnings into newly
+  initialized official `web` and `headless` profiles under an isolated
+  `DSH_HOME`. Both profiles retained `autoInstallPeers: false`; `--dump-config`
+  included `browserrig/dsh`; import resolved inside each profile to exports
+  `Config`, `apply`, `inject`, and `name`; package-local
+  `node_modules/browserrig/dist/cli.js --help` passed; and both installed copies
+  contained the seven licenses. The temporary profiles were moved recoverably
+  to Trash after validation.
+- **Packaged MCP compatibility passed:** the MCP bundle from the exact installed
+  tarball negotiated all four explicit protocol versions (`2025-11-25`,
+  `2025-06-18`, `2025-03-26`, and `2024-11-05`) and reported server
+  `browserrig` `0.3.0` each time.
+- **Live smoke passed with a known wrapper-exit gap:** after correcting the
+  Effect RC boolean-flag regression, the complete required 23-case
+  `SMOKE_CASE` matrix reached `pass: 23, fail: 0, expectedFail: 0,
+  unexpectedPass: 0` against Chrome, extension `0.1.1`, and protocol `3`.
+  The wrapper was interrupted with status `130` only after the green summary
+  because fixture keep-alive handles prevented process exit. The redirect case
+  took `5,384 ms`, matching the five-second cleanup bound, although its port
+  `64464` had drained by the summary. At that summary, `lsof` showed four later
+  fixture server sockets still established to Chrome: handoff navigation
+  `64581`, handoff target detach `64628`, network capture `64661`, and download
+  `64690`. Their listeners had already stopped, proving `server.close()` was
+  waiting for active HTTP keep-alive sockets while `boundedCleanup` at
+  `scripts/smoke.ts:2086` resolved after five seconds and abandoned the pending
+  close callbacks used at lines `1836`, `1875`, `1918`, and `1956`. This
+  pre-existing smoke-fixture cleanup issue was not changed in the dependency
+  batch. The minimum closure follow-up is to track or close fixture connections
+  (for example with `closeAllConnections()` after graceful close), await and
+  verify each server's final closed state, and add a redirect/full-wrapper exit
+  regression.
+- **Environment gaps recorded:** `termctrl` was unavailable, so the live relay
+  and smoke runner used bounded PTY sessions instead. Brave was not installed
+  on the validation host (only Google Chrome `151.0.7922.174` was available),
+  so the AGENTS-required unpacked-extension reload in Brave was not run; Store
+  packaging, extension release checks, and live protocol-3 Chrome smoke passed.
+  The source relay was stopped afterward.
+- **Independent review:** not started.
 
 ## Batch briefs
 

@@ -674,8 +674,8 @@ candidate for publication.
   process, fixture listener, or fixture connection remained; the relay reported
   zero targets, child targets, and CDP clients. All smoke-created sessions and
   tabs were cleaned up, and the controlled source relay was stopped. GitHub
-  `validate` passed before review at author head `b173f34`; the final follow-up
-  check is pending.
+  `validate` passed before review at author head `b173f34` and again after the
+  author follow-up at `2fb57b6`.
 - **Changeset:** none. The change is test infrastructure only and has no shipped
   package or extension behavior impact.
 - **Independent review:** `Changes requested` on 2026-08-28 for author head

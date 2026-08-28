@@ -27,3 +27,7 @@ actual completion date.
 
 Archived records are immutable except for factual corrections. Add each archive
 to the index in [`../README.md`](../README.md).
+
+## Records
+
+- [`2026-08-28: v0.4.0 -> v0.5.1`](2026-08-28_upstream-v0.4.0-to-v0.5.1.md)

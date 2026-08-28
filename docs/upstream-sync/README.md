@@ -16,10 +16,9 @@ branches or starting an agent.
 
 ## Current state
 
-- **Latest completed upstream sync:** `v0.4.0` (bootstrap source baseline;
-  predates this archive process)
-- **Active cycle:** [`v0.4.0 -> v0.5.1`](current_upstream-v0.4.0-to-v0.5.1.md)
-- **Active cycle status:** closure audit pending
+- **Latest completed upstream sync:** `v0.5.1` (completed 2026-08-28)
+- **Active cycle:** none
+- **Active cycle status:** no approved upstream range is in progress
 - **BrowserRig package version:** independent from the upstream sync cursor
 
 "Completed through `vX.Y.Z`" means every upstream pull request reachable in
@@ -278,7 +277,8 @@ Archived cycle records are immutable except for factual corrections.
 
 ## Archive
 
-No upstream sync cycle has been archived under this process yet. The `v0.4.0`
-cursor is the shared bootstrap source baseline and therefore has no retroactive
-cycle record. See [`archive/README.md`](archive/README.md) for archive naming and
-contents.
+- [`2026-08-28: v0.4.0 -> v0.5.1`](archive/2026-08-28_upstream-v0.4.0-to-v0.5.1.md)
+
+The `v0.4.0` cursor is the shared bootstrap source baseline and therefore has
+no retroactive cycle record. See [`archive/README.md`](archive/README.md) for
+archive naming and contents.

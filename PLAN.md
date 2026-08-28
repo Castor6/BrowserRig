@@ -257,7 +257,9 @@ require a new extension capture protocol and permission model.
   selected behavior serially through independently reviewed batches, and keep
   the durable cursor, authorization, progress, and archives in
   [`docs/upstream-sync/`](docs/upstream-sync/README.md). Never treat sync as
-  product identity, release, or source-equivalence ownership.
+  product identity, release, or source-equivalence ownership. The first
+  archived cycle completed selective intake through upstream `v0.5.1` on
+  2026-08-28; no later range is currently active.
 - **Trusted local execution**: `execute(code)` trusts the calling agent. It is
   not an untrusted-code security boundary.
 - **Code-first control**: `execute(code)` is the primary interface. Dedicated

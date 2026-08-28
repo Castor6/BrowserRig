@@ -116,6 +116,40 @@ const makeFakeSandbox = (options?: {
 }
 
 describe("BrowserRigSessions", () => {
+  it("keeps network capture under the execute permit through teardown", async () => {
+    const captureStarted = Deferred.makeUnsafe<void>()
+    const releaseCapture = Deferred.makeUnsafe<void>()
+    let networkStartCalls = 0
+    const sandbox = makeFakeSandbox()
+    Object.assign(sandbox, {
+      networkStart: () => Effect.gen(function* () {
+        networkStartCalls += 1
+        yield* Deferred.succeed(captureStarted, undefined)
+        yield* Deferred.await(releaseCapture)
+        return { active: true, entryCount: 0, responseCount: 0, failureCount: 0, capturedBodyBytes: 0, truncatedBodyCount: 0, droppedEntryCount: 0 }
+      }),
+    })
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandbox)
+    sessions.createNew("capture-session")
+
+    const firstCapture = Effect.runFork(sessions.networkStart("capture-session"))
+    await Effect.runPromise(Deferred.await(captureStarted))
+    const deletion = Effect.runFork(sessions.delete("capture-session"))
+    const staleCapture = Effect.runFork(sessions.networkStart("capture-session"))
+    await Effect.runPromise(Effect.yieldNow)
+
+    expect(sandbox.closes()).toBe(0)
+    await Effect.runPromise(Deferred.succeed(releaseCapture, undefined))
+    await Effect.runPromise(Fiber.join(firstCapture))
+    await expect(Effect.runPromise(Fiber.join(deletion))).resolves.toBe(true)
+    await expect(Effect.runPromise(Fiber.join(staleCapture))).rejects.toMatchObject({
+      _tag: "BrowserRigSessions.SessionError",
+      reason: "inactive",
+    })
+    expect(networkStartCalls).toBe(1)
+    expect(sandbox.closes()).toBe(1)
+  })
+
   it("atomically ensures one named session", async () => {
     const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
     const summaries = await Effect.runPromise(Effect.all([

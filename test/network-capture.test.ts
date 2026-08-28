@@ -4,13 +4,14 @@ import os from "node:os"
 import path from "node:path"
 import { Effect } from "effect"
 import type { Page, Request, Response } from "playwright-core"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { Recorder } from "../src/network-capture.ts"
 import * as AuthProfile from "../src/auth-profile.ts"
 
 const temporaryDirectories: string[] = []
 
 afterEach(async () => {
+  vi.useRealTimers()
   await Promise.all(temporaryDirectories.splice(0).map((directory) => fs.rm(directory, { recursive: true, force: true })))
 })
 
@@ -230,6 +231,33 @@ describe("NetworkCapture", () => {
     await Effect.runPromise(recorder.cancel())
   })
 
+  it("removes a timed-out finalizer waiter before a later capture starts", async () => {
+    vi.useFakeTimers()
+    const firstPage = new FakePage()
+    const secondPage = new FakePage()
+    const recorder = new Recorder()
+    const releaseHeaders = firstPage.exchangeWithPendingRequestHeaders()
+    await Effect.runPromise(recorder.start(firstPage as unknown as Page))
+    firstPage.finishPendingRequestHeadersExchange()
+    const firstActive = activeCapture(recorder)
+
+    const firstStop = Effect.runPromise(recorder.stop())
+    await vi.advanceTimersByTimeAsync(5_000)
+    const firstResult = await firstStop
+
+    expect(firstResult).toMatchObject({ active: false, entryCount: 0, droppedEntryCount: 1 })
+    expect(finalizerWaiterCount(firstActive)).toBe(0)
+
+    await Effect.runPromise(recorder.start(secondPage as unknown as Page))
+    secondPage.exchange({ url: "https://example.com/api/current" })
+    releaseHeaders()
+    await vi.runAllTimersAsync()
+
+    const secondResult = await Effect.runPromise(recorder.stop())
+    expect(secondResult).toMatchObject({ active: false, entryCount: 1, responseCount: 1, droppedEntryCount: 0 })
+    expect(firstActive.entries).toHaveLength(0)
+  })
+
   it("redacts short typed values from execute output after capture", async () => {
     const page = new FakePage()
     const recorder = new Recorder()
@@ -301,6 +329,8 @@ describe("NetworkCapture", () => {
 })
 
 class FakePage extends EventEmitter {
+  private pendingHeadersExchange: { readonly request: Request; readonly response: Response } | undefined
+
   isClosed(): boolean {
     return false
   }
@@ -331,6 +361,25 @@ class FakePage extends EventEmitter {
 
   requestOnly(url: string): void {
     this.emit("request", fakeRequest({ url }))
+  }
+
+  exchangeWithPendingRequestHeaders(): () => void {
+    let release!: () => void
+    const headers = new Promise<Header[]>((resolve) => {
+      release = () => resolve([])
+    })
+    const request = fakeRequest({ headers })
+    this.pendingHeadersExchange = { request, response: fakeResponse(request) }
+    return release
+  }
+
+  finishPendingRequestHeadersExchange(): void {
+    const exchange = this.pendingHeadersExchange
+    if (!exchange) throw new Error("No pending request-headers exchange")
+    this.pendingHeadersExchange = undefined
+    this.emit("request", exchange.request)
+    this.emit("response", exchange.response)
+    this.emit("requestfinished", exchange.request)
   }
 
   hangingExchange(): void {
@@ -364,11 +413,11 @@ class FakePage extends EventEmitter {
 
 type Header = { readonly name: string; readonly value: string }
 
-function fakeRequest(options: { readonly url?: string; readonly headers?: readonly Header[]; readonly failure?: string; readonly redirectedFrom?: string }): Request {
+function fakeRequest(options: { readonly url?: string; readonly headers?: readonly Header[] | Promise<readonly Header[]>; readonly failure?: string; readonly redirectedFrom?: string }): Request {
   const request = {
     method: () => "GET",
     url: () => options.url ?? "https://example.com/api/test",
-    headersArray: async () => [...(options.headers ?? [])],
+    headersArray: async () => [...(await options.headers ?? [])],
     postDataBuffer: () => null,
     resourceType: () => "fetch",
     redirectedFrom: () => options.redirectedFrom ? { url: () => options.redirectedFrom } : null,
@@ -395,4 +444,19 @@ async function temporaryDirectory(): Promise<string> {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-network-"))
   temporaryDirectories.push(directory)
   return directory
+}
+
+type TestActiveCapture = {
+  readonly entries: readonly unknown[]
+  readonly finalizeWaiters: readonly unknown[] | ReadonlySet<unknown>
+}
+
+function activeCapture(recorder: Recorder): TestActiveCapture {
+  const active = (recorder as unknown as { readonly active?: TestActiveCapture }).active
+  if (!active) throw new Error("Expected an active capture")
+  return active
+}
+
+function finalizerWaiterCount(active: TestActiveCapture): number {
+  return "size" in active.finalizeWaiters ? active.finalizeWaiters.size : active.finalizeWaiters.length
 }

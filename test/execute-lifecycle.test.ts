@@ -1,5 +1,5 @@
 import type { Browser, BrowserContext, Page } from "playwright-core"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { Effect } from "effect"
 import {
   defaultPageClosedWarning,
@@ -12,6 +12,51 @@ import {
 import { BrowserRigSessions } from "../src/session-manager.ts"
 
 describe("execute lifecycle", () => {
+  it("settles network capture once for a successful execute", async () => {
+    const browserFixture = makeAdoptedBrowserFixture({
+      targetId: "target-network-settlement",
+      targetUrl: "https://example.test/capture",
+    })
+    const sandbox = new ExecuteSandbox({
+      endpointUrl: "http://127.0.0.1:0",
+      sessionId: "alpha",
+    })
+    Object.assign(sandbox, { browser: browserFixture.browser })
+    const recorder = (sandbox as unknown as {
+      readonly networkCapture: { settleForOutput: () => Promise<void> }
+    }).networkCapture
+    const settleForOutput = vi.spyOn(recorder, "settleForOutput")
+
+    const result = await Effect.runPromise(sandbox.execute("return 'complete'"))
+
+    expect(result).toMatchObject({ isError: false, value: "complete" })
+    expect(settleForOutput).toHaveBeenCalledTimes(1)
+  })
+
+  it("reports a real network finalizer failure instead of returning successful output", async () => {
+    const browserFixture = makeAdoptedBrowserFixture({
+      targetId: "target-network-finalizer-failure",
+      targetUrl: "https://example.test/capture",
+    })
+    const sandbox = new ExecuteSandbox({
+      endpointUrl: "http://127.0.0.1:0",
+      sessionId: "alpha",
+    })
+    Object.assign(sandbox, { browser: browserFixture.browser })
+    const recorder = (sandbox as unknown as {
+      readonly networkCapture: { settleForOutput: () => Promise<void> }
+    }).networkCapture
+    const settleForOutput = vi.spyOn(recorder, "settleForOutput")
+      .mockRejectedValueOnce(new Error("network finalizer failed"))
+      .mockResolvedValueOnce()
+
+    const result = await Effect.runPromise(sandbox.execute("return 'unsafe success'"))
+
+    expect(result.isError).toBe(true)
+    expect(result.text).toContain("network finalizer failed")
+    expect(settleForOutput).toHaveBeenCalledTimes(2)
+  })
+
   it("reports a session connected only when it has a live default page", () => {
     expect(isSessionPageConnected({ browserConnected: true, pageUrl: null, healthCheckRequired: false })).toBe(false)
     expect(isSessionPageConnected({ browserConnected: true, pageUrl: "about:blank", healthCheckRequired: false })).toBe(true)

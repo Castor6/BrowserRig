@@ -12,9 +12,9 @@ import * as RelayLifecycle from "./relay-lifecycle.ts"
 import { browserRigVersion } from "./version.ts"
 
 const packageRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-type CurrentSession = { id: string; established: boolean }
+export type CurrentSession = { id: string; established: boolean }
 
-type ToolSpec = {
+export type ToolSpec = {
   readonly name: string
   readonly description: string
   readonly inputSchema: JsonObject
@@ -39,9 +39,9 @@ type AdoptArguments = {
 }
 
 const emptyInputSchema = objectSchema({})
-export const sessionDeleteIsIdempotent = true
+export const sessionDeleteIsIdempotent = false
 
-function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSession): readonly ToolSpec[] {
+export function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSession): readonly ToolSpec[] {
   return [
     {
       name: "execute",
@@ -200,7 +200,6 @@ function makeToolSpecs(relay: RelayClient.Interface, currentSession: CurrentSess
         const id = optionalStringField(input, "id") ?? currentSession.id
         const result = yield* relay.sessionDelete(id)
         if (currentSession.id === id) {
-          currentSession.id = `mcp-${crypto.randomUUID().slice(0, 8)}`
           currentSession.established = false
         }
         return { ...result, currentSession: currentSession.id }

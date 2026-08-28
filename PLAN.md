@@ -104,9 +104,12 @@ destination without repeating the human action.
 
 ### Session cleanup is safely repeatable
 
-Deleting a resolved session id is idempotent across HTTP, CLI, and MCP. The
-structured result reports whether a live session was deleted, while CLI cleanup
-retries no longer turn an already-absent session into a failure.
+Deleting a resolved session id is idempotent across HTTP, RelayClient, CLI, and
+an explicit MCP target. The structured result reports whether a live session
+was deleted, while CLI cleanup retries no longer turn an already-absent session
+into a failure. MCP keeps omitted-id deletion on one stable current target, but
+does not advertise the whole optional-target tool as retry-safe because an
+intervening bare execute can atomically recreate that current session.
 
 ### Browser startup and delayed tab groups do not strand connectivity
 

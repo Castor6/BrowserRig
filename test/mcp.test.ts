@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { mcpErrorMessage, mcpToolRequiresRelayCompatibility, parseMcpAdoptArguments, sessionDeleteIsIdempotent, toolResultForValue } from "../src/mcp.ts"
+import { Effect } from "effect"
+import { makeToolSpecs, mcpErrorMessage, mcpToolRequiresRelayCompatibility, parseMcpAdoptArguments, sessionDeleteIsIdempotent, toolResultForValue } from "../src/mcp.ts"
+import type * as RelayClient from "../src/relay-client.ts"
 
 describe("MCP tool results", () => {
   it("rechecks relay compatibility for operational tools", () => {
@@ -23,8 +25,50 @@ describe("MCP tool results", () => {
     expect(() => parseMcpAdoptArguments({ active: true, targetIndex: 0 })).toThrow("exactly one")
   })
 
-  it("advertises session deletion as idempotent", () => {
-    expect(sessionDeleteIsIdempotent).toBe(true)
+  it("does not advertise implicit current-session deletion as retry-safe", () => {
+    expect(sessionDeleteIsIdempotent).toBe(false)
+  })
+
+  it("keeps consecutive implicit session deletions on one stable current target", async () => {
+    const deletedIds: string[] = []
+    let attempts = 0
+    const relay = {
+      sessionDelete: (id: string) => Effect.sync(() => {
+        deletedIds.push(id)
+        attempts += 1
+        return { id, deleted: attempts === 1 }
+      }),
+    } as unknown as RelayClient.Interface
+    const currentSession = { id: "mcp-current", established: true }
+    const sessionDelete = makeToolSpecs(relay, currentSession).find((spec) => spec.name === "session_delete")
+    if (!sessionDelete) throw new Error("session_delete tool missing")
+
+    const first = await Effect.runPromise(sessionDelete.handle({}))
+    const second = await Effect.runPromise(sessionDelete.handle({}))
+
+    expect(deletedIds).toEqual(["mcp-current", "mcp-current"])
+    expect(first).toEqual({ id: "mcp-current", deleted: true, currentSession: "mcp-current" })
+    expect(second).toEqual({ id: "mcp-current", deleted: false, currentSession: "mcp-current" })
+    expect(currentSession).toEqual({ id: "mcp-current", established: false })
+  })
+
+  it("keeps explicit session deletion scoped away from the MCP current session", async () => {
+    const deletedIds: string[] = []
+    const relay = {
+      sessionDelete: (id: string) => Effect.sync(() => {
+        deletedIds.push(id)
+        return { id, deleted: false }
+      }),
+    } as unknown as RelayClient.Interface
+    const currentSession = { id: "mcp-current", established: true }
+    const sessionDelete = makeToolSpecs(relay, currentSession).find((spec) => spec.name === "session_delete")
+    if (!sessionDelete) throw new Error("session_delete tool missing")
+
+    await Effect.runPromise(sessionDelete.handle({ id: "explicit-target" }))
+    await Effect.runPromise(sessionDelete.handle({ id: "explicit-target" }))
+
+    expect(deletedIds).toEqual(["explicit-target", "explicit-target"])
+    expect(currentSession).toEqual({ id: "mcp-current", established: true })
   })
 
   it("marks execute script failures as failed MCP tool calls", () => {

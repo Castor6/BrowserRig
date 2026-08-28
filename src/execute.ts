@@ -513,7 +513,7 @@ export class ExecuteSandbox {
       },
     }).pipe(
       Effect.uninterruptible,
-      Effect.ensuring(Effect.promise(() => this.networkCapture.settleForOutput())),
+      Effect.tapError(() => Effect.promise(() => this.networkCapture.settleForOutput())),
       Effect.match({
         onFailure: (error): ExecuteResult => {
           const logSummary = error instanceof ExecuteCodeError ? error.logSummary : emptyExecuteLogSummary()

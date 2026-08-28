@@ -15,7 +15,7 @@ target_checked: 2026-08-27
 - **Target:** `v0.5.1`
 - **Target checked:** 2026-08-27
 - **Product recommendation:** sync selectively
-- **Cycle status:** implementation in progress (Batches 01-05 complete; Batch 06 next)
+- **Cycle status:** implementation in progress (Batches 01-05 complete; Batch 06 approved for merge)
 - **Execution authorization:** approved 2026-08-27 for the recorded `v0.5.1`
   target and all seven listed batches, including the conditional per-batch merge
   authority defined in [`README.md`](README.md)
@@ -119,7 +119,7 @@ previous batch pull request merges.
 | 03 | Managed relay and client recovery | [#55](https://github.com/anomalyco/browser-control/pull/55), [#57](https://github.com/anomalyco/browser-control/pull/57) | `Complete` | `sync/upstream-v0.5.1-03-relay-client-recovery` | [#29](https://github.com/Castor6/BrowserRig/pull/29), merge `d6e5939` | `Approve` on 2026-08-27 at `53c4b94`; no findings | Typecheck, 529 tests, CLI build, DSH package checks, six focused smoke cases, and GitHub `validate` passed; see evidence below. |
 | 04 | Extension connectivity and browser-start recovery | [#47](https://github.com/anomalyco/browser-control/pull/47), [#58](https://github.com/anomalyco/browser-control/pull/58) | `Complete` | `sync/upstream-v0.5.1-04-extension-recovery` | [#31](https://github.com/Castor6/BrowserRig/pull/31), merge `bf235f2` | `Approve` on 2026-08-28 at `a7aea52`; no findings, Brave reload waived for this batch | Typecheck, 536 tests, CLI and extension builds, extension release/package checks, eight focused smoke cases, and constrained Chrome live recovery passed; see evidence below. |
 | 05 | Handoff readiness and idempotent deletion | [#59](https://github.com/anomalyco/browser-control/pull/59), [#61](https://github.com/anomalyco/browser-control/pull/61) | `Complete` | `sync/upstream-v0.5.1-05-handoff-session-delete` | [#33](https://github.com/Castor6/BrowserRig/pull/33), merge `e79f95e` | `Approve` on 2026-08-28 at `cbdc29e`; no findings | Follow-up typecheck, 548 tests, CLI build, and four focused smoke cases passed; see evidence below. |
-| 06 | Network-capture lifecycle correctness | [#65](https://github.com/anomalyco/browser-control/pull/65) | `Pending` | `sync/upstream-v0.5.1-06-network-lifecycle` | — | — | — |
+| 06 | Network-capture lifecycle correctness | [#65](https://github.com/anomalyco/browser-control/pull/65) | `Pending` | `sync/upstream-v0.5.1-06-network-lifecycle` | [#35](https://github.com/Castor6/BrowserRig/pull/35) | `Approve` on 2026-08-28 at `1206c82`; no findings | Typecheck, 552 tests, CLI build, six focused smoke cases, and GitHub `validate` passed at author implementation head; see evidence below. |
 | 07 | Runtime and build dependency compatibility | [#54](https://github.com/anomalyco/browser-control/pull/54), [#62](https://github.com/anomalyco/browser-control/pull/62), [#63](https://github.com/anomalyco/browser-control/pull/63) | `Pending` | `sync/upstream-v0.5.1-07-dependencies` | — | — | — |
 | — | Public Secret Profile SDK workers | [#60](https://github.com/anomalyco/browser-control/pull/60) | `Deferred` | — | — | — | Reconsider on concrete SDK demand. |
 | — | Temporary cross-host direction | [#44](https://github.com/anomalyco/browser-control/pull/44), [#46](https://github.com/anomalyco/browser-control/pull/46) | `Skipped` | — | — | — | Preserve loopback-only boundary. |
@@ -432,6 +432,63 @@ previous batch pull request merges.
   `cbdc29e` with no findings. The reviewer reran typecheck, all 548 tests,
   exact-page and generation probes, diff and Changeset checks, and confirmed
   the green GitHub `validate`.
+
+### Batch 06 implementation evidence
+
+- **Implementation status:** author implementation and validation are complete
+  on `sync/upstream-v0.5.1-06-network-lifecycle`; pull request
+  [#35](https://github.com/Castor6/BrowserRig/pull/35) is approved for the
+  conditional coordinator merge. The recovery marker is `4fe2a96`, and the
+  behavior implementation is `6e5cfe9`.
+- **Upstream commit adapted:** `73beb8a` from upstream pull request
+  [#65](https://github.com/anomalyco/browser-control/pull/65). BrowserRig ports
+  only its two operational network-capture corrections: a successful execute
+  settles capture output once, while error paths still settle before producing
+  redacted diagnostics; and a settlement waiter removes itself immediately
+  after success, timeout, or failure instead of remaining reachable until an
+  unrelated finalizer eventually completes. The upstream extension, build,
+  protocol, CLI, recording, session-manager, and target-registry refactors were
+  intentionally not imported.
+- **Boundaries preserved:** the persistent `ExecuteSandbox` remains the capture
+  owner; exchanges remain normalized and HAR remains an export adapter. Per-body
+  and aggregate retention limits, route-scoped stable `BROWSERRIG_SECRET_N`
+  references, mode-`0600` lossless Secret Profiles, the `secrets run` boundary,
+  cross-process profile locks, serialized recorder transitions, credential
+  redaction, generation-based late-finalizer rejection, session execute permits,
+  HTTP cancellation, journal ordering, and aftermath redaction are unchanged.
+- **Failure reproduction and focused tests:** before the source correction, the
+  three-file lifecycle selection ran 92 tests and reproduced both missing
+  behaviors: successful execute called output settlement twice, and a finalizer
+  blocked on request headers left one waiter retained after the five-second stop
+  timeout. After the correction, the same 92 tests passed. The added probes also
+  prove that a real settlement failure produces an error result, a timed-out
+  finalizer cannot append into a later capture after its generation is discarded,
+  and session deletion waits for network work under the execute permit before a
+  queued stale network operation fails without reaching the closed sandbox.
+- **Changeset:** BrowserRig patch Changeset
+  `.changeset/fifty-aliens-knock.md`.
+- **Validation passed:** `pnpm typecheck`; `pnpm test` (59 files and 552 tests);
+  the focused network-capture, execute-lifecycle, and session-manager selection
+  (3 files and 92 tests); `pnpm build:cli`; and GitHub `validate` at author
+  implementation head `6e5cfe9`.
+- **Focused smoke:** `network-capture`, `reconnect-evaluate`,
+  `redirect-reconnect-evaluate`, `execute-page-recovery`,
+  `execute-page-detach-recovery`, and `session-isolation` passed 6/6 against the
+  controlled source relay and compatible Store extension `0.1.1` using protocol
+  `3`. The network case retained its redacted artifact/profile assertions, and
+  every case returned targets, child targets, and CDP clients to zero. The known
+  smoke keep-alive issue left the wrapper running after its complete summary, so
+  it was interrupted with status 130; the source relay was then stopped and the
+  two pre-existing disconnected persisted sessions remained untouched.
+- **Not run in this batch:** the complete current smoke matrix, retained for
+  cycle closure. Extension build and unpacked-extension reload were not run
+  because no extension source changed. DSH build/pack and clean official profile
+  installation were not run because neither the DSH adapter nor its packaged
+  output changed.
+- **Independent review:** `Approve` on 2026-08-28 for final head `1206c82`,
+  with no findings. The reviewer reran typecheck, all 552 tests, focused
+  lifecycle tests, diff and Changeset checks, and independent error-order and
+  64-waiter cancellation/generation probes; GitHub `validate` was green.
 
 ## Batch briefs
 

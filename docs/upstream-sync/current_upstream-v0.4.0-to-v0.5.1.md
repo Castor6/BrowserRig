@@ -1,10 +1,10 @@
 ---
 title: Upstream Sync v0.4.0 to v0.5.1
 description: Product decision, execution authorization, and serial batch ledger for adopting selected upstream changes through v0.5.1.
-status: implementing
+status: closure-audit-pending
 upstream_from: v0.4.0
 upstream_to: v0.5.1
-target_checked: 2026-08-27
+target_checked: 2026-08-28
 ---
 
 # Upstream Sync: `v0.4.0 -> v0.5.1`
@@ -13,9 +13,9 @@ target_checked: 2026-08-27
 
 - **Latest completed upstream sync:** `v0.4.0` bootstrap source baseline
 - **Target:** `v0.5.1`
-- **Target checked:** 2026-08-27
+- **Target checked:** 2026-08-28
 - **Product recommendation:** sync selectively
-- **Cycle status:** all seven batches complete; smoke closure prerequisite approved for merge
+- **Cycle status:** all seven batches and closure prerequisites complete; closure audit pending
 - **Execution authorization:** approved 2026-08-27 for the recorded `v0.5.1`
   target and all seven listed batches, including the conditional per-batch merge
   authority defined in [`README.md`](README.md)
@@ -638,11 +638,10 @@ candidate for publication.
 
 ## Closure prerequisite: smoke fixture cleanup
 
-- **Status:** approved for conditional coordinator merge on
-  `test/smoke-fixture-cleanup`; pull request
-  [#39](https://github.com/Castor6/BrowserRig/pull/39). This is a cycle-closure
-  prerequisite, not Batch 08; all seven implementation batch rows remain
-  `Complete`.
+- **Status:** complete. Pull request
+  [#39](https://github.com/Castor6/BrowserRig/pull/39) merged to `main` as
+  `1785d49` on 2026-08-28. This is a cycle-closure prerequisite, not Batch 08;
+  all seven implementation batch rows remain `Complete`.
 - **Root cause reproduced:** the focused redirect, handoff navigation, handoff
   target detach, network-capture, and download selection passed 5/5 and returned
   relay targets, child targets, and CDP clients to zero, but its wrapper remained
@@ -689,6 +688,32 @@ candidate for publication.
   reran typecheck, all 558 tests, focused cleanup tests, the five affected live
   cases, and the exact 23-case matrix, confirming natural status-0 exits, clean
   resource aftermath, and green GitHub `validate`.
+
+## Closure readiness evidence
+
+- **Target freshness:** upstream tags were fetched again on 2026-08-28 into the
+  isolated `upstream/*` namespace. `v0.5.1` remains the newest `v0.5.x` tag,
+  resolving to `bbd92a7`; no additional target-minor pull requests need intake.
+- **Batch and pull-request state:** all seven implementation rows are
+  `Complete`, with merged BrowserRig pull requests and final independent
+  `Approve` verdicts. The smoke prerequisite is also merged. No deterministic
+  `sync/upstream-v0.5.1-*` branch, smoke prerequisite branch, or open cycle pull
+  request remains on `origin`. The open `Version Packages` pull request
+  [#25](https://github.com/Castor6/BrowserRig/pull/25) is release automation,
+  not a cycle implementation pull request, and remains intentionally unmerged.
+- **Final-tree validation:** merge commit `1785d49` and reviewed pull-request
+  head `4118f21` have the same tree `3242251`. GitHub `validate` passed on that
+  head with 60 test files and 558 tests plus the standard CLI, extension, and
+  package checks. The exact 23-case smoke command required by `AGENTS.md`
+  completed naturally with status `0`, summary `pass: 23, fail: 0,
+  expectedFail: 0, unexpectedPass: 0`, zero targets, child targets, and CDP
+  clients, and no retained fixture listener or connection.
+- **Publication boundary:** no `Version Packages` pull request was merged, and
+  no npm publication, Chrome Web Store submission, tag, or release was
+  performed or authorized by this cycle.
+- **Next step:** a fresh closure audit agent must verify this evidence and the
+  complete disposition ledger before the record can be archived and the
+  completed upstream cursor advanced to `v0.5.1`.
 
 ## Batch briefs
 

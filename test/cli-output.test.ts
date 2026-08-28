@@ -1,13 +1,10 @@
 import { describe, expect, it, vi } from "vitest"
 
-vi.mock("@effect/platform-node", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@effect/platform-node")>()
+vi.mock("@effect/platform-node/NodeRuntime", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@effect/platform-node/NodeRuntime")>()
   return {
     ...actual,
-    NodeRuntime: {
-      ...actual.NodeRuntime,
-      runMain: vi.fn(),
-    },
+    runMain: vi.fn(),
   }
 })
 

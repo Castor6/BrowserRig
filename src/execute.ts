@@ -37,7 +37,7 @@ export const downloadCapabilityErrorMessage = "Downloads are unavailable in Brow
 const downloadGuardedPages = new WeakSet<Page>()
 const downloadGuardedContexts = new WeakSet<BrowserContext>()
 
-export class PlaywrightOperationError extends Schema.TaggedErrorClass<PlaywrightOperationError>()(
+export class PlaywrightOperationError extends Schema.TaggedError<PlaywrightOperationError>()(
   "Execute.PlaywrightOperationError",
   {
     message: Schema.String,
@@ -47,7 +47,7 @@ export class PlaywrightOperationError extends Schema.TaggedErrorClass<Playwright
   },
 ) {}
 
-export class SessionPageRecoveryError extends Schema.TaggedErrorClass<SessionPageRecoveryError>()(
+export class SessionPageRecoveryError extends Schema.TaggedError<SessionPageRecoveryError>()(
   "Execute.SessionPageRecoveryError",
   {
     message: Schema.String,
@@ -56,7 +56,7 @@ export class SessionPageRecoveryError extends Schema.TaggedErrorClass<SessionPag
   },
 ) {}
 
-export class TargetSelectionError extends Schema.TaggedErrorClass<TargetSelectionError>()(
+export class TargetSelectionError extends Schema.TaggedError<TargetSelectionError>()(
   "Execute.TargetSelectionError",
   {
     message: Schema.String,

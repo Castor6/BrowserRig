@@ -29,7 +29,7 @@ export type EnsureRelayOptions = {
 
 class RelayStillRunning extends Error {}
 
-export class RelayStartFailed extends Schema.TaggedErrorClass<RelayStartFailed>()(
+export class RelayStartFailed extends Schema.TaggedError<RelayStartFailed>()(
   "RelayLifecycle.RelayStartFailed",
   {
     message: Schema.String,
@@ -38,12 +38,12 @@ export class RelayStartFailed extends Schema.TaggedErrorClass<RelayStartFailed>(
   },
 ) {}
 
-export class ExtensionDisconnected extends Schema.TaggedErrorClass<ExtensionDisconnected>()(
+export class ExtensionDisconnected extends Schema.TaggedError<ExtensionDisconnected>()(
   "RelayLifecycle.ExtensionDisconnected",
   { message: Schema.String },
 ) {}
 
-export class ExtensionProtocolIncompatible extends Schema.TaggedErrorClass<ExtensionProtocolIncompatible>()(
+export class ExtensionProtocolIncompatible extends Schema.TaggedError<ExtensionProtocolIncompatible>()(
   "RelayLifecycle.ExtensionProtocolIncompatible",
   {
     message: Schema.String,

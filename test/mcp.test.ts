@@ -42,6 +42,7 @@ describe("MCP tool results", () => {
     const currentSession = { id: "mcp-current", established: true }
     const sessionDelete = makeToolSpecs(relay, currentSession).find((spec) => spec.name === "session_delete")
     if (!sessionDelete) throw new Error("session_delete tool missing")
+    expect(sessionDelete).toMatchObject({ destructive: true, idempotent: false })
 
     const first = await Effect.runPromise(sessionDelete.handle({}))
     const second = await Effect.runPromise(sessionDelete.handle({}))

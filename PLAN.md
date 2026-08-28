@@ -95,6 +95,19 @@ Verification:
 
 ## Recently Shipped
 
+### Handoffs return on a live destination context
+
+After a human completes a navigation-triggering handoff, BrowserRig waits
+through transient execution-context replacement before returning to user code.
+The same execute can immediately inspect and verify the authenticated
+destination without repeating the human action.
+
+### Session cleanup is safely repeatable
+
+Deleting a resolved session id is idempotent across HTTP, CLI, and MCP. The
+structured result reports whether a live session was deleted, while CLI cleanup
+retries no longer turn an already-absent session into a failure.
+
 ### Browser startup and delayed tab groups do not strand connectivity
 
 The extension registers a global browser-start listener that repairs its alarm
@@ -463,9 +476,10 @@ reconciles existing client announcements, browser grouping, and page status.
 - `start` registers WAIT state before invoking a prompt-triggering action, so
   native WebAuthn or payment UI cannot block the script before handoff exists.
   It runs only after the extension acknowledges WAIT. Human completion waits
-  for the action to settle; timeout or target cancellation disconnects the
-  sandbox's Playwright connection before releasing the execute permit, so a
-  non-settling action cannot mutate the page later.
+  for the action to settle and the destination execution context to become
+  available; timeout or target cancellation disconnects the sandbox's
+  Playwright connection before releasing the execute permit, so a non-settling
+  action cannot mutate the page later.
 - Destructive browser-state CDP methods such as `Browser.close` and cookie or
   cache clearing are always blocked.
 - Read-only sessions additionally reject `Input.*`. They reduce trusted

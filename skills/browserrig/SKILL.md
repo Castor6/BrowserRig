@@ -136,6 +136,10 @@ browserrig session reset github
 browserrig session delete github
 ```
 
+Deletion is idempotent for a resolved session id, so cleanup can be safely
+retried when that session is already absent. A missing selector still fails,
+and reset remains non-idempotent.
+
 Every execute is journaled under
 `~/.browserrig/sessions/<id>/journal.jsonl`. The journal records code,
 status, duration, URL movement, warnings, handoffs, and bounded diagnostics.
@@ -174,6 +178,10 @@ await page.waitForURL((url) => !url.pathname.startsWith("/login"))
 await page.getByRole("heading", { name: /account|dashboard/i }).waitFor()
 return { authenticatedUrl: page.url(), title: await page.title() }
 ```
+
+After a resolved handoff, BrowserRig waits through transient destination
+context replacement before returning, so this verification can remain in the
+same execute.
 
 Tell the user what action is waiting. Human acknowledgment is not verification:
 always assert the expected URL or stable element after `handoff`. If the action

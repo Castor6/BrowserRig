@@ -190,11 +190,41 @@ describe("execute lifecycle", () => {
     })).rejects.toThrow("did not become available within 20ms")
     expect(Date.now() - startedAt).toBeLessThan(100)
   })
+
+  it("waits for the destination execution context after a resolved handoff", async () => {
+    let contextAttempts = 0
+    const browserFixture = makeAdoptedBrowserFixture({
+      targetId: "target-handoff",
+      targetUrl: "https://example.test/destination",
+      evaluate: () => {
+        contextAttempts += 1
+        return contextAttempts < 3
+          ? Promise.reject(new Error("Execution context was destroyed, most likely because of a navigation"))
+          : Promise.resolve(true)
+      },
+    })
+    const sandbox = new ExecuteSandbox({
+      endpointUrl: "http://127.0.0.1:0",
+      sessionId: "alpha",
+      requestHandoff: () => Promise.resolve("resolved"),
+    })
+    Object.assign(sandbox, { browser: browserFixture.browser })
+
+    const result = await Effect.runPromise(sandbox.execute("await handoff('finish navigation'); return page.url()"))
+
+    expect(result).toMatchObject({
+      isError: false,
+      value: "https://example.test/destination",
+      aftermath: { handoffs: 1 },
+    })
+    expect(contextAttempts).toBe(3)
+  })
 })
 
 function makeAdoptedBrowserFixture(options: {
   readonly targetId: string
   readonly targetUrl: string
+  readonly evaluate?: () => Promise<unknown>
 }): { readonly browser: Browser; readonly newPageCalls: () => number } {
   let newPageCalls = 0
   let context!: BrowserContext
@@ -202,6 +232,7 @@ function makeAdoptedBrowserFixture(options: {
   const mainFrame = { url: () => options.targetUrl }
   page = {
     context: () => context,
+    evaluate: options.evaluate ?? (() => Promise.resolve(true)),
     isClosed: () => false,
     mainFrame: () => mainFrame,
     off: () => page,

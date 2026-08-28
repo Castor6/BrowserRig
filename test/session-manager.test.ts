@@ -393,6 +393,13 @@ describe("BrowserRigSessions", () => {
     )
   })
 
+  it("does not treat a closing manager as an already-absent deletion success", async () => {
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
+    await Effect.runPromise(sessions.closeAll())
+
+    await expect(Effect.runPromise(sessions.delete("already-absent"))).rejects.toThrow("sessions are closing")
+  })
+
   it("rejects duplicate explicit session ids", () => {
     const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
     sessions.createNew("alpha")

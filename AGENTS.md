@@ -118,10 +118,11 @@ local Node relay.
   targets must preserve the handoff UI.
 - Handoff `start` actions run only after the waiter and WAIT UI are registered.
   Require extension acknowledgement of WAIT before invoking `start`. Human
-  completion waits for the action to settle. Timeout or target cancellation
-  disconnects the sandbox before releasing its execute permit, preventing a
-  non-settling prompt action from mutating the page later. Cancel the waiter if
-  WAIT presentation or action startup fails.
+  completion waits for the action to settle and for the destination execution
+  context to become available. Timeout or target cancellation disconnects the
+  sandbox before releasing its execute permit, preventing a non-settling prompt
+  action from mutating the page later. Cancel the waiter if WAIT presentation or
+  action startup fails.
 - `TargetRegistry` is the sole production live target-ownership authority.
   Session state keeps one durable default-target identity and owner. Adoption reserves,
   commits, or rolls back registry ownership transactionally and reconciles CDP
@@ -197,6 +198,8 @@ local Node relay.
   navigation timestamps.
 - Session delete/reset must acquire the session's execute permit before closing
   the sandbox, so running scripts are never yanked mid-flight.
+- Session deletion is idempotent for a resolved session id: return whether a
+  live session was deleted instead of failing when it is already absent.
 - Reset/delete of an absent persisted relay-owned target waits for protocol-v1
   inventory reconciliation or a bounded grace, then forgets the dead identity
   without guessing a physical tab to close. Never apply this dead-target path

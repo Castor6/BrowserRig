@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { mcpErrorMessage, mcpToolRequiresRelayCompatibility, parseMcpAdoptArguments, toolResultForValue } from "../src/mcp.ts"
+import { mcpErrorMessage, mcpToolRequiresRelayCompatibility, parseMcpAdoptArguments, sessionDeleteIsIdempotent, toolResultForValue } from "../src/mcp.ts"
 
 describe("MCP tool results", () => {
   it("rechecks relay compatibility for operational tools", () => {
@@ -21,6 +21,10 @@ describe("MCP tool results", () => {
     expect(() => parseMcpAdoptArguments({})).toThrow("exactly one")
     expect(() => parseMcpAdoptArguments({ active: false })).toThrow("exactly one")
     expect(() => parseMcpAdoptArguments({ active: true, targetIndex: 0 })).toThrow("exactly one")
+  })
+
+  it("advertises session deletion as idempotent", () => {
+    expect(sessionDeleteIsIdempotent).toBe(true)
   })
 
   it("marks execute script failures as failed MCP tool calls", () => {

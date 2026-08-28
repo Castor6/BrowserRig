@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { resolveExplicitSessionSelector } from "../src/cli-session-selector.ts"
+import { resolveExplicitSessionSelector, resolveSessionDeletionId } from "../src/cli-session-selector.ts"
 
 describe("resolveExplicitSessionSelector", () => {
   it("accepts positional, flag, and environment selectors in precedence order", () => {
@@ -15,5 +15,13 @@ describe("resolveExplicitSessionSelector", () => {
       flag: "flag",
       environment: undefined,
     })).toThrow("Use either a positional session id or --session, not both")
+  })
+
+  it("resolves deletion without preflighting whether the selected id exists", () => {
+    expect(resolveSessionDeletionId({ explicit: "already-absent", persisted: undefined })).toBe("already-absent")
+    expect(resolveSessionDeletionId({ explicit: undefined, persisted: "current-session" })).toBe("current-session")
+    expect(() => resolveSessionDeletionId({ explicit: undefined, persisted: undefined })).toThrow(
+      "No session provided and no current BrowserRig session exists",
+    )
   })
 })

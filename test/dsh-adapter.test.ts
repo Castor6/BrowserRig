@@ -127,6 +127,18 @@ function missingSession(command: "execute" | "reset" = "execute"): BrowserRigPro
   }, 1)
 }
 
+function resetFailure(code: string, message: string): BrowserRigProcessResult {
+  return processResult({
+    ok: false,
+    error: {
+      _tag: "RelayRejected",
+      message,
+      code,
+      status: 409,
+    },
+  }, 1)
+}
+
 function scriptFailure(id: string, message: string): BrowserRigProcessResult {
   return processResult({
     ok: false,
@@ -243,6 +255,19 @@ describe("BrowserRig DSH adapter", () => {
     expect(runner.calls.map(call => call.args)).toEqual([
       ["session", "reset", "--json", "--session", "stale-session"],
     ])
+  })
+
+  it("preserves a DSH mapping when reset fails for anything except stable session-not-found", async () => {
+    const { adapter, runner, map, cwd } = await fixture([
+      resetFailure("session-busy", "Session stale-session still has an active worker"),
+    ])
+    const key = dshSessionMappingKey(runner.endpointKey(), "dsh-agent")
+    await map.set(key, "stale-session")
+
+    await expect(adapter.reset(execContext("dsh-agent", cwd))).rejects.toThrow(
+      "Session <session> still has an active worker",
+    )
+    expect(await map.get(key)).toBe("stale-session")
   })
 
   it("projects status to this DSH session and hides all BrowserRig ids and global targets", async () => {

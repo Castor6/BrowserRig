@@ -20,7 +20,7 @@ import { startRelay } from "./relay.ts"
 import { defaultJournalBaseDir, formatJournalEntry, readJournalEntries } from "./session-journal.ts"
 import * as SessionStore from "./session-store.ts"
 import { browserRigVersion } from "./version.ts"
-import { resolveExplicitSessionSelector } from "./cli-session-selector.ts"
+import { resolveExplicitSessionSelector, resolveSessionDeletionId } from "./cli-session-selector.ts"
 
 const packageRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const sessionIdConfig = Config.option(Config.string("BROWSERRIG_SESSION"))
@@ -506,11 +506,16 @@ const sessionDelete = Command.make(
   Effect.fn("Cli.sessionDelete")(function* ({ id, session }) {
     const relay = yield* RelayClient.Service
     const store = yield* SessionStore.Service
-    const sessionId = yield* resolveExistingSessionId(resolveExplicitSessionSelector({
+    const selectedSessionId = resolveExplicitSessionSelector({
       positional: optionString(id),
       flag: optionString(session),
       environment: Option.getOrUndefined(yield* sessionIdConfig),
-    }))
+    })
+    const sessionId = resolveSessionDeletionId({
+      explicit: selectedSessionId,
+      persisted: selectedSessionId ? undefined : (yield* store.read),
+    })
+    yield* ensureCliRelay()
     yield* relay.sessionDelete(sessionId)
     const current = yield* store.read
     if (current === sessionId) {

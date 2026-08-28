@@ -30,6 +30,7 @@ const playwrightCloseTimeoutMs = 2_000
 const playwrightConnectTimeoutMs = 15_000
 const sessionPageHealthCheckTimeoutMs = 3_000
 const sessionPageHealthRetryDelayMs = 100
+const handoffPageContextTimeoutMs = 15_000
 const timedOut = Symbol("timed-out")
 export const downloadCapabilityErrorMessage = "Downloads are unavailable in BrowserRig extension-backed tabs: Chromium blocks Browser.setDownloadBehavior and Page.setDownloadBehavior through chrome.debugger, so Playwright cannot retain an artifact for download.saveAs(). Fetch the response in the page and write the returned bytes with fs when the site exposes them."
 const downloadGuardedPages = new WeakSet<Page>()
@@ -798,6 +799,20 @@ export class ExecuteSandbox {
         const targetEvent = outcome.reason === "target-crashed" ? "crashed" : "detached"
         throw new Error(`Handoff cancelled because its target ${targetEvent}: ${handoffMessage}`)
       }
+      await waitForPageContext({
+        timeoutMs: handoffPageContextTimeoutMs,
+        evaluate: async () => {
+          try {
+            const currentPage = await this.getSessionPage({ context })
+            await currentPage.evaluate(() => true)
+          } catch (error) {
+            if (error instanceof SessionPageRecoveryError && error.reason === "target-unavailable") {
+              throw new Error("Execution context is not available while the handoff destination settles", { cause: error })
+            }
+            throw error
+          }
+        },
+      })
       handoffTracker.count += 1
     }
     return {

@@ -657,11 +657,18 @@ candidate for publication.
   concurrent or repeated calls, and failures surface instead of being ignored.
   Redirect, handoff, network-capture, and download fixtures use this verified
   path; BrowserRig runtime, extension, and public behavior are unchanged.
-- **Validation so far:** `pnpm typecheck` and the four-test focused fixture
-  cleanup suite passed. The suite covers graceful completion, forced cleanup,
-  concurrent and repeated calls, failure reporting, and a child wrapper that
-  exits naturally without `process.exit`. Relevant live smoke, the exact
-  23-case closure matrix, and GitHub checks remain pending.
+- **Validation passed:** `pnpm typecheck`; the four-test focused fixture cleanup
+  suite; and `pnpm test` (60 files and 556 tests). The focused suite covers
+  graceful completion, forced cleanup, concurrent and repeated calls, failure
+  reporting, and a child wrapper that exits naturally without `process.exit`.
+  The five directly affected live cases passed 5/5 and their wrapper exited
+  naturally with status `0`. The exact 23-case `SMOKE_CASE` command required by
+  `AGENTS.md` then exited naturally with status `0` and summary
+  `pass: 23, fail: 0, expectedFail: 0, unexpectedPass: 0`. Afterward no smoke
+  process, fixture listener, or fixture connection remained; the relay reported
+  zero targets, child targets, and CDP clients. All smoke-created sessions and
+  tabs were cleaned up, and the controlled source relay was stopped. GitHub
+  checks remain pending.
 - **Changeset:** none. The change is test infrastructure only and has no shipped
   package or extension behavior impact.
 

@@ -20,7 +20,7 @@ branches or starting an agent.
   predates this archive process)
 - **Active cycle:** [`v0.4.0 -> v0.5.1`](current_upstream-v0.4.0-to-v0.5.1.md)
 - **Active cycle status:** implementation in progress; Batches 01-05 complete;
-  Batch 06 implementation in progress
+  Batch 06 author implementation complete and independent review not started
 - **BrowserRig package version:** independent from the upstream sync cursor
 
 "Completed through `vX.Y.Z`" means every upstream pull request reachable in

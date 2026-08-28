@@ -506,14 +506,13 @@ const cases: SmokeCase[] = [
         return yield* Effect.fail(new Error(`explicit missing --session returned the wrong error: ${flagError.message}`))
       }
       const environmentOutcome = yield* Effect.result(runBrowserRig(["session", "delete"], { sessionId: missing }))
-      if (environmentOutcome._tag === "Success") {
-        return yield* Effect.fail(new Error(`explicit missing BROWSERRIG_SESSION unexpectedly succeeded: ${environmentOutcome.success}`))
+      if (environmentOutcome._tag === "Failure") {
+        return yield* Effect.fail(new Error(`explicit missing BROWSERRIG_SESSION deletion did not settle idempotently: ${environmentOutcome.failure.message}`))
       }
-      const environmentError = environmentOutcome.failure
-      if (!environmentError.message.includes(`Session not found: ${missing}`)) {
-        return yield* Effect.fail(new Error(`explicit missing BROWSERRIG_SESSION returned the wrong error: ${environmentError.message}`))
+      if (!environmentOutcome.success.includes(missing)) {
+        return yield* Effect.fail(new Error(`idempotent deletion did not report the resolved session id: ${environmentOutcome.success}`))
       }
-      return "explicit missing session selectors fail closed"
+      return "reset fails for an absent session while deletion reaches the requested absent state"
     }),
   },
   {
@@ -1048,7 +1047,7 @@ return { result: await page.locator('#class-result').textContent() }
             "execute",
             "--session",
             smokeSession,
-            `await handoff('Navigate and resume ${marker}', { timeoutMs: 30000 }); return { resumed: true, url: page.url() }`,
+            `await handoff('Navigate and resume ${marker}', { timeoutMs: 30000 }); return { resumed: true, url: page.url(), view: await snapshot({ maxItems: 20 }) }`,
           ]).pipe(Effect.forkChild)
           yield* Effect.sleep("500 millis")
           const ownerPage = yield* scopedOwnerCdpPage({ sessionId: smokeSession, urlIncludes: marker })
@@ -1065,7 +1064,7 @@ return { result: await page.locator('#class-result').textContent() }
 
           yield* ownerPage.evaluate(`document.querySelector('#__browserrig_page_status__')?.shadowRoot?.querySelector('button')?.click()`)
           const output = yield* Fiber.join(executeFiber)
-          if (!output.includes("resumed: true") || !output.includes(fixture.afterUrl)) {
+          if (!output.includes("resumed: true") || !output.includes(fixture.afterUrl) || !output.includes('button "Unrelated page button"')) {
             return yield* Effect.fail(new Error(`handoff did not resume on the navigated page: ${output}`))
           }
           return output.trim()

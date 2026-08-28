@@ -226,8 +226,9 @@ browser driver or an MCP wrapper. It contributes these tools directly to DSH:
 Each DSH agent session maps durably to one BrowserRig session at the configured
 relay endpoint. First use creates the mapping atomically; an explicitly missing
 BrowserRig session is replaced once, while unrelated DSH tasks remain isolated.
-Internal BrowserRig IDs and the global target list are not returned to the
-model.
+Only the stable `session-not-found` code permits that replacement; active-worker,
+ownership, endpoint, persistence, and other failures preserve the mapping.
+Internal BrowserRig IDs and the global target list are not returned to the model.
 
 The adapter invokes the CLI shipped in the same npm package with fixed argument
 arrays, validated JSON envelopes, bounded output, and DSH cancellation. There
@@ -319,6 +320,9 @@ result envelope. Delete the session when you finish:
 browserrig session delete docs
 ```
 
+Deletion is idempotent for a resolved session id, so cleanup can be safely
+retried when that session is already absent.
+
 ## Control an Existing Tab
 
 Relay-created pages are isolated from other BrowserRig sessions. To adopt
@@ -402,12 +406,14 @@ await handoff("Complete the security-key prompt, then continue", {
 
 The page displays an accessible completion control and the script waits. Always
 verify the expected URL or element after the handoff; human acknowledgment does
-not prove that the requested step succeeded. BrowserRig waits for the
-extension to acknowledge WAIT before calling `start`. If the handoff times out
-or its target disappears first, it disconnects that sandbox's Playwright
-connection before releasing the execute permit, preventing a still-pending
-prompt action from mutating the page later. Keep `start` limited to the bounded
-browser action that opens the native prompt.
+not prove that the requested step succeeded. After the handoff resolves,
+BrowserRig waits through transient destination context replacement so the same
+execute can perform that verification. BrowserRig waits for the extension to
+acknowledge WAIT before calling `start`. If the handoff times out or its target
+disappears first, it disconnects that sandbox's Playwright connection before
+releasing the execute permit, preventing a still-pending prompt action from
+mutating the page later. Keep `start` limited to the bounded browser action that
+opens the native prompt.
 
 ## Use Read-Only Sessions
 

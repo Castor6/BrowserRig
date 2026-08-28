@@ -30,7 +30,9 @@ const playwrightCloseTimeoutMs = 2_000
 const playwrightConnectTimeoutMs = 15_000
 const sessionPageHealthCheckTimeoutMs = 3_000
 const sessionPageHealthRetryDelayMs = 100
+const handoffPageContextTimeoutMs = 15_000
 const timedOut = Symbol("timed-out")
+export const handoffPageContinuityErrorMessage = "The exact handoff page was detached or replaced before its destination execution context became ready; execution cannot safely continue with the captured page and snapshot helpers."
 export const downloadCapabilityErrorMessage = "Downloads are unavailable in BrowserRig extension-backed tabs: Chromium blocks Browser.setDownloadBehavior and Page.setDownloadBehavior through chrome.debugger, so Playwright cannot retain an artifact for download.saveAs(). Fetch the response in the page and write the returned bytes with fs when the site exposes them."
 const downloadGuardedPages = new WeakSet<Page>()
 const downloadGuardedContexts = new WeakSet<BrowserContext>()
@@ -171,6 +173,38 @@ export async function waitForPageContext(options: {
     }
   }
   throw lastError ?? new Error(`Execution context did not become available within ${options.timeoutMs}ms`)
+}
+
+export async function waitForHandoffPageContext(options: {
+  readonly page: Page
+  readonly targetId: string
+  readonly timeoutMs: number
+}): Promise<void> {
+  const assertExactTarget = async () => {
+    if (options.page.isClosed()) {
+      throw new Error(handoffPageContinuityErrorMessage)
+    }
+    let currentTargetId: string
+    try {
+      currentTargetId = await pageTargetId(options.page)
+    } catch (error) {
+      const kind = runtimeFailureKind(error)
+      if (kind === "context-destroyed" || kind === "context-missing") throw error
+      throw new Error(handoffPageContinuityErrorMessage, { cause: error })
+    }
+    if (currentTargetId !== options.targetId) {
+      throw new Error(handoffPageContinuityErrorMessage)
+    }
+  }
+
+  await waitForPageContext({
+    timeoutMs: options.timeoutMs,
+    evaluate: async () => {
+      await assertExactTarget()
+      await options.page.evaluate(() => true)
+      await assertExactTarget()
+    },
+  })
 }
 
 export function isSessionPageConnected(options: {
@@ -798,6 +832,11 @@ export class ExecuteSandbox {
         const targetEvent = outcome.reason === "target-crashed" ? "crashed" : "detached"
         throw new Error(`Handoff cancelled because its target ${targetEvent}: ${handoffMessage}`)
       }
+      await waitForHandoffPageContext({
+        page: handoffPage,
+        targetId,
+        timeoutMs: handoffPageContextTimeoutMs,
+      })
       handoffTracker.count += 1
     }
     return {

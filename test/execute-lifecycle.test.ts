@@ -190,11 +190,277 @@ describe("execute lifecycle", () => {
     })).rejects.toThrow("did not become available within 20ms")
     expect(Date.now() - startedAt).toBeLessThan(100)
   })
+
+  it("waits for the destination execution context after a resolved handoff", async () => {
+    let contextAttempts = 0
+    const browserFixture = makeAdoptedBrowserFixture({
+      targetId: "target-handoff",
+      targetUrl: "https://example.test/destination",
+      evaluate: () => {
+        contextAttempts += 1
+        return contextAttempts < 3
+          ? Promise.reject(new Error("Execution context was destroyed, most likely because of a navigation"))
+          : Promise.resolve(true)
+      },
+    })
+    const sandbox = new ExecuteSandbox({
+      endpointUrl: "http://127.0.0.1:0",
+      sessionId: "alpha",
+      requestHandoff: () => Promise.resolve("resolved"),
+    })
+    Object.assign(sandbox, { browser: browserFixture.browser })
+
+    const result = await Effect.runPromise(sandbox.execute("await handoff('finish navigation'); return page.url()"))
+
+    expect(result).toMatchObject({
+      isError: false,
+      value: "https://example.test/destination",
+      aftermath: { handoffs: 1 },
+    })
+    expect(contextAttempts).toBe(3)
+  })
+
+  it("waits for the exact secondary-page context selected by handoff", async () => {
+    let defaultAttempts = 0
+    let secondaryAttempts = 0
+    const browserFixture = makeMultiPageBrowserFixture([
+      {
+        targetId: "target-default",
+        targetUrl: "https://example.test/default",
+        evaluate: () => {
+          defaultAttempts += 1
+          return Promise.resolve(true)
+        },
+      },
+      {
+        targetId: "target-secondary",
+        targetUrl: "https://example.test/destination",
+        evaluate: () => {
+          secondaryAttempts += 1
+          return secondaryAttempts < 3
+            ? Promise.reject(new Error("Execution context was destroyed, most likely because of a navigation"))
+            : Promise.resolve(true)
+        },
+      },
+    ])
+    const sandbox = new ExecuteSandbox({
+      endpointUrl: "http://127.0.0.1:0",
+      sessionId: "alpha",
+      requestHandoff: () => Promise.resolve("resolved"),
+    })
+    Object.assign(sandbox, { browser: browserFixture.browser })
+
+    const result = await Effect.runPromise(sandbox.execute(`
+      const secondaryPage = context.pages()[1]
+      await handoff("finish navigation", { page: secondaryPage })
+      return secondaryPage.url()
+    `))
+
+    expect(result).toMatchObject({ isError: false, value: "https://example.test/destination" })
+    expect(defaultAttempts).toBe(0)
+    expect(secondaryAttempts).toBe(3)
+  })
+
+  it("fails closed when the handoff page target generation is replaced", async () => {
+    let replacementAttempts = 0
+    const browserFixture = makeMultiPageBrowserFixture([
+      { targetId: "target-old", targetUrl: "https://example.test/wait" },
+      {
+        targetId: "target-new",
+        targetUrl: "https://example.test/destination",
+        initiallyVisible: false,
+        evaluate: () => {
+          replacementAttempts += 1
+          return Promise.resolve(true)
+        },
+      },
+    ])
+    let sandbox!: ExecuteSandbox
+    sandbox = new ExecuteSandbox({
+      endpointUrl: "http://127.0.0.1:0",
+      sessionId: "alpha",
+      requestHandoff: () => {
+        browserFixture.replace("target-old", "target-new")
+        expect(sandbox.markTargetReplaced("target-old", "target-new")).toBe(true)
+        return Promise.resolve("resolved")
+      },
+    })
+    Object.assign(sandbox, { browser: browserFixture.browser })
+
+    const result = await Effect.runPromise(sandbox.execute(`
+      await handoff("finish navigation")
+      return { url: page.url(), snapshot: await snapshot() }
+    `))
+
+    expect(result.isError).toBe(true)
+    expect(result.text).toContain("exact handoff page was detached or replaced")
+    expect(replacementAttempts).toBe(0)
+    expect(browserFixture.newPageCalls()).toBe(1)
+  })
+
+  it("does not create a fallback page when the resolved handoff target detaches", async () => {
+    let fallbackAttempts = 0
+    const browserFixture = makeMultiPageBrowserFixture([
+      { targetId: "target-detached", targetUrl: "https://example.test/wait" },
+      {
+        targetId: "target-unrelated",
+        targetUrl: "https://example.test/unrelated",
+        evaluate: () => {
+          fallbackAttempts += 1
+          return Promise.resolve(true)
+        },
+      },
+    ])
+    let sandbox!: ExecuteSandbox
+    sandbox = new ExecuteSandbox({
+      endpointUrl: "http://127.0.0.1:0",
+      sessionId: "alpha",
+      requestHandoff: () => {
+        browserFixture.detach("target-detached")
+        expect(sandbox.markTargetDetached("target-detached")).toBe(true)
+        return Promise.resolve("resolved")
+      },
+    })
+    Object.assign(sandbox, { browser: browserFixture.browser })
+
+    const result = await Effect.runPromise(sandbox.execute(`
+      await handoff("finish navigation")
+      return "continued"
+    `))
+
+    expect(result.isError).toBe(true)
+    expect(result.text).toContain("exact handoff page was detached or replaced")
+    expect(fallbackAttempts).toBe(0)
+    expect(browserFixture.newPageCalls()).toBe(1)
+  })
+
+  it("does not recover a crashed resolved handoff target onto an unrelated page", async () => {
+    let fallbackAttempts = 0
+    const browserFixture = makeMultiPageBrowserFixture([
+      {
+        targetId: "target-crashed",
+        targetUrl: "https://example.test/wait",
+        evaluate: () => Promise.reject(new Error("Target crashed: target-crashed")),
+      },
+      {
+        targetId: "target-unrelated",
+        targetUrl: "https://example.test/unrelated",
+        evaluate: () => {
+          fallbackAttempts += 1
+          return Promise.resolve(true)
+        },
+      },
+    ])
+    let sandbox!: ExecuteSandbox
+    sandbox = new ExecuteSandbox({
+      endpointUrl: "http://127.0.0.1:0",
+      sessionId: "alpha",
+      requestHandoff: () => {
+        expect(sandbox.markTargetCrashed("target-crashed")).toBe(true)
+        return Promise.resolve("resolved")
+      },
+    })
+    Object.assign(sandbox, { browser: browserFixture.browser })
+
+    const result = await Effect.runPromise(sandbox.execute(`
+      await handoff("finish navigation")
+      return "continued"
+    `))
+
+    expect(result.isError).toBe(true)
+    expect(result.text).toContain("Target crashed: target-crashed")
+    expect(fallbackAttempts).toBe(0)
+    expect(browserFixture.newPageCalls()).toBe(1)
+  })
 })
+
+function makeMultiPageBrowserFixture(options: readonly {
+  readonly targetId: string
+  readonly targetUrl: string
+  readonly initiallyVisible?: boolean
+  readonly evaluate?: () => Promise<unknown>
+}[]): {
+  readonly browser: Browser
+  readonly detach: (targetId: string) => void
+  readonly replace: (previousTargetId: string, targetId: string) => void
+  readonly newPageCalls: () => number
+} {
+  type FixturePage = { readonly page: Page; closed: boolean; visible: boolean }
+  let newPageCalls = 0
+  let context!: BrowserContext
+  const pages = new Map<string, FixturePage>()
+  for (const option of options) {
+    let fixture!: FixturePage
+    const mainFrame = { url: () => option.targetUrl }
+    const page = {
+      close: async () => {
+        fixture.closed = true
+        fixture.visible = false
+      },
+      context: () => context,
+      evaluate: option.evaluate ?? (() => Promise.resolve(true)),
+      isClosed: () => fixture.closed,
+      mainFrame: () => mainFrame,
+      off: () => page,
+      on: () => page,
+      once: () => page,
+      url: () => {
+        if (fixture.closed) throw new Error("Target page, context or browser has been closed")
+        return option.targetUrl
+      },
+      waitForEvent: () => new Promise(() => {}),
+    } as unknown as Page
+    fixture = { page, closed: false, visible: option.initiallyVisible !== false }
+    pages.set(option.targetId, fixture)
+  }
+  const firstPage = pages.values().next().value as FixturePage | undefined
+  if (!firstPage) throw new Error("Fixture requires at least one page")
+  context = {
+    newCDPSession: async (page: Page) => {
+      const entry = [...pages.entries()].find(([, fixture]) => fixture.page === page)
+      if (!entry || entry[1].closed) throw new Error("Target page, context or browser has been closed")
+      return {
+        detach: async () => {},
+        send: async () => ({ targetInfo: { targetId: entry[0] } }),
+      }
+    },
+    newPage: async () => {
+      newPageCalls += 1
+      const page = [...pages.values()].find((fixture) => fixture.visible && !fixture.closed)
+      if (!page) throw new Error("Fixture has no page available for newPage")
+      return page.page
+    },
+    on: () => context,
+    pages: () => [...pages.values()].filter((fixture) => fixture.visible && !fixture.closed).map((fixture) => fixture.page),
+  } as unknown as BrowserContext
+  const browser = {
+    contexts: () => [context],
+    isConnected: () => true,
+  } as unknown as Browser
+  return {
+    browser,
+    detach: (targetId) => {
+      const fixture = pages.get(targetId)
+      if (!fixture) throw new Error(`Unknown fixture target: ${targetId}`)
+      fixture.closed = true
+      fixture.visible = false
+    },
+    replace: (previousTargetId, targetId) => {
+      const previous = pages.get(previousTargetId)
+      const replacement = pages.get(targetId)
+      if (!previous || !replacement) throw new Error("Unknown fixture replacement target")
+      previous.closed = true
+      previous.visible = false
+      replacement.visible = true
+    },
+    newPageCalls: () => newPageCalls,
+  }
+}
 
 function makeAdoptedBrowserFixture(options: {
   readonly targetId: string
   readonly targetUrl: string
+  readonly evaluate?: () => Promise<unknown>
 }): { readonly browser: Browser; readonly newPageCalls: () => number } {
   let newPageCalls = 0
   let context!: BrowserContext
@@ -202,6 +468,7 @@ function makeAdoptedBrowserFixture(options: {
   const mainFrame = { url: () => options.targetUrl }
   page = {
     context: () => context,
+    evaluate: options.evaluate ?? (() => Promise.resolve(true)),
     isClosed: () => false,
     mainFrame: () => mainFrame,
     off: () => page,

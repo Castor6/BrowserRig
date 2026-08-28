@@ -8,3 +8,14 @@ export function resolveExplicitSessionSelector(options: {
   }
   return options.flag ?? options.positional ?? options.environment
 }
+
+export function resolveSessionDeletionId(options: {
+  readonly explicit: string | undefined
+  readonly persisted: string | undefined
+}): string {
+  const sessionId = options.explicit ?? options.persisted
+  if (!sessionId) {
+    throw new Error("No session provided and no current BrowserRig session exists")
+  }
+  return sessionId
+}

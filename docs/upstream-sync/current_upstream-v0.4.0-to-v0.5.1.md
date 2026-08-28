@@ -338,7 +338,7 @@ previous batch pull request merges.
 
 - **Implementation status:** author implementation and required available
   validation are complete on
-  `sync/upstream-v0.5.1-05-handoff-session-delete`; draft pull request
+  `sync/upstream-v0.5.1-05-handoff-session-delete`; pull request
   [#33](https://github.com/Castor6/BrowserRig/pull/33) is ready for independent
   review. The implementation commit before this ledger update is `0de3f45`.
 - **Upstream commits adapted:** `3146cdc` and `2de472a` from upstream pull

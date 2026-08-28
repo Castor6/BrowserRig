@@ -15,7 +15,8 @@ target_checked: 2026-08-27
 - **Target:** `v0.5.1`
 - **Target checked:** 2026-08-27
 - **Product recommendation:** sync selectively
-- **Cycle status:** implementation in progress (Batch 05 in progress)
+- **Cycle status:** implementation in progress (Batch 05 author work complete;
+  independent review not started)
 - **Execution authorization:** approved 2026-08-27 for the recorded `v0.5.1`
   target and all seven listed batches, including the conditional per-batch merge
   authority defined in [`README.md`](README.md)
@@ -118,7 +119,7 @@ previous batch pull request merges.
 | 02 | Browser-context CDP routing | [#49](https://github.com/anomalyco/browser-control/pull/49) | `Complete` | `sync/upstream-v0.5.1-02-context-routing` | [#27](https://github.com/Castor6/BrowserRig/pull/27), merge `72db822` | `Approve` on 2026-08-27 at `fba918d`; no findings | Typecheck, 520 tests, CLI build, six focused smoke cases, and GitHub `validate` passed; see evidence below. |
 | 03 | Managed relay and client recovery | [#55](https://github.com/anomalyco/browser-control/pull/55), [#57](https://github.com/anomalyco/browser-control/pull/57) | `Complete` | `sync/upstream-v0.5.1-03-relay-client-recovery` | [#29](https://github.com/Castor6/BrowserRig/pull/29), merge `d6e5939` | `Approve` on 2026-08-27 at `53c4b94`; no findings | Typecheck, 529 tests, CLI build, DSH package checks, six focused smoke cases, and GitHub `validate` passed; see evidence below. |
 | 04 | Extension connectivity and browser-start recovery | [#47](https://github.com/anomalyco/browser-control/pull/47), [#58](https://github.com/anomalyco/browser-control/pull/58) | `Complete` | `sync/upstream-v0.5.1-04-extension-recovery` | [#31](https://github.com/Castor6/BrowserRig/pull/31), merge `bf235f2` | `Approve` on 2026-08-28 at `a7aea52`; no findings, Brave reload waived for this batch | Typecheck, 536 tests, CLI and extension builds, extension release/package checks, eight focused smoke cases, and constrained Chrome live recovery passed; see evidence below. |
-| 05 | Handoff readiness and idempotent deletion | [#59](https://github.com/anomalyco/browser-control/pull/59), [#61](https://github.com/anomalyco/browser-control/pull/61) | `Pending` | `sync/upstream-v0.5.1-05-handoff-session-delete` | — | — | — |
+| 05 | Handoff readiness and idempotent deletion | [#59](https://github.com/anomalyco/browser-control/pull/59), [#61](https://github.com/anomalyco/browser-control/pull/61) | `Pending` | `sync/upstream-v0.5.1-05-handoff-session-delete` | [#33](https://github.com/Castor6/BrowserRig/pull/33) | `Not started` | Typecheck, 542 tests, CLI build, real CLI and MCP checks, nine focused smoke cases, and GitHub `validate` passed; see evidence below. |
 | 06 | Network-capture lifecycle correctness | [#65](https://github.com/anomalyco/browser-control/pull/65) | `Pending` | `sync/upstream-v0.5.1-06-network-lifecycle` | — | — | — |
 | 07 | Runtime and build dependency compatibility | [#54](https://github.com/anomalyco/browser-control/pull/54), [#62](https://github.com/anomalyco/browser-control/pull/62), [#63](https://github.com/anomalyco/browser-control/pull/63) | `Pending` | `sync/upstream-v0.5.1-07-dependencies` | — | — | — |
 | — | Public Secret Profile SDK workers | [#60](https://github.com/anomalyco/browser-control/pull/60) | `Deferred` | — | — | — | Reconsider on concrete SDK demand. |
@@ -332,6 +333,66 @@ previous batch pull request merges.
   waived that check for this batch on 2026-08-28. Follow-up review returned
   `Approve` for head `a7aea52` with no findings after confirming the waiver is
   scoped to this pull request and the global repository rule remains unchanged.
+
+### Batch 05 implementation evidence
+
+- **Implementation status:** author implementation and required available
+  validation are complete on
+  `sync/upstream-v0.5.1-05-handoff-session-delete`; draft pull request
+  [#33](https://github.com/Castor6/BrowserRig/pull/33) is ready for independent
+  review. The implementation commit before this ledger update is `0de3f45`.
+- **Upstream commits adapted:** `3146cdc` and `2de472a` from upstream pull
+  requests [#59](https://github.com/anomalyco/browser-control/pull/59) and
+  [#61](https://github.com/anomalyco/browser-control/pull/61). A resolved
+  navigation-triggering handoff now waits up to 15 seconds through only
+  execution-context-destroyed or context-missing transitions, reacquiring the
+  exact session target through the existing page-recovery path. Deleting a
+  resolved absent session id now returns `{ deleted: false, id }` with HTTP 200;
+  CLI skips the session-list existence preflight, and MCP advertises deletion as
+  idempotent.
+- **Boundaries preserved:** waiter registration still precedes the action, WAIT
+  presentation must be acknowledged before `start`, human completion waits for
+  the action to settle, exact handoff ids and registry targets remain required,
+  replacement target generations rebind through the existing session path, and
+  target cancellation still disconnects the sandbox before releasing the
+  execute permit. Session deletion still acquires that permit, releases rather
+  than closes adopted tabs, retains dead relay-target inventory grace, and
+  propagates persistence, active-worker, ownership, endpoint, and all other
+  non-absence failures. DSH mapping replacement remains limited to stable
+  `session-not-found` results.
+- **Failure reproduction and focused tests:** the pre-change focused baseline
+  passed 8 files and 128 tests. After adding the upstream-derived regressions,
+  105 of 109 tests passed and four failed as expected: handoff performed zero
+  destination probes, absent HTTP delete returned 404, MCP deletion lacked the
+  idempotent annotation, and CLI deletion still used the existence-preflight
+  selector path. The implemented seven-file selection then passed 109/109,
+  including RelayClient `{ deleted: false }` decoding, closing-manager failure,
+  and DSH preservation of mappings on non-`session-not-found` errors.
+- **Changeset:** BrowserRig patch Changeset
+  `.changeset/flat-experts-call.md`.
+- **Validation passed:** `pnpm typecheck`; `pnpm test` (59 files and 542 tests);
+  `pnpm build:cli`; and GitHub `validate` at `0de3f45`. A built-CLI probe on
+  isolated port `63105` deleted the same absent explicit id twice with exit 0,
+  while a call with no explicit or persisted selector exited 1. A built MCP
+  protocol check confirmed `session_delete` has `destructiveHint: true` and
+  `idempotentHint: true`. The isolated relay was stopped and released its port.
+- **Focused smoke:** against the controlled source relay and compatible Store
+  extension `0.1.1` using protocol `3`, `reconnect-evaluate`,
+  `redirect-reconnect-evaluate`, `session-missing-selector`,
+  `execute-page-recovery`, `execute-page-detach-recovery`,
+  `handoff-navigation`, `handoff-cross-tab`, `handoff-target-detach`, and
+  `session-isolation` passed 9/9. Navigation handoff immediately captured a
+  compact snapshot from the destination page. Every case returned targets,
+  child targets, and CDP clients to zero. The known smoke keep-alive issue left
+  the wrapper running after its complete summary, so it was interrupted and
+  ended with status 130; the source relay was then stopped.
+- **Not run in this batch:** the complete current smoke matrix, retained for
+  cycle closure. DSH build/pack and clean official `web`/`headless` profile
+  installation were not required because neither the DSH adapter nor its output
+  changed; the focused DSH tests passed within the focused and full suites.
+  Extension build and unpacked-extension reload were not run because no
+  extension source changed.
+- **Independent review:** not started.
 
 ## Batch briefs
 

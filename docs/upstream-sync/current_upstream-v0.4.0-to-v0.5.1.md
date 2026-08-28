@@ -636,6 +636,35 @@ candidate for publication.
   and four-version MCP checks. GitHub `validate` was green. The user-scoped
   Brave waiver was accepted for this batch without changing the global rule.
 
+## Closure prerequisite: smoke fixture cleanup
+
+- **Status:** in progress on `test/smoke-fixture-cleanup`; draft pull request
+  [#39](https://github.com/Castor6/BrowserRig/pull/39). This is a cycle-closure
+  prerequisite, not Batch 08; all seven implementation batch rows remain
+  `Complete`.
+- **Root cause reproduced:** the focused redirect, handoff navigation, handoff
+  target detach, network-capture, and download selection passed 5/5 and returned
+  relay targets, child targets, and CDP clients to zero, but its wrapper remained
+  alive after the green summary. Four smoke-owned HTTP fixture connections to
+  Chrome remained established because `server.close()` waited for active
+  keep-alive sockets while `boundedCleanup` reported success after five seconds
+  without waiting for the callbacks to settle. Manual interruption produced the
+  known wrapper status `130`.
+- **Implementation evidence:** initial commit `110ec92` gives each smoke-owned
+  fixture server a short graceful drain, closes only that server's idle and
+  active connections when needed, waits for its close callback, and verifies
+  both its listener and connection count reached zero. Cleanup is shared across
+  concurrent or repeated calls, and failures surface instead of being ignored.
+  Redirect, handoff, network-capture, and download fixtures use this verified
+  path; BrowserRig runtime, extension, and public behavior are unchanged.
+- **Validation so far:** `pnpm typecheck` and the four-test focused fixture
+  cleanup suite passed. The suite covers graceful completion, forced cleanup,
+  concurrent and repeated calls, failure reporting, and a child wrapper that
+  exits naturally without `process.exit`. Relevant live smoke, the exact
+  23-case closure matrix, and GitHub checks remain pending.
+- **Changeset:** none. The change is test infrastructure only and has no shipped
+  package or extension behavior impact.
+
 ## Batch briefs
 
 ### 01. ARIA value privacy

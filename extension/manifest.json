@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BrowserRig",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv5p3lT4gv8lzLBhsMqzUhc1HpidegWLuZPxFgNahO+rNmlpgxoA9YjsoKO0/T7VM79Bi0FnVZ6TMW23Hr7zlLD68L4Ug5RQVHkvDh9SLZXGtBEozn81gpkEEvgBgWrXCL8Z/6WYmK40DouoM/gwX1WoNhkbYyGGGnheqZ9jSqSdR0v+WjFp1LnrKNqwW4eGX8UY5Dphv63i8f47zDbrtKLO5kTqn80kHSatToUX8WGPls7vDSpQ41ZzZChZPEl1bPQZjGjYKrhqZbgoQihdzisryXVHs9O4xjjSriW0xS3twXjULeBk/p4Hoqv365TCs47q3OFU4ZlcVese+ZVR88wIDAQAB",
   "description": "Connect browser tabs to the local BrowserRig driver.",
   "minimum_chrome_version": "120",

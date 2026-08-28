@@ -1,5 +1,17 @@
 # BrowserRig
 
+## 0.3.1
+
+### Patch Changes
+
+- 87432a9: Omit sensitive control and editable values from detailed ARIA snapshots while preserving compact snapshots and safe concurrent capture.
+- 4e8db7a: Update Effect, Playwright, WebSocket, parser, package-manager, TypeScript, build, and test dependencies while preserving BrowserRig runtime and extension compatibility.
+- 6e5cfe9: Prevent repeated network capture runs from retaining timed-out finalizers or settling successful execute output twice.
+- 0de3f45: Wait for handoff destinations to become ready and make repeated session deletion succeed when already absent.
+- c661492: Recover extension connectivity after browser startup and keep relay readiness independent from delayed tab-group APIs.
+- 4c70835: Route Playwright browser-context cookie and permission commands through the calling session's owned tab.
+- 692a250: Recover operational commands from safely identifiable stale managed relays, wait through brief extension reconnects in the TypeScript client, and report sessions connected only when their default page is live.
+
 ## 0.3.0
 
 ### Minor Changes

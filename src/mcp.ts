@@ -1,4 +1,4 @@
-import { NodeStdio } from "@effect/platform-node"
+import * as NodeStdio from "@effect/platform-node/NodeStdio"
 import { Config, Context, Effect, Layer, Option } from "effect"
 import { McpProtocol, McpSchema, McpServer } from "effect/unstable/ai"
 import fs from "node:fs/promises"

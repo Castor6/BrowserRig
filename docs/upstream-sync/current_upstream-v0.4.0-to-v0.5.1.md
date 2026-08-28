@@ -15,8 +15,7 @@ target_checked: 2026-08-27
 - **Target:** `v0.5.1`
 - **Target checked:** 2026-08-27
 - **Product recommendation:** sync selectively
-- **Cycle status:** implementation in progress (Batch 05 author follow-up
-  complete after `Changes requested`; follow-up review pending)
+- **Cycle status:** implementation in progress (Batches 01-04 complete; Batch 05 approved for merge)
 - **Execution authorization:** approved 2026-08-27 for the recorded `v0.5.1`
   target and all seven listed batches, including the conditional per-batch merge
   authority defined in [`README.md`](README.md)
@@ -119,7 +118,7 @@ previous batch pull request merges.
 | 02 | Browser-context CDP routing | [#49](https://github.com/anomalyco/browser-control/pull/49) | `Complete` | `sync/upstream-v0.5.1-02-context-routing` | [#27](https://github.com/Castor6/BrowserRig/pull/27), merge `72db822` | `Approve` on 2026-08-27 at `fba918d`; no findings | Typecheck, 520 tests, CLI build, six focused smoke cases, and GitHub `validate` passed; see evidence below. |
 | 03 | Managed relay and client recovery | [#55](https://github.com/anomalyco/browser-control/pull/55), [#57](https://github.com/anomalyco/browser-control/pull/57) | `Complete` | `sync/upstream-v0.5.1-03-relay-client-recovery` | [#29](https://github.com/Castor6/BrowserRig/pull/29), merge `d6e5939` | `Approve` on 2026-08-27 at `53c4b94`; no findings | Typecheck, 529 tests, CLI build, DSH package checks, six focused smoke cases, and GitHub `validate` passed; see evidence below. |
 | 04 | Extension connectivity and browser-start recovery | [#47](https://github.com/anomalyco/browser-control/pull/47), [#58](https://github.com/anomalyco/browser-control/pull/58) | `Complete` | `sync/upstream-v0.5.1-04-extension-recovery` | [#31](https://github.com/Castor6/BrowserRig/pull/31), merge `bf235f2` | `Approve` on 2026-08-28 at `a7aea52`; no findings, Brave reload waived for this batch | Typecheck, 536 tests, CLI and extension builds, extension release/package checks, eight focused smoke cases, and constrained Chrome live recovery passed; see evidence below. |
-| 05 | Handoff readiness and idempotent deletion | [#59](https://github.com/anomalyco/browser-control/pull/59), [#61](https://github.com/anomalyco/browser-control/pull/61) | `Pending` | `sync/upstream-v0.5.1-05-handoff-session-delete` | [#33](https://github.com/Castor6/BrowserRig/pull/33) | `Changes requested` on 2026-08-28; author follow-up `cc403d9`, follow-up review pending | Follow-up typecheck, 548 tests, CLI build, and four focused smoke cases passed; see evidence below. |
+| 05 | Handoff readiness and idempotent deletion | [#59](https://github.com/anomalyco/browser-control/pull/59), [#61](https://github.com/anomalyco/browser-control/pull/61) | `Pending` | `sync/upstream-v0.5.1-05-handoff-session-delete` | [#33](https://github.com/Castor6/BrowserRig/pull/33) | `Approve` on 2026-08-28 at `cbdc29e`; no findings | Follow-up typecheck, 548 tests, CLI build, and four focused smoke cases passed; see evidence below. |
 | 06 | Network-capture lifecycle correctness | [#65](https://github.com/anomalyco/browser-control/pull/65) | `Pending` | `sync/upstream-v0.5.1-06-network-lifecycle` | — | — | — |
 | 07 | Runtime and build dependency compatibility | [#54](https://github.com/anomalyco/browser-control/pull/54), [#62](https://github.com/anomalyco/browser-control/pull/62), [#63](https://github.com/anomalyco/browser-control/pull/63) | `Pending` | `sync/upstream-v0.5.1-07-dependencies` | — | — | — |
 | — | Public Secret Profile SDK workers | [#60](https://github.com/anomalyco/browser-control/pull/60) | `Deferred` | — | — | — | Reconsider on concrete SDK demand. |
@@ -339,9 +338,9 @@ previous batch pull request merges.
 - **Implementation status:** author follow-up implementation and validation are
   complete after `Changes requested` on
   `sync/upstream-v0.5.1-05-handoff-session-delete`; pull request
-  [#33](https://github.com/Castor6/BrowserRig/pull/33) remains open for follow-up
-  review. The initial implementation commit is `0de3f45`; the author follow-up
-  is `cc403d9`.
+  [#33](https://github.com/Castor6/BrowserRig/pull/33) is approved for the
+  conditional coordinator merge. The initial implementation commit is
+  `0de3f45`; the author follow-up is `cc403d9`.
 - **Upstream commits adapted:** `3146cdc` and `2de472a` from upstream pull
   requests [#59](https://github.com/anomalyco/browser-control/pull/59) and
   [#61](https://github.com/anomalyco/browser-control/pull/61). A resolved
@@ -428,9 +427,11 @@ previous batch pull request merges.
   pages, target-generation replacement, and detach/crash after resolution. The
   MCP `session_delete` annotation must reflect its optional current-session
   target, and repeated calls with an omitted id must retain one stable target
-  and observable current-session state. Author follow-up `cc403d9` addresses
-  those findings; follow-up independent review is pending and no approval is
-  recorded.
+  and observable current-session state. After author follow-up `cc403d9`, the
+  same independent reviewer returned `Approve` on 2026-08-28 for final head
+  `cbdc29e` with no findings. The reviewer reran typecheck, all 548 tests,
+  exact-page and generation probes, diff and Changeset checks, and confirmed
+  the green GitHub `validate`.
 
 ## Batch briefs
 

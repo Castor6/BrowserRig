@@ -490,6 +490,40 @@ previous batch pull request merges.
   lifecycle tests, diff and Changeset checks, and independent error-order and
   64-waiter cancellation/generation probes; GitHub `validate` was green.
 
+### Batch 07 dependency review baseline
+
+Upstream pull requests [#54](https://github.com/anomalyco/browser-control/pull/54),
+[#62](https://github.com/anomalyco/browser-control/pull/62), and
+[#63](https://github.com/anomalyco/browser-control/pull/63), represented by
+commits `7874e37`, `b26536f`, and `7f91927`, were reviewed file by file before
+changing BrowserRig's dependency manifest or lockfile. The following matrix is
+the pre-implementation disposition; exact compatible versions and validation
+results are recorded in the completed Batch 07 evidence.
+
+| Surface | BrowserRig baseline | Upstream `v0.5.1` | Disposition and compatibility boundary |
+| --- | --- | --- | --- |
+| Effect runtime | `effect`, `@effect/platform-node`, and `@effect/platform-node-shared` `4.0.0-beta.97`; optional public `effect` peer | `effect` and Node platform `4.0.0-rc.111` | `adopt`: keep the three BrowserRig build-time pins and optional public peer aligned, migrate only removed APIs, and retain Effect v4 / local `effect-smol` as the API source of truth. |
+| Playwright | manifest `^1.57.0`, lock `1.61.1` | `^1.62.1`, lock `1.62.1` | `adopt`: retain stock `playwright-core`, CDP visibility, target ownership, and package externalization. |
+| WebSocket | manifest `^8.18.3`, lock `8.21.0` | `^8.21.3`, lock `8.21.3` | `adopt`: retain the custom JSON-over-websocket relay protocol and externalized runtime package. |
+| Parser | `acorn` `^8.17.0` / `8.17.0` | `^8.18.0` / `8.18.0` | `adopt`: preserve code-first execute parsing and guardrails. |
+| Package manager | manifest and four workflows pin pnpm `11.18.0` | pnpm `11.20.0` | `adopt`: update every BrowserRig pin consistently and regenerate BrowserRig's own lockfile; never copy upstream's lockfile. |
+| TypeScript and platform types | TypeScript `^5.9.3`; Chrome types `^0.1.33` / `0.1.43`; Node types `^25.0.3` / `25.9.4`; WS types `^8.18.1` | TypeScript `^7.0.2`; Chrome types `^0.2.7`; Node types `^26.2.0`; WS types unchanged | `adopt` the compiler, Chrome types, and Node types with only type-compatibility source changes; `already-covered` for WS types. Preserve public namespaces and protocol behavior. |
+| Build tools | esbuild `^0.27.2` / `0.27.7`; tsx `^4.21.0` / `4.22.4`; Node target `node22` | esbuild `^0.28.2`; tsx `^4.23.12`; Node target `node22` | `adopt` esbuild and tsx; `already-covered` for the Node build target. Preserve executable Effect bundling, library Effect externalization, external Playwright/WS/parser packages, and bundled-license collection. |
+| Test and release tools | Vitest `^4.1.9` / `4.1.9`; Changesets `^2.31.1`; fflate `^0.8.3` | Vitest `^4.1.11`; Changesets `^3.0.1`; fflate unchanged | `adopt` Vitest and Changesets after full suite/status checks; `already-covered` for fflate. Preserve BrowserRig release workflows and Trusted Publishing. |
+| Node.js floor | package, CI, and release workflows require `>=22.22.0` / `22.22.0` | `>=22.19.0` | `skip`: BrowserRig's stronger floor remains unchanged; upstream's release-only minor classification does not apply. |
+| BrowserRig-only DSH/runtime dependencies | Cordis/DSH peers, Schemastery, and packaging integration; `ioredis` satisfies the beta Node platform peer | not present upstream; RC Node platform replaces its Redis peer | `already-covered` for BrowserRig-owned DSH packages and Schemastery; remove only the obsolete beta-platform `ioredis` development peer after proving the RC bundle and licenses are complete. |
+| Upstream identity and release metadata | BrowserRig package/extension versions, protocol `3`, Store ID, Changesets, OIDC Trusted Publishing, and DSH package identity | upstream package identity, exact versions, Store docs, and release metadata | `skip`: do not import any upstream identity, exact version, changelog, Store, or publication change. |
+
+The clean baseline on Node `22.22.0` and the exact manifest pnpm `11.18.0`
+passed frozen install, typecheck, all 59 files and 552 tests, CLI and extension
+builds, and extension release validation. The baseline Store ZIP was
+`browserrig-extension-0.1.1.zip` with SHA-256
+`5aa67c909dbdaf650f135e559de972b00edc5cc8f271da8fc6c1e348170a9c4f`;
+the baseline npm tarball was `browserrig-0.3.0.tgz` with SHA-256
+`bfa7fd71dd7b3f096306bcb3230ece063e14c3c937077c8a8b9213410ef19f09`.
+These establish a known-good comparison point; neither artifact is a release
+candidate for publication.
+
 ## Batch briefs
 
 ### 01. ARIA value privacy

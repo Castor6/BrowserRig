@@ -653,14 +653,20 @@ candidate for publication.
 - **Implementation evidence:** initial commit `110ec92` gives each smoke-owned
   fixture server a short graceful drain, closes only that server's idle and
   active connections when needed, waits for its close callback, and verifies
-  both its listener and connection count reached zero. Cleanup is shared across
-  concurrent or repeated calls, and failures surface instead of being ignored.
-  Redirect, handoff, network-capture, and download fixtures use this verified
-  path; BrowserRig runtime, extension, and public behavior are unchanged.
-- **Validation passed:** `pnpm typecheck`; the four-test focused fixture cleanup
-  suite; and `pnpm test` (60 files and 556 tests). The focused suite covers
-  graceful completion, forced cleanup, concurrent and repeated calls, failure
-  reporting, and a child wrapper that exits naturally without `process.exit`.
+  both its listener and connection count reached zero. Review follow-up commit
+  `60a35e5` retains the fulfilled Promise for the server's lifecycle, so
+  concurrent and later repeated cleanup share one Promise and one underlying
+  `server.close()` call. A rejected Promise is removed only to permit an
+  explicit retry after repairing a transient fixture-server failure. Redirect,
+  handoff, network-capture, and download fixtures use the same Effect finalizer,
+  whose failure terminates the smoke wrapper nonzero instead of being ignored.
+  BrowserRig runtime, extension, and public behavior are unchanged.
+- **Validation passed:** `pnpm typecheck`; the six-test focused fixture cleanup
+  suite; and `pnpm test` (60 files and 558 tests). The focused suite covers
+  graceful completion, forced cleanup, concurrent and repeated Promise identity,
+  one close call after success, repaired retry after a real connection-inventory
+  error, nonzero Effect-finalizer wrapper exit, failure reporting, and a child
+  wrapper that exits naturally without `process.exit`.
   The five directly affected live cases passed 5/5 and their wrapper exited
   naturally with status `0`. The exact 23-case `SMOKE_CASE` command required by
   `AGENTS.md` then exited naturally with status `0` and summary
@@ -668,7 +674,8 @@ candidate for publication.
   process, fixture listener, or fixture connection remained; the relay reported
   zero targets, child targets, and CDP clients. All smoke-created sessions and
   tabs were cleaned up, and the controlled source relay was stopped. GitHub
-  `validate` passed at author head `b173f34`.
+  `validate` passed before review at author head `b173f34`; the final follow-up
+  check is pending.
 - **Changeset:** none. The change is test infrastructure only and has no shipped
   package or extension behavior impact.
 - **Independent review:** `Changes requested` on 2026-08-28 for author head
@@ -676,8 +683,9 @@ candidate for publication.
   called `server.close()` a second time instead of preserving one lifecycle-wide
   close operation. The negative-timeout test also did not exercise a real close
   or verification failure, and the ledger still called the ready pull request a
-  draft. Author follow-up and validation are in progress; independent follow-up
-  review remains pending, and no approval is recorded yet.
+  draft. Author follow-up `60a35e5` and the required local validation are
+  complete; independent follow-up review remains pending, and no approval is
+  recorded yet.
 
 ## Batch briefs
 

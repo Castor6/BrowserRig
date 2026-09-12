@@ -62,6 +62,7 @@ export const ExecuteRequest = Schema.Struct({
   code: Schema.String,
   createIfMissing: Schema.Boolean,
   targetSelection: Schema.optionalKey(TargetSelection),
+  experimentalWebMcp: Schema.optionalKey(Schema.Boolean),
 })
 
 export interface ExecuteRequest extends Schema.Schema.Type<typeof ExecuteRequest> {}
@@ -165,6 +166,37 @@ export const ExecuteMedia = Schema.Struct({
 
 export interface ExecuteMedia extends Schema.Schema.Type<typeof ExecuteMedia> {}
 
+export const WebMcpTool = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  description: Schema.String,
+  frameId: Schema.String,
+  inputSchema: Schema.Record(Schema.String, Schema.Json),
+  annotations: Schema.optionalKey(Schema.Struct({
+    readOnly: Schema.optionalKey(Schema.Boolean),
+    untrustedContent: Schema.optionalKey(Schema.Boolean),
+    consequential: Schema.optionalKey(Schema.Boolean),
+    autosubmit: Schema.optionalKey(Schema.Boolean),
+  })),
+  requiresConfirmation: Schema.Boolean,
+})
+
+export interface WebMcpTool extends Schema.Schema.Type<typeof WebMcpTool> {}
+
+export const WebMcpDiscovery = Schema.Struct({
+  status: Schema.Literals(["available", "unsupported", "unavailable"]),
+  revision: Schema.String,
+  totalTools: Schema.Number,
+  tools: Schema.optionalKey(Schema.Array(WebMcpTool)),
+  changed: Schema.optionalKey(Schema.Boolean),
+  offset: Schema.Number,
+  nextOffset: Schema.optionalKey(Schema.Number),
+  omittedTools: Schema.optionalKey(Schema.Number),
+  message: Schema.optionalKey(Schema.String),
+})
+
+export interface WebMcpDiscovery extends Schema.Schema.Type<typeof WebMcpDiscovery> {}
+
 export const ExecuteResponse = Schema.Struct({
   text: Schema.String,
   value: Schema.optionalKey(Schema.Unknown),
@@ -175,6 +207,7 @@ export const ExecuteResponse = Schema.Struct({
   warnings: Schema.optionalKey(Schema.Array(Schema.String)),
   diagnostic: Schema.optionalKey(Schema.String),
   aftermath: Schema.optionalKey(ExecuteAftermath),
+  webmcp: Schema.optionalKey(WebMcpDiscovery),
   session: ExecuteSessionSummary,
 })
 

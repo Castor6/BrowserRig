@@ -22,6 +22,8 @@ import { defaultJournalBaseDir, formatJournalEntry, readJournalEntries } from ".
 import * as SessionStore from "./session-store.ts"
 import { browserRigVersion } from "./version.ts"
 import { resolveExplicitSessionSelector, resolveSessionDeletionId } from "./cli-session-selector.ts"
+import { experimentalWebMcpConfig } from "./webmcp-config.ts"
+import { formatWebMcpDiscovery } from "./webmcp.ts"
 
 const packageRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const sessionIdConfig = Config.option(Config.string("BROWSERRIG_SESSION"))
@@ -173,6 +175,7 @@ type ExecuteJsonEnvelope = {
   readonly warnings: readonly string[]
   readonly diagnostic?: string
   readonly aftermath?: ExecuteAftermath
+  readonly webmcp?: ExecuteResponse["webmcp"]
   readonly media?: ExecuteResponse["media"]
   readonly session?: ExecuteResponse["session"]
 }
@@ -191,6 +194,7 @@ export function executeJsonEnvelope(result: ExecuteResponse): ExecuteJsonEnvelop
     warnings: result.warnings ?? [],
     ...(result.diagnostic ? { diagnostic: result.diagnostic } : {}),
     ...(result.aftermath ? { aftermath: result.aftermath } : {}),
+    ...(result.webmcp ? { webmcp: result.webmcp } : {}),
     ...(result.media ? { media: result.media } : {}),
     session: result.session,
   }
@@ -278,6 +282,7 @@ const execute = Command.make(
         ...(explicitSessionId ? { sessionId: explicitSessionId } : {}),
         code: executeCode,
         createIfMissing: !explicitSessionId,
+        experimentalWebMcp: yield* experimentalWebMcpConfig,
         ...(targetUrlValue || targetIndexValue !== undefined
           ? {
             targetSelection: {
@@ -316,6 +321,7 @@ const execute = Command.make(
     const result = outcome.success
     const print = result.isError ? Console.error : Console.log
     yield* print(result.text)
+    if (result.webmcp) yield* print(formatWebMcpDiscovery(result.webmcp))
     if (result.logs.length > 0) {
       yield* print(formatExecuteLogs(result.logs))
     }

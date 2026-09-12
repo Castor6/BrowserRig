@@ -109,6 +109,8 @@ describe("relay-schema", () => {
   })
 
   it("decodes execute requests with atomic or explicit session ownership", () => {
+    expect(decodeExecuteRequest({ code: "page.url()", createIfMissing: true, experimentalWebMcp: true })).toMatchObject({ experimentalWebMcp: true })
+    expect(() => decodeExecuteRequest({ code: "page.url()", createIfMissing: true, experimentalWebMcp: "true" })).toThrow()
     expect(decodeExecuteRequest({ code: "page.url()", createIfMissing: true })).toEqual({
       code: "page.url()",
       createIfMissing: true,

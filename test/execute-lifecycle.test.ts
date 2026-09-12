@@ -10,8 +10,67 @@ import {
   waitForPageContext,
 } from "../src/execute.ts"
 import { BrowserRigSessions } from "../src/session-manager.ts"
+import { WebMcpSession, type WebMcpEvent } from "../src/webmcp.ts"
 
 describe("execute lifecycle", () => {
+  it("only discovers WebMCP when the current request opts in and expires saved helpers", async () => {
+    const f = makeWebMcpSandboxFixture()
+    const disabled = await Effect.runPromise(f.sandbox.execute("return typeof webmcp.call"))
+    expect(disabled).toMatchObject({ isError: false, value: "function" })
+    expect(disabled.webmcp).toBeUndefined()
+    expect(f.create).not.toHaveBeenCalled()
+    const enabled = await Effect.runPromise(f.sandbox.execute("state.oldWebMcp = webmcp; return 42", { experimentalWebMcp: true }))
+    expect(enabled.webmcp).toMatchObject({ status: "available", totalTools: 1, changed: true })
+    const expired = await Effect.runPromise(f.sandbox.execute("state.oldWebMcp.list()", { experimentalWebMcp: true }))
+    expect(expired.isError).toBe(true)
+    expect(expired.text).toContain("finished execute")
+    expect(expired.webmcp).toMatchObject({ changed: false })
+    const off = await Effect.runPromise(f.sandbox.execute("webmcp.list()"))
+    expect(off.isError).toBe(true)
+    expect(off.text).toContain("BROWSERRIG_EXPERIMENTAL_WEBMCP=true")
+    expect(off.webmcp).toBeUndefined()
+    expect(f.listeners.size).toBe(0)
+  })
+
+  it.each([false, true])("waits for unawaited WebMCP calls before finishing (script failure: %s)", async (failScript) => {
+    const f = makeWebMcpSandboxFixture()
+    let resolveStarted!: () => void
+    const started = new Promise<void>((resolve) => { resolveStarted = resolve })
+    f.onInvoke = resolveStarted
+    let settled = false
+    const result = Effect.runPromise(f.sandbox.execute(`
+      const tool = (await webmcp.list()).tools[0];
+      webmcp.call(tool.id, {});
+      ${failScript ? 'throw new Error("script failed")' : 'return "script returned"'}
+    `, { experimentalWebMcp: true })).then((value) => { settled = true; return value })
+    await started
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    f.emit({ method: "WebMCP.toolResponded", params: { invocationId: "one", status: "Completed", output: "done" } })
+    const completed = await result
+    expect(completed.isError).toBe(failScript)
+    expect(completed.webmcp?.totalTools).toBe(1)
+  })
+
+  it("registers human handoff before invoking a form that requires manual submission", async () => {
+    const f = makeWebMcpSandboxFixture(true)
+    const order: string[] = []
+    f.onInvoke = () => {
+      order.push("invoke")
+      f.emit({ method: "WebMCP.toolResponded", params: { invocationId: "one", status: "Completed", output: "submitted" } })
+    }
+    Object.assign(f.sandbox.options, {
+      requestHandoff: async ({ start }: { start: () => Promise<unknown> }) => {
+        order.push("handoff")
+        await start()
+        return "resolved"
+      },
+    })
+    const result = await Effect.runPromise(f.sandbox.execute("const tool = (await webmcp.list()).tools[0]; return webmcp.call(tool.id)", { experimentalWebMcp: true }))
+    expect(result).toMatchObject({ isError: false, value: { status: "Completed", output: "submitted" }, aftermath: { handoffs: 1 } })
+    expect(order).toEqual(["handoff", "invoke"])
+  })
+
   it("settles network capture once for a successful execute", async () => {
     const browserFixture = makeAdoptedBrowserFixture({
       targetId: "target-network-settlement",
@@ -539,4 +598,26 @@ function makeAdoptedBrowserFixture(options: {
     isConnected: () => true,
   } as unknown as Browser
   return { browser, newPageCalls: () => newPageCalls }
+}
+
+function makeWebMcpSandboxFixture(manualSubmit = false) {
+  const browser = makeAdoptedBrowserFixture({ targetId: "webmcp-target", targetUrl: "https://example.test/tools" })
+  const listeners = new Set<(event: WebMcpEvent) => void>()
+  const emit = (event: WebMcpEvent) => { for (const listener of listeners) listener(event) }
+  const f = { onInvoke: () => {} }
+  const create = vi.fn((targetId: string) => new WebMcpSession(targetId, {
+    send: async (method) => {
+      if (method === "WebMCP.enable") emit({ method: "WebMCP.toolsAdded", params: { tools: [{
+        name: "search", frameId: "main", inputSchema: { type: "object" },
+        ...(manualSubmit ? { backendNodeId: 1 } : {}),
+      }] } })
+      if (method === "WebMCP.invokeTool") { f.onInvoke(); return { invocationId: "one" } }
+      return {}
+    },
+    subscribe: (listener) => { listeners.add(listener); return () => { listeners.delete(listener) } },
+    childSessions: () => [],
+  }))
+  const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:0", sessionId: "alpha", createWebMcp: create })
+  Object.assign(sandbox, { browser: browser.browser })
+  return Object.assign(f, { sandbox, create, listeners, emit })
 }

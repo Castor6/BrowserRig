@@ -18,10 +18,11 @@ import type { HandoffOutcome } from "./handoff.ts"
 import * as AuthProfile from "./auth-profile.ts"
 import * as AuthenticatedOrigin from "./authenticated-origin.ts"
 import * as NetworkCapture from "./network-capture.ts"
-import type { AuthenticatedJsonOutcome, AuthenticatedJsonRequest, ExecuteAftermath, ExecuteLogEntry, ExecuteLogSummary, ExecuteMedia } from "./relay-schema.ts"
+import type { AuthenticatedJsonOutcome, AuthenticatedJsonRequest, ExecuteAftermath, ExecuteLogEntry, ExecuteLogSummary, ExecuteMedia, WebMcpDiscovery } from "./relay-schema.ts"
 import type { SessionTarget } from "./relay-types.ts"
 import { executionContextFailureDiagnostic, runtimeFailureKind } from "./runtime-diagnostics.ts"
 import { ariaSnapshotWithoutTextControlValues, registerAriaSnapshotSelector } from "./aria-snapshot.ts"
+import type { WebMcpSession, WebMcpHelpers, WebMcpCallResult } from "./webmcp.ts"
 
 const nodeModules = { fs, path, os, crypto, url, util, events, stream, buffer, http, https, zlib }
 const nodeModuleAliases = Object.keys(nodeModules).join(", ")
@@ -261,6 +262,8 @@ type SandboxGlobals = {
     readonly cancel: () => Promise<{ readonly cancelled: boolean }>
   }
   readonly handoffTracker: { count: number }
+  readonly webmcp?: WebMcpHelpers
+  readonly settleWebMcp?: () => Promise<void>
 }
 
 type HandoffCallOptions = {
@@ -421,6 +424,7 @@ type ExecuteSandboxOptions = {
   readonly sessionId?: string
   readonly requestHandoff?: RequestHandoff
   readonly onDefaultTargetChange?: (target: SessionTarget | undefined) => void
+  readonly createWebMcp?: (targetId: string) => WebMcpSession
 }
 
 export type ExecuteResult = {
@@ -433,6 +437,7 @@ export type ExecuteResult = {
   readonly warnings: readonly string[]
   readonly diagnostic?: string
   readonly aftermath?: ExecuteAftermath
+  readonly webmcp?: WebMcpDiscovery
   readonly setupFailed?: true
 }
 
@@ -453,6 +458,7 @@ class ExecuteCodeError extends Error {
 
 export type ExecuteOptions = {
   readonly targetSelection?: ExecuteTargetSelection
+  readonly experimentalWebMcp?: boolean
 }
 
 export class ExecuteSandbox {
@@ -467,6 +473,8 @@ export class ExecuteSandbox {
   private readonly networkCapture = new NetworkCapture.Recorder()
   private pendingWarnings: string[] = []
   private boundPageClose: { readonly page: Page; readonly listener: () => void } | undefined
+  private webMcp: WebMcpSession | undefined
+  private webMcpUnavailable: WebMcpDiscovery | undefined
 
   constructor(readonly options: ExecuteSandboxOptions) {}
 
@@ -542,6 +550,12 @@ export class ExecuteSandbox {
           return result
         },
       }),
+      Effect.flatMap((result) => Effect.promise(async () => {
+        if (!options.experimentalWebMcp) return result
+        const discovery = this.webMcp ? await this.webMcp.report() : this.webMcpUnavailable
+        return discovery ? { ...result, webmcp: this.networkCapture.redactValue(discovery) as WebMcpDiscovery } : result
+      })),
+      Effect.uninterruptible,
     )
   }
 
@@ -839,6 +853,62 @@ export class ExecuteSandbox {
       })
       handoffTracker.count += 1
     }
+    const webMcpEnabled = options.experimentalWebMcp === true
+    if (!webMcpEnabled) {
+      await this.webMcp?.stop()
+      this.clearWebMcp()
+    } else {
+      const targetId = await resolvePageTargetId(page)
+      if (this.webMcp?.targetId !== targetId || this.webMcp?.disposed || this.webMcp?.needsRetry) this.clearWebMcp()
+      if (!this.webMcp) {
+        try {
+          if (!targetId || !this.options.createWebMcp) throw new Error("WebMCP requires a relay-backed session with an owned page")
+          this.webMcp = this.options.createWebMcp(targetId)
+          await this.webMcp.start()
+          this.webMcpUnavailable = undefined
+        } catch (cause) {
+          this.webMcpUnavailable = {
+            status: "unavailable", revision: crypto.randomUUID(), totalTools: 0, offset: 0, tools: [],
+            message: cause instanceof Error ? cause.message : "WebMCP discovery is unavailable",
+          }
+        }
+      }
+    }
+    const webMcp = this.webMcp
+    const unavailable = this.webMcpUnavailable
+    let acceptingWebMcpCalls = true
+    const webMcpCalls: Promise<unknown>[] = []
+    const assertWebMcpEnabled = () => {
+      if (!acceptingWebMcpCalls) throw new Error("This WebMCP helper belongs to a finished execute call; use the current webmcp helper")
+      if (!webMcpEnabled) throw new Error("WebMCP is disabled. Set BROWSERRIG_EXPERIMENTAL_WEBMCP=true in the calling agent's environment.")
+    }
+    const webmcp: WebMcpHelpers = {
+      list: async (listOptions) => {
+        assertWebMcpEnabled()
+        if (webMcp) return await webMcp.list(listOptions)
+        return unavailable!
+      },
+      call: (id, input, callOptions) => {
+        const operation = (async () => {
+          assertWebMcpEnabled()
+          if (!webMcp) throw new Error(unavailable?.message ?? "WebMCP is unavailable")
+          if (webMcpCalls.length >= 32) throw new Error("At most 32 WebMCP calls may be started per execute")
+          const tool = webMcp.callableTool(id)
+          if (!tool.requiresConfirmation) return await webMcp.call(id, input, callOptions)
+          let result: WebMcpCallResult | undefined
+          const timeoutMs = callOptions?.timeoutMs ?? defaultHandoffTimeoutMs
+          await handoff(`Review and submit the website form for "${tool.name}", then continue.`, {
+            timeoutMs,
+            start: async () => { result = await webMcp.call(id, input, { ...callOptions, timeoutMs }) },
+          })
+          return result!
+        })()
+        // Keep the execute permit until even unawaited tool invocations settle.
+        void operation.catch(() => {})
+        webMcpCalls.push(operation)
+        return operation
+      },
+    }
     return {
       browser: this.browser,
       context,
@@ -865,6 +935,11 @@ export class ExecuteSandbox {
         cancel: () => Effect.runPromise(this.networkCapture.cancel()),
       },
       handoffTracker,
+      webmcp,
+      settleWebMcp: async () => {
+        acceptingWebMcpCalls = false
+        await Promise.allSettled(webMcpCalls)
+      },
     }
   }
 
@@ -962,6 +1037,13 @@ export class ExecuteSandbox {
   private clearPageListeners(): void {
     this.clearBoundPageClose()
     this.clearSnapshotRefs()
+    this.clearWebMcp()
+  }
+
+  private clearWebMcp(): void {
+    this.webMcp?.dispose()
+    this.webMcp = undefined
+    this.webMcpUnavailable = undefined
   }
 
   getStatus(): { readonly sessionId?: string; readonly connected: boolean; readonly pageUrl: string | null; readonly stateKeys: string[] } {
@@ -2489,6 +2571,7 @@ export async function runUserCode({ code, globals }: { readonly code: string; re
       "ghostCursor",
       "handoff",
       "network",
+      "webmcp",
       wrapCodeWithModuleAliases(code),
     )
     const result = await fn(
@@ -2509,9 +2592,12 @@ export async function runUserCode({ code, globals }: { readonly code: string; re
       globals.ghostCursor,
       globals.handoff,
       globals.network,
+      globals.webmcp,
     )
+    await globals.settleWebMcp?.()
     return { result, ...buildResultMetadata() }
   } catch (cause) {
+    await globals.settleWebMcp?.()
     const error = cause instanceof Error ? cause : new Error("execute sandbox code", { cause })
     const metadata = buildResultMetadata()
     throw new ExecuteCodeError(error, metadata.logs, metadata.logSummary, metadata.aftermath)

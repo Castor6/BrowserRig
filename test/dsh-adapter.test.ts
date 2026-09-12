@@ -154,6 +154,13 @@ function scriptFailure(id: string, message: string): BrowserRigProcessResult {
 }
 
 describe("BrowserRig DSH adapter", () => {
+  it("preserves automatic WebMCP discovery for the native DSH tool", async () => {
+    const webmcp = { status: "available", revision: "one", totalTools: 0, tools: [], offset: 0, changed: true }
+    const { adapter, cwd } = await fixture([executeSuccess("hidden-session", null, { webmcp })])
+    const value = await adapter.execute(execContext("dsh-agent", cwd), "page.url()")
+    expect(value.webmcp).toEqual(webmcp)
+    expect(JSON.stringify(value)).not.toContain("hidden-session")
+  })
   it("binds each DSH agent to an isolated persistent BrowserRig session", async () => {
     const { adapter, runner, map, cwd } = await fixture([
       executeSuccess("alpha-session", { turn: 1 }),

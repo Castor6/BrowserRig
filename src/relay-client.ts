@@ -265,6 +265,7 @@ export const make = Effect.fn("RelayClient.make")(function* (options?: { readonl
         code: request.code,
         createIfMissing: request.createIfMissing,
         ...(request.targetSelection === undefined ? {} : { targetSelection: request.targetSelection }),
+        ...(request.experimentalWebMcp === undefined ? {} : { experimentalWebMcp: request.experimentalWebMcp }),
       }, ExecuteResponse),
     authenticatedJson: (request) => postJson("/v1/authenticated-origin/json", { ...request }, AuthenticatedJsonOutcome),
     networkStart: (request) => postJson("/network/start", { ...request }, NetworkStatusResponse),

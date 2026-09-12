@@ -237,6 +237,70 @@ out of version, and ambient CLI session or target selectors cannot override the
 DSH task binding. There is also no duplicate click/fill/navigation micro-tool
 layer. Direct CLI, MCP, and library users remain independent of DSH.
 
+## Experimental WebMCP
+
+Enable native website tool discovery in the environment of the agent calling
+BrowserRig (off by default):
+
+```bash
+export BROWSERRIG_EXPERIMENTAL_WEBMCP=true
+browserrig execute 'await page.goto("https://googlechromelabs.github.io/webmcp-tools/demos/pizza-maker/"); return page.title()'
+```
+
+The execute response includes a `webmcp` discovery field with tool ids, names,
+descriptions, input schemas, and frame identities. Use the returned session id
+to continue. For an existing user tab, adopt it first. Discovery covers the
+current session-owned page, including its attached iframe targets.
+
+```js
+const { tools } = await webmcp.list();
+const tool = tools.find(tool => tool.name === "set_pizza_size");
+if (!tool) throw new Error("The page has no set_pizza_size tool");
+const result = await webmcp.call(tool.id, { size: "Small" });
+return { result, size: await page.locator("#size-text").innerText() };
+```
+
+Set the same environment variable in an MCP server's `env` configuration or
+before launching DSH. Each execute request carries its own setting, so it also
+works with an already-running shared relay. No additional MCP micro-tools or
+extension update is needed.
+
+Definitions are included automatically on first discovery and after changes.
+Unchanged responses carry `changed: false` without repeating the definitions.
+`webmcp.list({ offset, limit })` explicitly refreshes a page of definitions,
+also included in that execute's discovery field. Follow `nextOffset` to page
+through large lists. Automatic output is limited to 25 tools / 128 KiB; explicit
+lists allow up to 100 tools. The registry retains up to 256 tools / 1 MiB,
+with a 64 KiB limit per definition, and reports `omittedTools` when capped.
+
+Tool ids expire on registration changes, document navigation, detach, and
+reconnect. Re-list before using an old id. Calls return Chrome's `Completed`,
+`Canceled`, or `Error` status; verify the page outcome as well. Calls accept
+`{ timeoutMs, signal }` (30 seconds by default, up to 10 minutes). Declarative
+forms that require manual submission automatically enter the existing human
+handoff flow, with a 10-minute default. Cancellation is cooperative and does
+not undo website changes. Inputs and outputs are limited to 1 MiB, and each
+execute can start up to 32 calls. Normal execute-value limits still apply to
+values returned from scripts; select relevant fields from large tool outputs.
+
+Read-only sessions can discover tools but cannot invoke them, even when a
+website marks a tool read-only. Website descriptions and outputs are untrusted
+content, not instructions or permission to perform actions.
+
+Native WebMCP requires a compatible Chrome and an enabled website. A site with
+a valid [Origin Trial](https://developer.chrome.com/docs/ai/webmcp) enrollment
+can enable it without a user changing browser flags. `unsupported` means the
+native CDP domain could not be used; `unavailable` reports a connection or
+ownership problem. `available` with no tools means no native tools were
+discovered, which can include a page that has not enabled the API. BrowserRig
+does not enable Chrome experiments or convert a site's polyfill into native
+WebMCP.
+
+For source development, `SMOKE_CASE=execute-webmcp pnpm smoke` exercises native
+discovery, calls, iframe isolation, stale handles, navigation, and manual-form
+handoff against the public Chrome demos. This case is opt-in and requires a
+compatible browser and valid demo Origin Trial enrollment.
+
 ## TypeScript Client
 
 The package also exports an Effect client for applications that need structured

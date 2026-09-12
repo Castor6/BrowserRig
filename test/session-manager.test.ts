@@ -374,6 +374,16 @@ describe("BrowserRigSessions", () => {
     expect(sessions.listSummaries().map((session) => session.id)).toEqual([result.session.id])
   })
 
+  it("forwards WebMCP opt-in per request without retaining an earlier caller's setting", async () => {
+    const sandbox = makeFakeSandbox()
+    const execute = vi.spyOn(sandbox, "execute")
+    const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandbox)
+    const created = await Effect.runPromise(sessions.execute({ code: "noop", createIfMissing: true, experimentalWebMcp: true }))
+    await Effect.runPromise(sessions.execute({ sessionId: created.session.id, code: "noop", createIfMissing: false }))
+    await Effect.runPromise(sessions.execute({ sessionId: created.session.id, code: "noop", createIfMissing: false, experimentalWebMcp: false }))
+    expect(execute.mock.calls.map(([, options]) => options?.experimentalWebMcp)).toEqual([true, undefined, false])
+  })
+
   it("requires createIfMissing when execute omits the session id", async () => {
     const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => makeFakeSandbox())
 

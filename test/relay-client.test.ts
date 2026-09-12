@@ -66,6 +66,13 @@ const session = {
 }
 
 describe("RelayClient", () => {
+  it("transports the caller's WebMCP opt-in and schema-defined discovery", async () => {
+    const webmcp = { status: "available", revision: "one", totalTools: 0, tools: [], offset: 0, changed: true }
+    routes.set("POST /cli/execute", { status: 200, body: { text: "ok", isError: false, logs: [], session, webmcp } })
+    const result = await withClient((client) => client.execute({ sessionId: session.id, code: "page.url()", createIfMissing: false, experimentalWebMcp: true }))
+    expect(result.webmcp).toEqual(webmcp)
+    expect(lastRequestBody).toMatchObject({ experimentalWebMcp: true })
+  })
   it("sends the guarded relay shutdown request", async () => {
     routes.set("POST /shutdown", { status: 200, body: { stopping: true } })
     const result = await withClient((client) => client.shutdown!("relay-instance"))

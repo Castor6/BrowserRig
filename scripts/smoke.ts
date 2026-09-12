@@ -36,6 +36,7 @@ type ExtensionStatus = {
 
 type SmokeCase = {
   readonly name: string
+  readonly optIn?: boolean
   readonly expectedFailure?: boolean
   readonly run: (page: Page) => Effect.Effect<unknown, Error>
 }
@@ -185,6 +186,103 @@ const runLocalCheckoutFlow = Effect.fnUntraced(function* (page: Page) {
 })
 
 const cases: SmokeCase[] = [
+  {
+    name: "execute-webmcp",
+    // Requires native WebMCP and the demo's valid Origin Trial enrollment.
+    optIn: true,
+    run: Effect.fnUntraced(function* () {
+      const smokeSession = `br-webmcp-${Date.now()}`
+      const pizzaUrl = "https://googlechromelabs.github.io/webmcp-tools/demos/pizza-maker/"
+      const execute = (code: string, enabled = true) => runBrowserRig([
+        "execute", "--json", "--session", smokeSession, code,
+      ], { experimentalWebMcp: enabled })
+      return yield* Effect.scoped(Effect.gen(function* () {
+        yield* runBrowserRig(["session", "new", smokeSession])
+        const initial = parseJsonObject(yield* execute(`await page.goto(${JSON.stringify(pizzaUrl)}); return page.url()`), "WebMCP discovery")
+        const discovery = getObject(initial.webmcp)
+        if (discovery?.status !== "available" || !Array.isArray(discovery.tools) || !discovery.tools.some((tool) => getObject(tool)?.name === "set_pizza_size")) {
+          return yield* Effect.fail(new Error(`Native pizza tools were not discovered: ${formatValue(discovery)}`))
+        }
+        const output = yield* execute(`
+const { default: assert } = await import('node:assert/strict')
+const size = (await webmcp.list()).tools.find(tool => tool.name === 'set_pizza_size')
+assert(size)
+assert.equal((await webmcp.call(size.id, { size: 'Small' })).status, 'Completed')
+assert.equal(await page.locator('#size-text').textContent(), 'Small')
+state.oldWebMcpId = size.id
+await page.evaluate(async () => {
+  window.browserRigProbeController = new AbortController()
+  await document.modelContext.registerTool({
+    name: 'browserrig_probe', description: 'BrowserRig local smoke probe',
+    inputSchema: { type: 'object', properties: { value: { type: 'string' } } },
+    execute: ({ value }) => ({ echo: value }),
+  }, { signal: window.browserRigProbeController.signal })
+})
+const probe = (await webmcp.list()).tools.find(tool => tool.name === 'browserrig_probe')
+assert(probe)
+assert.equal((await webmcp.call(probe.id, { value: 'smoke' })).status, 'Completed')
+await page.evaluate(() => window.browserRigProbeController.abort())
+await webmcp.list()
+await assert.rejects(webmcp.call(probe.id), /stale/)
+await page.evaluate((url) => {
+  const frame = document.createElement('iframe')
+  frame.id = 'browserrig-webmcp-frame'
+  frame.src = url
+  document.body.append(frame)
+}, ${JSON.stringify(pizzaUrl)})
+await page.frameLocator('#browserrig-webmcp-frame').locator('#size-text').waitFor({ state: 'attached', timeout: 10000 })
+let child
+for (let attempt = 0; attempt < 50 && !child; attempt++) {
+  child = (await webmcp.list()).tools.find(tool => tool.name === 'set_pizza_size' && tool.frameId !== size.frameId)
+  if (!child) await new Promise(resolve => setTimeout(resolve, 100))
+}
+assert(child)
+assert.equal((await webmcp.call(child.id, { size: 'Large' })).status, 'Completed')
+assert.equal(await page.frameLocator('#browserrig-webmcp-frame').locator('#size-text').textContent(), 'Large')
+assert.equal(await page.locator('#size-text').textContent(), 'Small')
+await page.evaluate(() => document.querySelector('#browserrig-webmcp-frame').remove())
+await webmcp.list()
+await assert.rejects(webmcp.call(child.id), /stale/)
+await page.evaluate(() => {
+  document.body.insertAdjacentHTML('beforeend', '<form id="browserrig-manual" toolname="browserrig_manual" tooldescription="Local smoke form"><input name="message" required><button type="submit">Submit test form</button></form>')
+  document.querySelector('#browserrig-manual').addEventListener('submit', event => {
+    event.preventDefault()
+    event.respondWith(Promise.resolve('submitted'))
+  })
+})
+const manual = (await webmcp.list()).tools.find(tool => tool.name === 'browserrig_manual')
+assert.equal(manual?.requiresConfirmation, true)
+state.manualWebMcpId = manual.id
+return { size: true, dynamic: true, iframe: true, manualDetected: true }
+        `)
+        const owner = yield* scopedOwnerCdpPage({ sessionId: smokeSession, urlIncludes: pizzaUrl })
+        const invocation = yield* execute(`return await webmcp.call(state.manualWebMcpId, { message: 'local smoke' }, { timeoutMs: 30000 })`).pipe(Effect.forkChild)
+        yield* owner.waitFor(`document.querySelector('#__browserrig_page_status__')?.shadowRoot?.querySelector('button') != null`)
+        yield* owner.waitFor(`document.querySelector('#browserrig-manual input')?.value === 'local smoke'`)
+        yield* owner.evaluate(`document.querySelector('#browserrig-manual button').click()`)
+        yield* owner.evaluate(`document.querySelector('#__browserrig_page_status__')?.shadowRoot?.querySelector('button')?.click()`)
+        const manual = parseJsonObject(yield* Fiber.join(invocation), "WebMCP manual invocation")
+        if (getObject(manual.value)?.status !== "Completed") return yield* Effect.fail(new Error(`Manual WebMCP invocation failed: ${formatValue(manual)}`))
+        const navigation = yield* execute(`
+const { default: assert } = await import('node:assert/strict')
+await page.goto('https://googlechromelabs.github.io/webmcp-tools/demos/doors/')
+const door = (await webmcp.list()).tools.find(tool => tool.name === 'openDoor1')
+assert(door)
+await assert.rejects(webmcp.call(state.oldWebMcpId, { size: 'Medium' }), /stale/)
+assert.equal((await webmcp.call(door.id)).status, 'Completed')
+assert.equal(await page.title(), 'The Whispering Woods')
+return { navigation: true }
+        `)
+        const disabled = parseJsonObject(yield* execute(`
+const { default: assert } = await import('node:assert/strict')
+await assert.rejects(webmcp.list(), /disabled/)
+return { disabled: true, title: await page.title() }
+        `, false), "disabled WebMCP")
+        if (disabled.webmcp !== undefined || getObject(disabled.value)?.disabled !== true) return yield* Effect.fail(new Error("WebMCP remained enabled in a subsequent caller without opt-in"))
+        return { operations: parseJsonObject(output, "WebMCP operations").value, manual: manual.value, navigation: parseJsonObject(navigation, "WebMCP navigation").value, disabled: disabled.value }
+      }).pipe(Effect.ensuring(runBrowserRig(["session", "delete", smokeSession]).pipe(Effect.ignore))))
+    }),
+  },
   {
     name: "local-actions",
     run: Effect.fnUntraced(function* (page) {
@@ -1532,7 +1630,7 @@ return await page.evaluate(() => ({
 
 const main = Effect.fn("Smoke.main")(function* () {
   const selectedCases = cases.filter((testCase) => {
-    return selectedCaseNames.size === 0 || selectedCaseNames.has(testCase.name)
+    return selectedCaseNames.size === 0 ? !testCase.optIn : selectedCaseNames.has(testCase.name)
   })
   if (selectedCases.length === 0) {
     return yield* Effect.fail(new Error(`No smoke cases matched: ${Array.from(selectedCaseNames).join(", ")}`))
@@ -2105,6 +2203,7 @@ function boundedCleanup(label: string, run: () => PromiseLike<unknown>, timeoutM
 type RunBrowserRigOptions = {
   readonly retryOnTimeout?: boolean
   readonly sessionId?: string
+  readonly experimentalWebMcp?: boolean
 }
 
 function runBrowserRig(args: readonly string[], options: RunBrowserRigOptions = {}): Effect.Effect<string, Error> {
@@ -2128,6 +2227,7 @@ function runBrowserRigOnce(args: readonly string[], options: RunBrowserRigOption
     delete childEnv.BROWSERRIG_TARGET_INDEX
     delete childEnv.BROWSERRIG_SESSION
     if (options.sessionId) childEnv.BROWSERRIG_SESSION = options.sessionId
+    childEnv.BROWSERRIG_EXPERIMENTAL_WEBMCP = String(options.experimentalWebMcp === true)
     const child = cp.execFile(
       process.execPath,
       ["--import", "tsx", localCliPath, ...args],

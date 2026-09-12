@@ -425,6 +425,47 @@ reconciles existing client announcements, browser grouping, and page status.
   channel. MCP emits native image attachments without temporary files or
   duplicated base64 metadata.
 
+### Experimental WebMCP
+
+- Opt in with `BROWSERRIG_EXPERIMENTAL_WEBMCP=true` in the calling CLI, MCP,
+  or DSH environment. Each execute request carries the resolved boolean to
+  the relay; an omitted flag is off. The setting is not read from the shared
+  relay's startup environment or persisted in the session catalog.
+- Automatically discover native WebMCP tools on the current session-owned
+  page. Tools in unrelated open or merely attached tabs are not collected.
+  Existing user tabs must be adopted before using the helpers.
+- Keep stock Playwright and the unchanged extension shim. A relay-side
+  collector uses the shim's generic CDP command/event transport and receives
+  original root/iframe events before client-side CDP alias routing.
+- Expose `webmcp.list({ offset, limit })` and
+  `webmcp.call(id, input, { timeoutMs, signal })` inside `execute(code)`.
+  Discovery is automatic; tool invocation is explicit. CLI, MCP, and DSH
+  responses carry a separate bounded `webmcp` field, including full definitions
+  initially, after changes, and for explicitly requested list pages.
+- Bind opaque tool handles to the exact session/root generation, Chrome child
+  session, frame, and observed document registration. Navigation, removal,
+  iframe detach, root replacement, and reconnect invalidate affected handles.
+  CDP itself invokes by frame/name; handles do not make website changes atomic.
+- Await Chrome's `toolResponded` status, including navigation-causing tools.
+  Keep the execute permit through unawaited invocations. Timeouts and aborts
+  request cooperative cancellation; they do not prove absence of side effects.
+  Declarative tools requiring manual submission use the existing human handoff
+  flow and register WAIT before invocation.
+- Read-only sessions allow discovery and reject `WebMCP.invokeTool` regardless
+  of website annotations. Definitions and outputs remain untrusted site data.
+- Bound discovery to 256 retained tools / 1 MiB, 64 KiB per definition, and
+  25 tools / 128 KiB per automatic response. Explicit lists paginate with a
+  maximum limit of 100. Report omitted tools instead of silently suggesting
+  that the retained registry is complete. Inputs and outputs are capped at
+  1 MiB, with at most 32 tool calls per execute.
+- Capability detection reports unavailable/unsupported Chrome gracefully.
+  An available domain with zero tools may mean the page has not registered
+  tools or has not enabled native WebMCP. BrowserRig does not change browser
+  flags, enroll sites in Origin Trials, or install a polyfill.
+- Keep the native browser regression case explicit:
+  `SMOKE_CASE=execute-webmcp pnpm smoke`. It depends on compatible Chrome and
+  the public demos' Origin Trial enrollment, so it is not in the default set.
+
 ### Authenticated Network Capture
 
 - Each Execute Sandbox owns one normalized network recorder that follows its

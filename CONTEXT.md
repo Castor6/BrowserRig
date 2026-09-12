@@ -73,6 +73,20 @@ transport to the browser extension. It is a deep module, not a pass-through
 message relay.
 _Avoid_: Temporary bridge, extension reload helper
 
+**WebMCP**:
+An experimental browser capability through which a website registers structured
+tools in its live document. BrowserRig discovers and invokes those tools through
+Chrome's native CDP domain and the existing extension transport, reusing the
+page's state and login. It is enabled by the calling agent's
+`BROWSERRIG_EXPERIMENTAL_WEBMCP` environment variable.
+_Avoid_: remote MCP server, backend `/mcp` endpoint, extension-hosted agent
+
+**WebMCP Tool Handle**:
+An opaque BrowserRig id for a particular observed tool registration in a
+session-owned document/frame. It expires when the registration, document, or
+target generation changes. Tool names alone are not unique across frames.
+_Avoid_: permanent tool id, global tool name, permission grant
+
 **Extension Protocol**:
 The compatibility version reported by the extension when it connects to the
 Local Driver Daemon. Store and npm release versions may differ while this

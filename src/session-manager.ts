@@ -426,6 +426,7 @@ export class BrowserRigSessions {
     readonly code: string
     readonly createIfMissing: boolean
     readonly targetSelection?: ExecuteTargetSelection
+    readonly experimentalWebMcp?: boolean
   }): Effect.Effect<{ readonly result: ExecuteResult; readonly session: SessionSummary & { readonly created?: boolean } }, Error> {
     const manager = this
     return Effect.gen(function* () {
@@ -460,7 +461,10 @@ export class BrowserRigSessions {
           manager.setExecuting(session.id, true)
           const startedAt = Date.now()
           const result = yield* session.sandbox
-            .execute(options.code, { ...(options.targetSelection ? { targetSelection: options.targetSelection } : {}) })
+            .execute(options.code, {
+              ...(options.targetSelection ? { targetSelection: options.targetSelection } : {}),
+              ...(options.experimentalWebMcp === undefined ? {} : { experimentalWebMcp: options.experimentalWebMcp }),
+            })
             .pipe(Effect.ensuring(Effect.sync(() => manager.setExecuting(session.id, false))))
           if (resolved.created && result.setupFailed) {
             return yield* Effect.fail(sessionError("setup-failed", result.text, session.id))

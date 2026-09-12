@@ -458,6 +458,7 @@ function handleCliRequest(options: {
         code: request.code,
         createIfMissing: request.createIfMissing,
         ...(targetSelection ? { targetSelection } : {}),
+        ...(request.experimentalWebMcp === undefined ? {} : { experimentalWebMcp: request.experimentalWebMcp }),
       })
       const { setupFailed: _setupFailed, ...wireResult } = result
       sendJson(options.response, { ...wireResult, session })

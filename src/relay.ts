@@ -59,6 +59,7 @@ import { appendManagedRelayProcessLog } from "./relay-log.ts"
 import { boundedToken, runtimeFailureKind, summarizeDiagnosticUrl, summarizeRuntimeEvaluate } from "./runtime-diagnostics.ts"
 import { shouldExposeChildTarget, TargetRegistry, type RootTargetChange, type TargetOwnershipChange } from "./target-registry.ts"
 import { browserRigVersion, buildArtifactMetadata } from "./version.ts"
+import { WebMcpSession, type WebMcpEvent } from "./webmcp.ts"
 
 export type { RelayServer } from "./relay-types.ts"
 
@@ -169,6 +170,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     : new SessionCatalog(options.sessionCatalogPath ?? defaultSessionCatalogPath(port))
   let catalogWritesEnabled = false
   const registry = new TargetRegistry()
+  const webMcpListeners = new Map<string, Set<(event: WebMcpEvent) => void>>()
   const rootLifecycleSemaphores = new Map<number, Semaphore.Semaphore>()
   type RootReconciliationWorker = {
     attachIfMissing: boolean
@@ -397,6 +399,46 @@ const makeRelay = Effect.fnUntraced(function* (options: {
       new ExecuteSandbox({
         endpointUrl,
         sessionId: id,
+        createWebMcp: (targetId) => {
+          const target = registry.targetsByTargetId.get(targetId)
+          if (!target || target.browserRigSessionId !== id) {
+            throw new Error("WebMCP requires the current session's owned page; adopt the tab first")
+          }
+          const rootSessionId = target.sessionId
+          const expectedGeneration = extensionGeneration
+          return new WebMcpSession(targetId, {
+            send: (method, params, childSessionId) => Effect.runPromise(Effect.gen(function* () {
+              const current = registry.targetsByTargetId.get(targetId)
+              if (relayClosing || !current || current.sessionId !== rootSessionId || current.browserRigSessionId !== id) {
+                return yield* Effect.fail(new Error("WebMCP target ownership or generation changed"))
+              }
+              const child = childSessionId ? registry.childTargets.get(childSessionId) : undefined
+              if (childSessionId && (!child || child.tabId !== current.tabId || child.targetInfo.type !== "iframe")) {
+                return yield* Effect.fail(new Error("WebMCP iframe is no longer attached to this session page"))
+              }
+              const rejection = guardCdpMethod({ method, readOnly: sessions.isReadOnly(id), sessionId: id })
+              if (rejection) return yield* Effect.fail(new Error(rejection))
+              return yield* sendDebuggerCommandAtGeneration(expectedGeneration, {
+                tabId: current.tabId,
+                ...(childSessionId ? { sessionId: childSessionId } : {}),
+                method,
+                params,
+              })
+            })),
+            subscribe: (listener) => {
+              let listeners = webMcpListeners.get(rootSessionId)
+              if (!listeners) webMcpListeners.set(rootSessionId, listeners = new Set())
+              listeners.add(listener)
+              return () => {
+                listeners.delete(listener)
+                if (listeners.size === 0) webMcpListeners.delete(rootSessionId)
+              }
+            },
+            childSessions: () => [...registry.childTargets.values()]
+              .filter((child) => child.tabId === target.tabId && child.targetInfo.type === "iframe")
+              .map((child) => child.sessionId),
+          }, sessions.isReadOnly(id))
+        },
         onDefaultTargetChange: (target) => {
           sessions.updateTarget(id, target)
         },
@@ -1141,6 +1183,11 @@ const makeRelay = Effect.fnUntraced(function* (options: {
       contextDebugLog?.(`contexts-cleared ${targetDiagnosticIdentity(targetForCdpSession(tabId, eventSessionId))}`)
     }
     notifyRuntimeContextWaiters(event)
+    emitWebMcpEvent(target.sessionId, {
+      method,
+      ...(params ? { params } : {}),
+      ...(sourceSessionId && sourceSessionId !== target.sessionId ? { sessionId: sourceSessionId } : {}),
+    })
     if (attachedChildTarget) {
       announceAttachedChildTarget(target.sessionId, attachedChildTarget)
       return
@@ -1862,6 +1909,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     if (!detached) {
       return
     }
+    emitWebMcpEvent(detached.target.sessionId, { method: "BrowserRig.targetInvalidated" })
     cancelTargetHandoffs(detached.target, "target-detached")
     if (!options.preserveSessionTarget) sessions.markTargetDetached(detached.target.targetInfo.targetId)
     cdpClients.removeTargetAliases((alias) => alias.tabId === tabId)
@@ -1893,6 +1941,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
   }
 
   function reconcileRootReplacement(change: Extract<RootTargetChange, { readonly kind: "replaced" }>): void {
+    emitWebMcpEvent(change.previous.sessionId, { method: "BrowserRig.targetInvalidated" })
     handoffs.rebindTarget({
       tabId: change.target.tabId,
       previousTargetId: change.previous.targetInfo.targetId,
@@ -1929,6 +1978,10 @@ const makeRelay = Effect.fnUntraced(function* (options: {
         removeAnnouncedSession(cdpClients.announcements(client), sessionId)
       }
     }
+  }
+
+  function emitWebMcpEvent(rootSessionId: string, event: WebMcpEvent): void {
+    for (const listener of webMcpListeners.get(rootSessionId) ?? []) listener(event)
   }
 
   // Deliver a session-scoped event only to clients that have been told about

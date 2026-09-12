@@ -1,9 +1,33 @@
 import { describe, expect, it } from "vitest"
-import { Effect } from "effect"
+import { ConfigProvider, Effect } from "effect"
 import { makeToolSpecs, mcpErrorMessage, mcpToolRequiresRelayCompatibility, parseMcpAdoptArguments, sessionDeleteIsIdempotent, toolResultForValue } from "../src/mcp.ts"
 import type * as RelayClient from "../src/relay-client.ts"
 
 describe("MCP tool results", () => {
+  it("passes WebMCP opt-in from the MCP environment to the shared relay", async () => {
+    const seen: unknown[] = []
+    const relay = {
+      extensionStatus: Effect.succeed({ connected: true }),
+      execute: (request: unknown) => Effect.sync(() => {
+        seen.push(request)
+        return { session: { id: "current" }, text: "ok", isError: false, logs: [] }
+      }),
+    } as unknown as RelayClient.Interface
+    const execute = makeToolSpecs(relay, { id: "current", established: false }).find((spec) => spec.name === "execute")!
+    for (const value of [true, false]) {
+      await Effect.runPromise(execute.handle({ code: "page.url()" }).pipe(Effect.provideService(
+        ConfigProvider.ConfigProvider, ConfigProvider.fromUnknown({ BROWSERRIG_EXPERIMENTAL_WEBMCP: value }),
+      )))
+    }
+    expect(seen).toMatchObject([{ experimentalWebMcp: true }, { experimentalWebMcp: false }])
+  })
+
+  it("keeps discovery in both MCP text and structured output after a script error", () => {
+    const webmcp = { status: "available", revision: "one", totalTools: 0, offset: 0, tools: [] }
+    const result = toolResultForValue({ text: "script failed", isError: true, webmcp })
+    expect(result.structuredContent).toMatchObject({ webmcp })
+    expect(result.content[0]).toMatchObject({ text: expect.stringContaining('"webmcp"') })
+  })
   it("rechecks relay compatibility for operational tools", () => {
     expect(mcpToolRequiresRelayCompatibility("execute")).toBe(true)
     expect(mcpToolRequiresRelayCompatibility("network_start")).toBe(true)

@@ -38,7 +38,7 @@ export function guardCdpMethod(context: GuardContext): string | null {
   if (reason) {
     return `BrowserRig blocked ${context.method}: ${reason}. This command is always blocked by the relay.`
   }
-  if (context.readOnly && readOnlyBlockedPrefixes.some((prefix) => context.method.startsWith(prefix))) {
+  if (context.readOnly && (context.method === "WebMCP.invokeTool" || readOnlyBlockedPrefixes.some((prefix) => context.method.startsWith(prefix)))) {
     const session = context.sessionId ? `Session ${context.sessionId}` : "This session"
     return `${session} is read-only: ${context.method} is blocked. Use a session created without --read-only to interact with pages.`
   }

@@ -31,6 +31,11 @@ function executeResponse(overrides: Partial<ExecuteResponse>): ExecuteResponse {
 }
 
 describe("executeJsonEnvelope", () => {
+  it("preserves full WebMCP discovery independently of the script value budget", () => {
+    const webmcp = { status: "available" as const, revision: "one", totalTools: 0, offset: 0, tools: [], changed: true }
+    const envelope = executeJsonEnvelope(executeResponse({ webmcp }))
+    expect(envelope.webmcp).toEqual(webmcp)
+  })
   it("uses the structured wire value when present", () => {
     const envelope = executeJsonEnvelope(executeResponse({ text: "{ a: 1 }", value: { a: 1 } }))
 

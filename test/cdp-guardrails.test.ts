@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest"
 import { alwaysBlockedCdpMethods, guardCdpMethod } from "../src/cdp-guardrails.ts"
 
 describe("cdp-guardrails", () => {
+  it("allows WebMCP discovery but blocks invocation in read-only sessions", () => {
+    expect(guardCdpMethod({ method: "WebMCP.enable", readOnly: true })).toBeNull()
+    expect(guardCdpMethod({ method: "WebMCP.cancelInvocation", readOnly: true })).toBeNull()
+    expect(guardCdpMethod({ method: "WebMCP.invokeTool", readOnly: true })).toContain("read-only")
+    expect(guardCdpMethod({ method: "WebMCP.invokeTool", readOnly: false })).toBeNull()
+  })
   it("always blocks browser-state-destroying methods", () => {
     for (const method of ["Network.clearBrowserCookies", "Network.clearBrowserCache", "Storage.clearCookies", "Browser.close"]) {
       expect(alwaysBlockedCdpMethods.has(method)).toBe(true)

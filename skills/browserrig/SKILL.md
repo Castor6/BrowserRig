@@ -310,6 +310,12 @@ const session = BrowserRigClient.reveal(sensitive)
 
 ## Experimental WebMCP
 
+Choose the website relevant to the user's task before inspecting its WebMCP
+tools. Adopt the relevant existing tab or open the required page in your
+session. The user does not need to mention WebMCP explicitly. Keep tool
+discovery and invocation on that selected page; do not scan unrelated open
+tabs or combine their tool definitions into a browser-wide catalog.
+
 When the user has enabled `BROWSERRIG_EXPERIMENTAL_WEBMCP=true` in the calling
 agent's environment, each execute automatically discovers native website tools
 on the session-owned page. For CLI use, export the variable so continuation

@@ -210,17 +210,18 @@ assert(size)
 assert.equal((await webmcp.call(size.id, { size: 'Small' })).status, 'Completed')
 assert.equal(await page.locator('#size-text').textContent(), 'Small')
 state.oldWebMcpId = size.id
-await page.evaluate(() => {
-  document.modelContext.registerTool({
+await page.evaluate(async () => {
+  window.browserRigProbeController = new AbortController()
+  await document.modelContext.registerTool({
     name: 'browserrig_probe', description: 'BrowserRig local smoke probe',
     inputSchema: { type: 'object', properties: { value: { type: 'string' } } },
     execute: ({ value }) => ({ echo: value }),
-  })
+  }, { signal: window.browserRigProbeController.signal })
 })
 const probe = (await webmcp.list()).tools.find(tool => tool.name === 'browserrig_probe')
 assert(probe)
 assert.equal((await webmcp.call(probe.id, { value: 'smoke' })).status, 'Completed')
-await page.evaluate(() => document.modelContext.unregisterTool('browserrig_probe'))
+await page.evaluate(() => window.browserRigProbeController.abort())
 await webmcp.list()
 await assert.rejects(webmcp.call(probe.id), /stale/)
 await page.evaluate((url) => {
@@ -229,7 +230,7 @@ await page.evaluate((url) => {
   frame.src = url
   document.body.append(frame)
 }, ${JSON.stringify(pizzaUrl)})
-await page.frameLocator('#browserrig-webmcp-frame').locator('#size-text').waitFor()
+await page.frameLocator('#browserrig-webmcp-frame').locator('#size-text').waitFor({ state: 'attached', timeout: 10000 })
 let child
 for (let attempt = 0; attempt < 50 && !child; attempt++) {
   child = (await webmcp.list()).tools.find(tool => tool.name === 'set_pizza_size' && tool.frameId !== size.frameId)

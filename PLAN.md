@@ -427,6 +427,10 @@ reconciles existing client announcements, browser grouping, and page status.
 
 ### Experimental WebMCP
 
+- Keep automatic WebMCP discovery scoped to the session page selected by the
+  agent for the user's task. Exclude browser-wide discovery from v1 to avoid
+  adding unrelated tool definitions to the agent's context and consuming
+  unnecessary tokens.
 - Opt in with `BROWSERRIG_EXPERIMENTAL_WEBMCP=true` in the calling CLI, MCP,
   or DSH environment. Each execute request carries the resolved boolean to
   the relay; an omitted flag is off. The setting is not read from the shared

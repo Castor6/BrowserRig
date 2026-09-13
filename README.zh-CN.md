@@ -215,6 +215,30 @@ DSH Bundle 是 BrowserRig 之上的轻量原生适配器，而不是第二个浏
 绑定。它同样不会重复提供点击、填写和导航等微型工具层。直接使用 CLI、MCP 和库
 的用户仍然独立于 DSH。
 
+## 实验性 WebMCP
+
+在调用 BrowserRig 的智能体环境中启用原生网站工具发现（默认关闭）：
+
+```bash
+export BROWSERRIG_EXPERIMENTAL_WEBMCP=true
+```
+
+原生 WebMCP 需要兼容的 Chrome，以及已启用该功能的网站。网站如果配置了有效的
+[Origin Trial 试用凭证](https://developer.chrome.com/docs/ai/webmcp)，用户无需
+手动开启浏览器实验开关。
+
+如果网站没有通过有效的 Origin Trial 启用 WebMCP，你可以在本地开启它进行测试：
+
+1. 在 Chrome 地址栏输入 `chrome://flags/#enable-webmcp-testing`。
+2. 将该项设为 **Enabled**。
+3. 重启 Chrome。
+
+然后重新打开网站，让智能体再次发现其 WebMCP 工具。开启这个开关不会为尚未实现
+WebMCP 的网站添加工具。
+
+BrowserRig 不会自动开启 Chrome 实验功能。`available` 但工具数量为零，只表示
+没有发现原生工具，也可能是页面尚未启用该 API。
+
 ## TypeScript 客户端
 
 对于需要发起结构化、浏览器认证请求，但不希望执行生成 JavaScript 的应用，此包

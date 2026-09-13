@@ -427,24 +427,17 @@ reconciles existing client announcements, browser grouping, and page status.
 
 ### Experimental WebMCP
 
-- Let the user's task drive website selection. The calling agent chooses the
-  relevant page and which tools to invoke; BrowserRig bridges that page's
-  native tool definitions, invocation, and results to the agent. Task planning
-  and relevance decisions remain with the agent.
-- Keep browser-wide WebMCP catalogs and automatic cross-tab scans out of the
-  first release. Opening multiple WebMCP-enabled sites must not inject their
-  unrelated tool definitions into agent context. Scope discovery to the chosen
-  session page and avoid repeating unchanged definitions to conserve tokens.
-  Apply this policy consistently to CLI, MCP, and DSH.
+- Keep automatic WebMCP discovery scoped to the session page selected by the
+  agent for the user's task. Exclude browser-wide discovery from v1 to avoid
+  adding unrelated tool definitions to the agent's context and consuming
+  unnecessary tokens.
 - Opt in with `BROWSERRIG_EXPERIMENTAL_WEBMCP=true` in the calling CLI, MCP,
   or DSH environment. Each execute request carries the resolved boolean to
   the relay; an omitted flag is off. The setting is not read from the shared
   relay's startup environment or persisted in the session catalog.
 - Automatically discover native WebMCP tools on the current session-owned
   page. Tools in unrelated open or merely attached tabs are not collected.
-  Existing user tabs must be adopted before using the helpers. Once the agent
-  has selected the page, retain automatic discovery in execute responses;
-  selecting a relevant website does not require a separate discovery command.
+  Existing user tabs must be adopted before using the helpers.
 - Keep stock Playwright and the unchanged extension shim. A relay-side
   collector uses the shim's generic CDP command/event transport and receives
   original root/iframe events before client-side CDP alias routing.

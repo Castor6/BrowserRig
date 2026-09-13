@@ -79,11 +79,6 @@ tools in its live document. BrowserRig discovers and invokes those tools through
 Chrome's native CDP domain and the existing extension transport, reusing the
 page's state and login. It is enabled by the calling agent's
 `BROWSERRIG_EXPERIMENTAL_WEBMCP` environment variable.
-The agent selects a page according to the user's task. BrowserRig supplies
-that page's tool definitions and invocation results as an intermediary;
-the agent decides which capabilities to use. The first release scopes this
-exchange to the chosen session page instead of building a browser-wide tool
-catalog that would add unrelated definitions to agent context.
 _Avoid_: remote MCP server, backend `/mcp` endpoint, extension-hosted agent
 
 **WebMCP Tool Handle**:

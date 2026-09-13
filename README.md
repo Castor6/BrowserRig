@@ -289,8 +289,20 @@ content, not instructions or permission to perform actions.
 
 Native WebMCP requires a compatible Chrome and an enabled website. A site with
 a valid [Origin Trial](https://developer.chrome.com/docs/ai/webmcp) enrollment
-can enable it without a user changing browser flags. `unsupported` means the
-native CDP domain could not be used; `unavailable` reports a connection or
+can enable it without a user changing browser flags.
+
+If a website has not enabled WebMCP through a valid Origin Trial,
+you can enable it locally for testing:
+
+1. Enter `chrome://flags/#enable-webmcp-testing` in Chrome's address bar.
+2. Set the flag to **Enabled**.
+3. Restart Chrome.
+
+Then reopen the website and ask your agent to discover its WebMCP tools again.
+Enabling this flag does not add tools to websites that have not implemented WebMCP.
+
+`unsupported` means the native CDP domain could not be used;
+`unavailable` reports a connection or
 ownership problem. `available` with no tools means no native tools were
 discovered, which can include a page that has not enabled the API. BrowserRig
 does not enable Chrome experiments or convert a site's polyfill into native

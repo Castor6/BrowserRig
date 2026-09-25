@@ -1,3 +1,4 @@
+import type { RelayWork } from "./relay-work.ts"
 import http from "node:http"
 import { Effect, Schema } from "effect"
 import * as AuthProfile from "./auth-profile.ts"
@@ -52,9 +53,10 @@ export function createHttpRequestHandler(options: {
     readonly managedEntrypointId?: string
     readonly managedEntrypointModifiedAt?: number
   }
+  readonly work?: RelayWork
   readonly shutdown: () => void
   readonly extensionStatus: () => Pick<ExtensionStatus,
-    "connected" | "version" | "protocolVersion" | "protocolCompatible" | "protocolLegacy" | "cdpClients"
+    "connected" | "version" | "protocolVersion" | "protocolCompatible" | "protocolLegacy" | "rejectedConnections" | "cdpClients"
   >
   readonly recordingRelay: RecordingRelay
   readonly registry: TargetRegistry
@@ -66,6 +68,8 @@ export function createHttpRequestHandler(options: {
       .filter((target) => target.owner === "user")
       .map((target) => target.targetInfo.url || "about:blank")
   )
+  const run = (response: http.ServerResponse, effect: Effect.Effect<void, Error>) =>
+    runRequestEffect(response, options.work ? options.work.track(effect) : effect)
   return (request, response) => {
     const hostError = validateHostHeader({ hostHeader: request.headers.host, host: options.host, port: options.port })
     if (hostError) {
@@ -136,6 +140,7 @@ export function createHttpRequestHandler(options: {
         ...(extensionStatus.protocolVersion === undefined ? {} : { protocolVersion: extensionStatus.protocolVersion }),
         ...(extensionStatus.protocolCompatible === undefined ? {} : { protocolCompatible: extensionStatus.protocolCompatible }),
         ...(extensionStatus.protocolLegacy === undefined ? {} : { protocolLegacy: extensionStatus.protocolLegacy }),
+        ...(extensionStatus.rejectedConnections === undefined ? {} : { rejectedConnections: extensionStatus.rejectedConnections }),
         ...(extensionStatus.cdpClients === undefined ? {} : { cdpClients: extensionStatus.cdpClients }),
         activeTargets: options.registry.rootTargetCount(),
         childTargets: options.registry.childTargets.size,
@@ -145,19 +150,19 @@ export function createHttpRequestHandler(options: {
       return
     }
     if (pathname.startsWith("/recording/")) {
-      runRequestEffect(response, handleRecordingRequest({ request, response, pathname, requestUrl, registry: options.registry, recordingRelay: options.recordingRelay }))
+      run(response, handleRecordingRequest({ request, response, pathname, requestUrl, registry: options.registry, recordingRelay: options.recordingRelay }))
       return
     }
     if (pathname.startsWith("/network/")) {
-      runRequestEffect(response, handleNetworkRequest({ request, response, pathname, sessions: options.sessions }))
+      run(response, handleNetworkRequest({ request, response, pathname, sessions: options.sessions }))
       return
     }
     if (pathname.startsWith("/auth/")) {
-      runRequestEffect(response, handleAuthRequest({ request, response, pathname, sessions: options.sessions }))
+      run(response, handleAuthRequest({ request, response, pathname, sessions: options.sessions }))
       return
     }
     if (pathname.startsWith("/v1/")) {
-      runRequestEffect(response, handleClientRequest({
+      run(response, handleClientRequest({
         request,
         response,
         pathname,
@@ -166,7 +171,7 @@ export function createHttpRequestHandler(options: {
       return
     }
     if (pathname.startsWith("/cli/")) {
-      runRequestEffect(response, handleCliRequest({
+      run(response, handleCliRequest({
         request,
         response,
         pathname,
@@ -315,7 +320,7 @@ function handleRecordingRequest(options: {
       const result = yield* Effect.tryPromise({
         try: () => options.recordingRelay.startRecording(startOptions),
         catch: (cause) => new Error(formatCauseMessage({ label: "start recording", cause }), { cause }),
-      })
+      }).pipe(Effect.uninterruptible)
       sendJson(options.response, result, result.success ? 200 : 500)
       return
     }
@@ -326,7 +331,7 @@ function handleRecordingRequest(options: {
       const result = yield* Effect.tryPromise({
         try: () => options.recordingRelay.stopRecording(target),
         catch: (cause) => new Error(formatCauseMessage({ label: "stop recording", cause }), { cause }),
-      })
+      }).pipe(Effect.uninterruptible)
       sendJson(options.response, result, result.success ? 200 : 500)
       return
     }
@@ -335,7 +340,7 @@ function handleRecordingRequest(options: {
       const result = yield* Effect.tryPromise({
         try: () => options.recordingRelay.statusRecording(target),
         catch: (cause) => new Error(formatCauseMessage({ label: "recording status", cause }), { cause }),
-      })
+      }).pipe(Effect.uninterruptible)
       sendJson(options.response, result)
       return
     }
@@ -346,7 +351,7 @@ function handleRecordingRequest(options: {
       const result = yield* Effect.tryPromise({
         try: () => options.recordingRelay.cancelRecording(target),
         catch: (cause) => new Error(formatCauseMessage({ label: "cancel recording", cause }), { cause }),
-      })
+      }).pipe(Effect.uninterruptible)
       sendJson(options.response, result, result.success ? 200 : 500)
       return
     }

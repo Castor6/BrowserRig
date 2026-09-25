@@ -453,13 +453,21 @@ Common diagnoses:
 - `connected:false` while Chrome says another product is debugging the browser:
   end that browser-wide debugging session before reloading BrowserRig. Chrome
   debugger ownership is exclusive for the affected targets.
+- Competing browser/profile connections: status and doctor report rejected
+  attempts while preserving the active connection. Keep BrowserRig enabled in
+  one browser/profile at a time. To switch, disable it in the current browser
+  before connecting the other; creating a session does not switch browsers.
+- Catalog persistence errors: a readable catalog after an error does not prove
+  it was durably saved. Resolve the filesystem error before relying on session
+  restoration.
 - Incompatible extension protocol: update either the extension or npm package;
   exact extension and relay release versions do not need to match.
 - Stale relay build: operational commands automatically replace an older
   detached managed relay when exact instance and build-order evidence is
   available. Unsupported old relays, source or foreground relays, differently
   installed same-version relays, and newer relays fail closed with restart
-  guidance.
+  guidance. Replacement waits for already accepted browser and recording cleanup
+  work; a slow operation may delay the new relay.
 - `Target not found`: attach the intended tab, then select or adopt it using a
   unique URL substring or explicit index.
 - All targets disappeared: dismissing Chromium's debugging banner detaches every

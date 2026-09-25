@@ -259,7 +259,11 @@ require a new extension capture protocol and permission model.
   [`docs/upstream-sync/`](docs/upstream-sync/README.md). Never treat sync as
   product identity, release, or source-equivalence ownership. The first
   archived cycle completed selective intake through upstream `v0.5.1` on
-  2026-08-28; no later range is currently active.
+  2026-08-28. The user approved six outcome groups through `v0.8.2` on
+  2026-09-25; the active cycle is `v0.5.1 -> v0.6.0`, with `v0.7.1` and
+  `v0.8.2` queued. Native WebMCP will become default-on as an independent
+  companion change. The active ledger records exact scope and review state;
+  implementation approval does not advance the cursor or authorize publication.
 - **Trusted local execution**: `execute(code)` trusts the calling agent. It is
   not an untrusted-code security boundary.
 - **Code-first control**: `execute(code)` is the primary interface. Dedicated
@@ -754,3 +758,25 @@ download capability boundary, cursor behavior, session isolation,
 multi-client visibility, stale-client ordering, and raw-client checkout.
 Historical milestone scope is no longer used as the active backlog; `Next
 Priorities` is authoritative.
+
+
+## Upstream v0.6.0 runtime safety intake
+
+Preserve the active compatible browser/profile connection and reject contenders
+with status/doctor diagnostics. Switching browsers requires closing the active
+connection; a failed bounded websocket probe permits recovery. Probe listeners
+are removed on cancellation and replacement.
+
+Bind default-target callbacks to exact session instances and preserve staged
+child subtrees through root replacement. Catalog directory sync failures are
+reported even when renamed bytes are readable. Named browser-context operations
+select healthy owned roots; raw clients still require exactly one visible root.
+Readiness retains failed root verification until successful reconciliation.
+Delayed Runtime recovery remains bound to its original extension, root, child,
+and client ownership. Existing exact selected-page handoff readiness is retained.
+
+Automatic managed-relay replacement keeps its existing version, installation,
+and exact-instance checks. Teardown stops transport admission and waits for
+accepted requests, session workers, journal/catalog tails, and recording cleanup
+before disconnecting the browser. It does not introduce an explicit restart
+command, runtime installer, or Effect dependency upgrade.

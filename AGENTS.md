@@ -96,6 +96,17 @@ local Node relay.
   Win the endpoint port before loading or writing this catalog. Successful
   durable lifecycle operations await atomic replacement plus file and directory
   sync. Corrupt catalogs fail relay startup and are never overwritten.
+- Preserve a live compatible extension connection when another browser/profile
+  connects. Reject the contender, probe the active socket, and report contention
+  in status/doctor; switching browsers requires the active connection to close.
+- Target-change callbacks belong to the exact session object, never just its id.
+  Root reconciliation failures remain visible to readiness even after their
+  worker settles. Named browser-context routing skips crashed owned roots while
+  raw clients retain the exactly-one-visible-root rule.
+- Relay shutdown stops transport admission and drains accepted HTTP/CDP, session,
+  journal, catalog, and recording cleanup work before disconnecting sockets.
+  Runtime recovery checks the original connection, root/child generation, and
+  client ownership before every delayed reset command.
 - An extension RPC timeout fails only that command; the extension socket is
   closed only when a websocket-level ping probe also fails.
 - Active-tab attachment binds every initialization and presentation RPC to the

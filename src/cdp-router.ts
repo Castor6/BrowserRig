@@ -19,7 +19,7 @@ export function isRootRoutableBrowserContextMethod(method: string): boolean {
 
 export type CdpRoutedSession = {
   readonly tabId: number
-  readonly rootSessionId?: string
+  readonly rootSessionId: string
   readonly chromeSessionId?: string
 }
 
@@ -30,7 +30,7 @@ export class CdpRouter<Client extends object> {
   ) {}
 
   canSeeTarget(client: Client, target: ConnectedTarget): boolean {
-    return this.canSessionSeeTarget(this.clients.sessionId(client), target)
+    return this.clients.has(client) && this.canSessionSeeTarget(this.clients.sessionId(client), target)
   }
 
   canSessionSeeTarget(clientSessionId: string | undefined, target: ConnectedTarget): boolean {
@@ -54,7 +54,7 @@ export class CdpRouter<Client extends object> {
     let preferred: ConnectedTarget | undefined
     for (const target of this.registry.listRootTargets()) {
       if (clientSessionId !== undefined) {
-        if (target.browserRigSessionId === clientSessionId) return target
+        if (target.browserRigSessionId === clientSessionId && target.crashed !== true) return target
         continue
       }
       if (!this.canSeeTarget(client, target)) continue

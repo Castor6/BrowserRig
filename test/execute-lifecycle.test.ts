@@ -131,7 +131,7 @@ describe("execute lifecycle", () => {
     const sandbox = new ExecuteSandbox({
       endpointUrl: "http://127.0.0.1:0",
       sessionId: "alpha",
-      onDefaultTargetChange: (target) => sessions.updateTarget("alpha", target),
+      onDefaultTargetChange: (target) => sessions.updateTarget(sessions.sessions.get("alpha")!, target),
     })
     Object.assign(sandbox, { browser: browserFixture.browser })
     sessions = new BrowserRigSessions(

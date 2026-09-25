@@ -107,7 +107,7 @@ describe("extensionProtocolCheck", () => {
 })
 
 describe("createDoctorReport", () => {
-  it("compares the runtime extension with the manifest shipped in the package", async () => {
+  it.each([0, 3, undefined])("compares extension versions and reports rejected connections: %s", async (rejectedConnections) => {
     const packageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-doctor-"))
     try {
       await fs.mkdir(path.join(packageRoot, "dist"), { recursive: true })
@@ -133,6 +133,7 @@ describe("createDoctorReport", () => {
           protocolCompatible: true,
           protocolLegacy: false,
           activeTargets: 0,
+          ...(rejectedConnections === undefined ? {} : { rejectedConnections }),
         }),
         targets: Effect.succeed([]),
         sessions: Effect.succeed([]),
@@ -156,6 +157,11 @@ describe("createDoctorReport", () => {
         status: "ok",
         message: "matches bundled extension (0.0.23)",
       })
+      expect(report.extension.rejectedConnections).toBe(rejectedConnections ?? null)
+      const conflict = report.checks.find((check) => check.id === "extension-connection-conflicts")
+      if (rejectedConnections === undefined) expect(conflict).toBeUndefined()
+      else expect(conflict?.status).toBe(rejectedConnections > 0 ? "warn" : "ok")
+      expect(report.recommendations.some((message) => message.includes("one browser/profile"))).toBe((rejectedConnections ?? 0) > 0)
     } finally {
       await fs.rm(packageRoot, { recursive: true, force: true })
     }

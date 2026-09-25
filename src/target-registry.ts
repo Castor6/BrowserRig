@@ -212,19 +212,22 @@ export class TargetRegistry {
     })
   }
 
-  addChildTarget(target: ChildTarget): void {
+  addChildTarget(target: ChildTarget): readonly ChildTarget[] {
+    const replaced: ChildTarget[] = []
     const existingForSession = this.childTargets.get(target.sessionId)
-    if (existingForSession) {
-      this.childTargetsByTargetId.delete(existingForSession.targetInfo.targetId)
+    if (existingForSession && existingForSession.targetInfo.targetId !== target.targetInfo.targetId) {
+      replaced.push(existingForSession)
+      this.detachChildTargetState(existingForSession.sessionId)
     }
     const existingForTargetId = this.childTargetsByTargetId.get(target.targetInfo.targetId)
-    if (existingForTargetId) {
-      this.childSessionTabs.delete(existingForTargetId.sessionId)
-      this.childTargets.delete(existingForTargetId.sessionId)
+    if (existingForTargetId && existingForTargetId.sessionId !== target.sessionId) {
+      replaced.push(existingForTargetId)
+      this.detachChildTargetState(existingForTargetId.sessionId)
     }
     this.childSessionTabs.set(target.sessionId, target.tabId)
     this.childTargets.set(target.sessionId, target)
     this.childTargetsByTargetId.set(target.targetInfo.targetId, target)
+    return replaced
   }
 
   rootTargetCount(): number {
@@ -325,17 +328,20 @@ export class TargetRegistry {
     this.targetsByTargetId.delete(target.targetInfo.targetId)
     this.pendingOwnershipReservations.delete(target.targetInfo.targetId)
     if (!options.preserveFrameEvents) this.tabFrameEvents.delete(tabId)
+    // Compute the full staged subtree before recursive removal mutates indexes.
+    const preservedSessionIds = new Set<string>()
+    if (options.preserveChildParentSessionId !== undefined) {
+      preservedSessionIds.add(options.preserveChildParentSessionId)
+      for (const parentSessionId of preservedSessionIds) {
+        for (const child of this.childTargets.values()) {
+          if (child.tabId === tabId && child.parentSessionId === parentSessionId) preservedSessionIds.add(child.sessionId)
+        }
+      }
+    }
     const childSessionIds = Array.from(this.childSessionTabs.entries())
-      .filter(([, childTabId]) => {
-        return childTabId === tabId
-      })
-      .filter(([sessionId]) => {
-        return this.childTargets.get(sessionId)?.parentSessionId !== options.preserveChildParentSessionId
-      })
-      .map(([sessionId]) => {
-        this.detachChildTargetState(sessionId)
-        return sessionId
-      })
+      .filter(([sessionId, childTabId]) => childTabId === tabId && !preservedSessionIds.has(sessionId))
+      .map(([sessionId]) => sessionId)
+    for (const sessionId of childSessionIds) this.detachChildTargetState(sessionId)
     return { target, childSessionIds }
   }
 
@@ -345,6 +351,9 @@ export class TargetRegistry {
     this.childTargets.delete(sessionId)
     if (target) {
       this.childTargetsByTargetId.delete(target.targetInfo.targetId)
+    }
+    for (const child of this.childTargets.values()) {
+      if (child.parentSessionId === sessionId) this.detachChildTargetState(child.sessionId)
     }
     return target
   }

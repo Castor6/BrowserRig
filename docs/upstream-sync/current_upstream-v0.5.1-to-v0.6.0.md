@@ -217,9 +217,9 @@ each preceding cycle closes.
   `feat/default-on-webmcp`. Remove the environment switch and agent-facing opt-in
   requirement across CLI, MCP, DSH, SDK, tests, documentation, and installed skill.
   Keep the native implementation and graceful unsupported-browser behavior.
-  Draft [#48](https://github.com/Castor6/BrowserRig/pull/48) targets `main`
-  after batch 01 merged. Independent review and merge remain pending; see the
-  companion evidence below.
+  [#48](https://github.com/Castor6/BrowserRig/pull/48) targets `main`
+  after batch 01 merged. Independent review approved the change; explicit merge
+  approval remains pending. See the companion evidence below.
 - **v0.6.0 -> v0.7.1:** adapt #87 (`1cdd1e4`) debugger ownership, bounded title
   reads, and image labels; include #88 (`3bb4e05`) where necessary for ownership
   checks. Adapt #73 (`a2e5bc9`) recording geometry, quality receipts, and
@@ -239,11 +239,19 @@ each preceding cycle closes.
 
 ## Default-on WebMCP companion evidence (not merged)
 
-The independently requested companion is **Pending**, in draft
+The independently requested companion is **Pending**, in
 [#48](https://github.com/Castor6/BrowserRig/pull/48), branch
 `feat/default-on-webmcp`. Code commit `2dfedfee1c87e097643a34c18e2273cce686c195`
 is based on the merged batch 01. This companion does not start a later upstream
-cycle or claim independent approval.
+cycle. A fresh independent reviewer returned **Approve** on 2026-09-25 for
+`f55d52b03b260ab8ce97ec81e51c5e32363f1f11`, after reviewing the complete PR
+against `fc420d6`. The reviewer independently passed 188 tests in seven files,
+verified the installed skill matches, and confirmed successful final-head CI
+[36115703594](https://github.com/Castor6/BrowserRig/actions/runs/36115703594).
+No actionable findings remain. The reviewer confirmed the native-browser
+capability limitation below; native invocation smoke is not claimed. This
+subsequent evidence-only update does not change the approved code. Explicit
+user merge approval is still required.
 
 The shared execute path enables discovery when its option is omitted, so CLI,
 MCP, DSH, and library callers, including continuations on a reused relay, do not

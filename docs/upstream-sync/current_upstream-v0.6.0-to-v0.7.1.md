@@ -52,7 +52,7 @@ including the completed WebMCP companion.
 
 | Order | Outcome | State | Branch | BrowserRig PR | Independent review | Validation |
 | --- | --- | --- | --- | --- | --- | --- |
-| 01 | Recording and screenshot evidence, debugger ownership, bounded title reads, image labels, and honest first-attempt smoke results | Pending | `feat/upstream-v0.7.1-browser-evidence` | [#50](https://github.com/Castor6/BrowserRig/pull/50) (draft) | Changes requested (P2 PNG preflight); fixed in `d4c7432`, awaiting fresh review | [Batch 01 validation](#batch-01-validation) |
+| 01 | Recording and screenshot evidence, debugger ownership, bounded title reads, image labels, and honest first-attempt smoke results | Pending | `feat/upstream-v0.7.1-browser-evidence` | [#50](https://github.com/Castor6/BrowserRig/pull/50) (draft) | Changes requested (PNG allocation bounds); fixed in `4a7ad4b`, awaiting fresh review | [Batch 01 validation](#batch-01-validation) |
 
 The implementation agent must read the complete upstream diffs and tests,
 confirm existing coverage, and adapt the selected outcomes to BrowserRig's
@@ -91,7 +91,7 @@ Implementation base: `fb8781ae4197bdb5e5e39d1ffa7bfba00ec859fa` (PR #49 merged).
 First coherent implementation: `1196c14`; draft PR #50 opened immediately after
 that commit. Browser regression fixtures: `6f99789b4f8fb7533fd36f9de7bfb4dc9dbd1397`.
 Recording correction: `90e2e94` (actual JPEG input geometry). Final behavioral
-correction: `d4c7432` (review-requested PNG structure preflight). Later evidence
+correction: `4a7ad4b` (PNG structure, palette and decompression bounds). Later evidence
 commits change only this ledger / PR metadata. Independent review remains pending;
 implementation authorization does not authorize merge or publication.
 
@@ -241,6 +241,94 @@ Red/green evidence:
 The task browser/relay were stopped after this targeted check. The existing
 minor/patch Changeset covers the corrected unreleased capability. A fresh
 independent reviewer must assess the fix before any merge approval request.
+
+### Second independent review and bounded decoder correction
+
+The fresh review of `8b14cd2` confirmed the duplicate-IHDR correction and
+returned **Changes requested** with two P2 findings. PNGJS 7 inflated Adam7
+streams without a maximum output length: a 4,143-byte PNG declaring one pixel
+expanded to 4,194,304 bytes before failing. Its PLTE parser also accepted 1,024
+entries and appended duplicate palettes. Reproductions remain at
+`/tmp/browserrig-v071-rereview-png.mts` and
+`/tmp/browserrig-v071-rereview-palette.mts`.
+
+Correction `4a7ad4b7a7179a15f43a1b84d5f3b3fb2bb40a32` retains PNGJS's image
+semantics and pins version 7.0.0 with `patches/pngjs@7.0.0.patch`. The patch
+changes the actual synchronous inflater, rather than validating and then
+calling an unbounded inflater. Both ordinary and Adam7 input now pass Node
+`inflateSync` an exact `maxOutputLength`: for every nonempty pass,
+`(ceil(passWidth * channels * bitDepth / 8) + 1) * passHeight`. Short streams
+also fail before filtering. The source preflight permits only legal color/depth
+combinations, one legal PLTE of at most 256 entries (also limited by indexed
+bit depth), and bounded, correctly ordered tRNS/gAMA. It retains palette alpha,
+all legal bit depths and all seven Adam7 passes.
+
+The full synchronous allocation path was inspected: parser chunk reads are
+views of the at-most-32-MiB input; the patch stores IDAT in one input-sized
+buffer instead of retaining one JS object per chunk. PNGJS's own Adam7 pass
+geometry has at most seven entries. Exact filtered bytes are at most nine
+bytes per declared pixel, including filter bytes and sub-byte row padding;
+thus the existing 16-Mi-pixel limit bounds inflation and filter output by
+144 MiB apiece. Filtering writes into one bounded buffer instead of retaining
+one buffer object for every row. Bitmap allocation is at most eight bytes per
+pixel for 16-bit channels, with four-byte-per-pixel normalized RGBA output.
+Palette storage is at most 256 small entries. Pixel comparison and output
+encoding are dimension bounded; unknown ancillary chunks are skipped, not
+decompressed. Parsing/CRC work is input bounded and filters/normalization are
+pixel bounded. Native zlib uses bounded output chunks and rejects excess output;
+there is no global monkeypatch or shared mutable decode state. These are
+per-image allocation bounds, not a promise that peak process RSS equals a
+single buffer size.
+
+Packaging is part of the correction. CLI bundles the patched decoder; MCP and
+DSH call the package-local CLI relay, and the public library is a client-only
+entry with no decoder. The build rejects external pngjs imports in every
+output. It fingerprints the patch and ships it beside PNGJS's original license
+in `dist/licenses/`; consumers need no pnpm patch configuration.
+
+Validation against that exact implementation:
+
+- Red on `8b14cd2`: the new inflation case and five palette boundary cases
+  failed, with the preceding 26 tests passing. No huge allocation was needed;
+  the inflate repro used 4 MiB. Log: `/tmp/browserrig-v071-rereview-red.log`.
+- Green: 53 screenshot tests passed, including all 15 legal color/depth
+  combinations across all seven Adam7 passes, exact/short/overlong streams,
+  noninterlaced overrun, all five filter types, and palette pre-decoder guards.
+  Log: `/tmp/browserrig-v071-rereview-green.log`.
+- `pnpm typecheck`, full `pnpm test` (782 tests / 70 files), `pnpm build:cli`,
+  `git diff --check`, and pack's prepack CLI/extension builds passed. Logs:
+  `/tmp/browserrig-v071-rereview-full.log`,
+  `/tmp/browserrig-v071-rereview-build.log`,
+  `/tmp/browserrig-v071-rereview-pack.log`. CI
+  [36121267460](https://github.com/Castor6/BrowserRig/actions/runs/36121267460)
+  succeeded on `4a7ad4b`.
+- Exact tarball `/tmp/browserrig-v071-rereview-package/browserrig-0.4.0.tgz`,
+  SHA-256 `15ffccc1ad7bb34191db6b48581cd8a4e8884b76034656a3271df8abc8b4a6f5`,
+  was installed into `/tmp/browserrig-v071-rereview-consumer` without workspace
+  patch configuration. Its library imported successfully; its CLI contained the
+  bounded inflater and no artifact imported external pngjs. Patch and original
+  license were present. With the packaged CLI relay and isolated Brave 1.96.59,
+  the 4-MiB expansion was rejected with `Cannot create a Buffer larger than 5
+  bytes`, and the 1,024-entry palette was rejected before decoding. Ordinary
+  960x640 screenshots produced equal=0 and intentional-change=3,354 pixels.
+  The session was deleted. Script/log:
+  `/tmp/browserrig-v071-rereview-consumer/check.mjs`,
+  `/tmp/browserrig-v071-rereview-tarball-browser.log`.
+- Retained setup diagnostics: initially using the smoke-only BROWSERRIG_ENDPOINT
+  selector started the task-owned CLI relay on 19990; it was stopped and
+  restarted with the CLI's BROWSERRIG_PORT=21990 before browser checks. A probe
+  importing DSH in the minimal non-DSH consumer failed because its optional
+  dsh-tools peer was intentionally absent (`autoInstallPeers: false`); that
+  unrelated import was removed from the screenshot probe, without changing the
+  artifact. First log: `/tmp/browserrig-v071-rereview-optional-peer-first.log`.
+  No DSH profile regression pass is claimed. Browser assertions then passed
+  on their first execution; no timeout replay or 23-case rerun occurred.
+
+Task process groups (relay 74852, Brave 74777) were stopped; ports 21990/21991
+are free and no task browser helpers remain. No recording, extension source,
+permissions, public API, native WebMCP or version changed. Existing Changeset
+scope remains correct. Another fresh independent review is required; this
+record does not approve itself or authorize merge/publication.
 
 ### Delivery boundaries
 

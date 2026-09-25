@@ -1,7 +1,7 @@
 ---
 title: Upstream Sync v0.5.1 to v0.6.0
 description: Approved implementation scope, upstream dispositions, and review evidence for the next BrowserRig intake cycle.
-status: awaiting-merge-approval
+status: awaiting-closure-audit
 upstream_from: v0.5.1
 upstream_to: v0.6.0
 target_checked: 2026-09-25
@@ -35,10 +35,12 @@ demonstration recording, flight recording, and changes to default recording
 resolution/frame rate. Those exclusions remain in force. Preserve BrowserRig
 identity, extension protocol/permissions, DSH packaging, and release ownership.
 
-**Implementation is approved. Merge and publication are not approved.** Prepare
-concrete pull requests with independent review and validation before requesting
-merge approval. Never record approval on the user's behalf. `Complete` means the
-reviewed implementation has actually landed on `main`.
+**Implementation is approved.** On 2026-09-25, after reviewing the concrete
+PR #46 approval and validation summary, the user explicitly approved merging
+PR #46 and continuing the subsequent sync work. This merge approval is specific
+to PR #46; it does not authorize publishing or merging later pull requests.
+The batch row below becomes `Complete` when this approved PR lands on `main`;
+the upstream cursor remains unchanged until the independent closure audit.
 
 ## Frozen review snapshot
 
@@ -54,7 +56,7 @@ reviewed implementation has actually landed on `main`.
 
 | Order | Outcome | State | Branch | BrowserRig PR | Independent review | Validation |
 | --- | --- | --- | --- | --- | --- | --- |
-| 01 | Runtime, session, target, and connection safety from v0.6.0 | Pending | `fix/upstream-v0.6.0-runtime-safety` | [#46](https://github.com/Castor6/BrowserRig/pull/46) | Approve on 2026-09-25 at `1c337b7` after the review correction | Typecheck, 704 unit tests, builds/package, 23 baseline and 10 correction smoke cases; see exact commits below |
+| 01 | Runtime, session, target, and connection safety from v0.6.0 | Complete | `fix/upstream-v0.6.0-runtime-safety` | [#46](https://github.com/Castor6/BrowserRig/pull/46) | Approve on 2026-09-25 at `1c337b7` after the review correction | Typecheck, 704 unit tests, builds/package, 23 baseline and 10 correction smoke cases; see exact commits below |
 
 ### Batch 01: runtime and target safety
 
@@ -87,10 +89,11 @@ smokes, and the full smoke set before claiming cycle-wide browser validation.
 Extension changes additionally require the extension build, both package
 Changesets, and a Brave reload. Report environmental blockers accurately.
 
-## Batch 01 implementation evidence (not merged)
+## Batch 01 implementation and merge evidence
 
-The PR manually adapts the approved safety outcomes. The batch remains
-`Pending` until explicit merge approval and landing on `main`.
+The PR manually adapts the approved safety outcomes. Its implementation and
+independent review are complete; the user approved its merge on 2026-09-25.
+The `Complete` state is effective on landing this PR, before the closure audit.
 
 A fresh independent reviewer approved `1c337b78b73e5893f421a0f2c1f97ba2f22e7c83`
 on 2026-09-25 after independently checking the complete change and the retired-tab

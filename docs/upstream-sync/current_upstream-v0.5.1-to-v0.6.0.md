@@ -217,9 +217,9 @@ each preceding cycle closes.
   `feat/default-on-webmcp`. Remove the environment switch and agent-facing opt-in
   requirement across CLI, MCP, DSH, SDK, tests, documentation, and installed skill.
   Keep the native implementation and graceful unsupported-browser behavior.
-  Implementation is in progress on the stacked companion branch; independent
-  review and merge remain pending. Typecheck, 707 unit tests, CLI build, and
-  npm packaging pass. Native browser and DSH package validation are in progress.
+  Draft [#48](https://github.com/Castor6/BrowserRig/pull/48) targets `main`
+  after batch 01 merged. Independent review and merge remain pending; see the
+  companion evidence below.
 - **v0.6.0 -> v0.7.1:** adapt #87 (`1cdd1e4`) debugger ownership, bounded title
   reads, and image labels; include #88 (`3bb4e05`) where necessary for ownership
   checks. Adapt #73 (`a2e5bc9`) recording geometry, quality receipts, and
@@ -236,6 +236,62 @@ each preceding cycle closes.
   diagnostics. Select #93 (`d2bed70`) hostile-page fixtures and invariants as
   regression evidence. Defer demonstration/flight recording; skip release-only
   #90, #92, and #95.
+
+## Default-on WebMCP companion evidence (not merged)
+
+The independently requested companion is **Pending**, in draft
+[#48](https://github.com/Castor6/BrowserRig/pull/48), branch
+`feat/default-on-webmcp`. Code commit `2dfedfee1c87e097643a34c18e2273cce686c195`
+is based on the merged batch 01. This companion does not start a later upstream
+cycle or claim independent approval.
+
+The shared execute path enables discovery when its option is omitted, so CLI,
+MCP, DSH, and library callers, including continuations on a reused relay, do not
+need an environment switch. The environment configuration module is removed.
+The deprecated `experimentalWebMcp` API/wire field retains its existing explicit
+values: `true` discovers and `false` opts out for that call only; omission now
+discovers. This compatible field does not restore environment gating. Native CDP,
+opaque handles, ownership/generation checks, budgets, read-only invocation
+rejection, cancellation, human handoff, changed-only reports, and settlement of
+unawaited invocations are unchanged. The repository and installed OpenCode skill
+are byte-identical. The Changeset is `major` because the published environment
+opt-out no longer applies and default behavior changes; no exact version changes.
+
+Validation on 2026-09-25:
+
+- `pnpm typecheck` and `pnpm test`: 64 files / 707 tests passed. Focused default
+  regressions cover ordinary/reused executions, helper expiry, unsupported
+  browsers, read-only discovery with rejected invocation, omitted transport
+  fields, and ignored legacy MCP environment values (including invalid values).
+  Existing native safety, handoff, and unawaited-call regressions still pass.
+- `pnpm build:cli` and `pnpm package:npm` passed; packaging also built the
+  unchanged extension. Exact tarball `browserrig-0.4.0.tgz` SHA-256:
+  `0c718ed4c46976de928e683dbe2541f876a964f3cba6d74fee9b2b1e07411297`.
+- Focused DSH tests: 3 files / 23 tests passed. That exact tarball installed
+  into fresh official `web` and `headless` profiles under an isolated `DSH_HOME`,
+  both retaining `autoInstallPeers: false`, without peer warnings. Both config
+  dumps contain `browserrig/dsh`. Official profile boot/help succeeded; after
+  boot initialized DSH's host dependency fallback, both profiles imported the
+  installed subpath, registered all six tools with default discovery guidance,
+  and ran the exact installed `dist/cli.js --version` with no global BrowserRig
+  on PATH. An initial direct Node import before official boot failed on the
+  missing host `@deepseek-ai/dsh-tools` peer; no package workaround was added.
+- Four ordinary isolated Chromium smoke cases passed: `local-forms`,
+  `session-isolation`, `multi-client`, and `stale-client-checkout`.
+  Log: `/tmp/browserrig-webmcp-ordinary-smoke.log`. No full 23-case smoke claim.
+- Native `execute-webmcp` was attempted without an environment enable flag.
+  Cached Chromium 147 returned `unsupported` with CDP `-32601` (`WebMCP.disable`
+  not found), so native invocation/handoff smoke is **not passed** in this
+  environment. Ordinary execution remained successful. Log:
+  `/tmp/browserrig-webmcp-native-smoke-correct-endpoint.log`. The first command
+  used `BROWSERRIG_PORT` instead of the harness's `BROWSERRIG_ENDPOINT` and
+  failed its connection preflight; that log remains at
+  `/tmp/browserrig-webmcp-native-smoke.log`.
+- Browser testing used source relay port 21990 and a directly launched cached
+  Chromium with a temporary profile and copied extension. No existing browser
+  profile was touched, no WebMCP flags or Origin Trials were changed, and no
+  extension source changed. `termctrl` and Brave are unavailable. Task-owned
+  browser, relay, and DSH web processes were stopped after validation.
 
 ## Closure
 

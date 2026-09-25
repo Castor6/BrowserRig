@@ -91,13 +91,54 @@ function validateThreshold(threshold: number): number {
 }
 
 function decodePng(buffer: Buffer): PNG {
-  if (!Buffer.isBuffer(buffer) || buffer.length > maxImageBytes || buffer.length < 24 || !buffer.subarray(0, 8).equals(pngSignature) || buffer.toString("ascii", 12, 16) !== "IHDR") {
+  if (!Buffer.isBuffer(buffer) || buffer.length > maxImageBytes || buffer.length < 24 || !buffer.subarray(0, 8).equals(pngSignature)) {
     throw new Error("Screenshot must be a PNG buffer no larger than 32 MiB")
   }
-  const width = buffer.readUInt32BE(16)
-  const height = buffer.readUInt32BE(20)
-  if (width === 0 || height === 0 || width * height > maxImagePixels) {
-    throw new Error("Screenshot exceeds the 16 megapixel comparison limit")
-  }
+  validatePngStructure(buffer)
   return PNG.sync.read(buffer)
+}
+
+function validatePngStructure(buffer: Buffer): void {
+  // PNGJS reads uint32 chunk types and advances by length + type + CRC. Its
+  // synchronous parser replaces metadata on every IHDR before inflating IDAT.
+  // Follow those exact boundaries; never search payload bytes for chunk names.
+  let offset = pngSignature.length
+  let sawData = false
+  let endedData = false
+  const invalid = () => new Error("Invalid screenshot PNG structure")
+  while (offset < buffer.length) {
+    if (buffer.length - offset < 12) throw invalid()
+    const length = buffer.readUInt32BE(offset)
+    const type = buffer.readUInt32BE(offset + 4)
+    if (length > buffer.length - offset - 12) throw invalid()
+    const end = offset + length + 12
+    for (const character of buffer.subarray(offset + 4, offset + 8)) {
+      if (!(character >= 65 && character <= 90) && !(character >= 97 && character <= 122)) throw invalid()
+    }
+    if ((buffer[offset + 6]! & 0x20) !== 0) throw invalid()
+    if (offset === pngSignature.length) {
+      if (type !== 0x49484452 || length !== 13) throw invalid() // IHDR
+      const width = buffer.readUInt32BE(offset + 8)
+      const height = buffer.readUInt32BE(offset + 12)
+      if (width === 0 || height === 0 || width * height > maxImagePixels) {
+        throw new Error("Screenshot exceeds the 16 megapixel comparison limit")
+      }
+    } else if (type === 0x49484452) {
+      throw invalid()
+    }
+    if (type === 0x49444154) { // IDAT
+      if (endedData) throw invalid()
+      sawData = true
+    } else if (sawData) {
+      endedData = true
+    }
+    if (type === 0x49454e44) { // IEND
+      if (length !== 0 || !sawData || end !== buffer.length) throw invalid()
+      return
+    }
+    offset = end
+  }
+  // Require a complete terminal IEND before PNGJS can inflate or allocate pixels.
+  // PNGJS remains responsible for CRCs, supported color modes and image data.
+  throw invalid()
 }

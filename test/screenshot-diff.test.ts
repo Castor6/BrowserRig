@@ -1,12 +1,14 @@
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { crc32, deflateSync } from "node:zlib"
 import { PNG } from "pngjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { createScreenshotDiff } from "../src/screenshot-diff.ts"
 
 const directories: string[] = []
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(directories.splice(0).map((directory) => fs.rm(directory, { recursive: true, force: true })))
 })
 
@@ -17,7 +19,94 @@ function image(width = 2, height = 2, red = 255): Buffer {
   return PNG.sync.write(png)
 }
 
+function chunk(type: string, payload: Buffer): Buffer {
+  const output = Buffer.alloc(payload.length + 12)
+  output.writeUInt32BE(payload.length)
+  output.write(type, 4, 4, "ascii")
+  payload.copy(output, 8)
+  output.writeUInt32BE(crc32(output.subarray(4, -4)), output.length - 4)
+  return output
+}
+
+function header(width: number, height: number, options = { depth: 8, color: 6, interlace: 0 }): Buffer {
+  const data = Buffer.alloc(13)
+  data.writeUInt32BE(width)
+  data.writeUInt32BE(height, 4)
+  data[8] = options.depth
+  data[9] = options.color
+  data[12] = options.interlace
+  return chunk("IHDR", data)
+}
+
+function png(...chunks: Buffer[]): Buffer {
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), ...chunks])
+}
+
 describe("screenshotDiff", () => {
+  it.each([false, true])("rejects a second oversized IHDR before decoding (after IDAT: %s)", async afterData => {
+    const ihdr = header(1, 1)
+    const oversized = header(4097, 4096)
+    const data = chunk("IDAT", deflateSync(Buffer.from([0, 255, 255, 255, 255])))
+    const baseline = png(ihdr, ...(afterData ? [data, oversized] : [oversized, data]), chunk("IEND", Buffer.alloc(0)))
+    const screenshot = vi.fn(async () => image())
+    // Fail immediately if unsafe input reaches PNGJS, without allocating its claimed pixels.
+    const decode = vi.spyOn(PNG.sync, "read").mockImplementation(() => { throw new Error("unsafe decoder reached") })
+    await expect(createScreenshotDiff({ screenshot })({ baseline })).rejects.toThrow("PNG structure")
+    expect(decode).not.toHaveBeenCalled()
+    expect(screenshot).not.toHaveBeenCalled()
+  })
+
+  it("documents PNGJS's last-IHDR semantics with a small fully decodable fixture", () => {
+    const original = image(2, 2)
+    const duplicate = Buffer.concat([original.subarray(0, 8), header(1, 1), original.subarray(8)])
+    expect(PNG.sync.read(duplicate)).toMatchObject({ width: 2, height: 2 })
+  })
+
+  it.each(["truncated chunk", "missing IEND", "trailing bytes", "nonempty IEND", "split IDAT sequence", "short IHDR", "invalid chunk type"])("rejects %s before decoding", kind => {
+    const data = chunk("IDAT", deflateSync(Buffer.from([0, 255, 255, 255, 255])))
+    const end = chunk("IEND", Buffer.alloc(0))
+    const badType = chunk("tEXt", Buffer.from("key\0value")); badType[4] = 0xf4
+    const chunks = kind === "truncated chunk" ? [header(1, 1), data.subarray(0, -1)]
+      : kind === "missing IEND" ? [header(1, 1), data]
+      : kind === "trailing bytes" ? [header(1, 1), data, end, Buffer.from([0])]
+      : kind === "nonempty IEND" ? [header(1, 1), data, chunk("IEND", Buffer.from([0]))]
+      : kind === "split IDAT sequence" ? [header(1, 1), data, chunk("tEXt", Buffer.from("key\0value")), data, end]
+      : kind === "short IHDR" ? [chunk("IHDR", Buffer.alloc(8)), data, end]
+      : [header(1, 1), badType, data, end]
+    const screenshot = vi.fn(async () => image())
+    const decode = vi.spyOn(PNG.sync, "read").mockImplementation(() => { throw new Error("unsafe decoder reached") })
+    return expect(createScreenshotDiff({ screenshot })({ baseline: png(...chunks) })).rejects.toThrow("PNG structure").then(() => {
+      expect(decode).not.toHaveBeenCalled()
+      expect(screenshot).not.toHaveBeenCalled()
+    })
+  })
+
+  it("validates the captured PNG before decoding it as well", async () => {
+    const baseline = image()
+    const malformed = Buffer.concat([baseline.subarray(0, 33), header(4097, 4096), baseline.subarray(33)])
+    const decode = vi.spyOn(PNG.sync, "read")
+    await expect(createScreenshotDiff({ screenshot: async () => malformed })({ baseline })).rejects.toThrow("PNG structure")
+    expect(decode).toHaveBeenCalledExactlyOnceWith(baseline)
+  })
+
+  it.each([
+    { depth: 8, color: 6, interlace: 0 },
+    { depth: 8, color: 6, interlace: 1 },
+    { depth: 16, color: 6, interlace: 0 },
+    { depth: 1, color: 3, interlace: 0 },
+  ])("preserves legal PNG modes and ancillary / split data chunks: %j", async options => {
+    const palette = options.color === 3
+    const data = deflateSync(palette ? Buffer.from([0, 0]) : Buffer.from([0, ...Array(options.depth === 16 ? 8 : 4).fill(255)]))
+    const baseline = png(
+      header(1, 1, options),
+      chunk("tEXt", Buffer.from("key\0IHDR inside payload is not a header")),
+      ...(palette ? [chunk("PLTE", Buffer.from([255, 0, 0])), chunk("tRNS", Buffer.from([128]))] : []),
+      chunk("IDAT", data.subarray(0, 3)), chunk("IDAT", Buffer.alloc(0)), chunk("IDAT", data.subarray(3)),
+      chunk("IEND", Buffer.alloc(0)),
+    )
+    expect(await createScreenshotDiff({ screenshot: async () => baseline })({ baseline })).toMatchObject({ matches: true, width: 1, height: 1 })
+  })
+
   it("returns a PNG and exact zero-change metrics for equal images", async () => {
     const baseline = image()
     const screenshot = vi.fn(async () => baseline)

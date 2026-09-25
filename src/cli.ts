@@ -604,6 +604,9 @@ const status = Command.make(
       yield* Console.log(`Warning: ${buildProblem}`)
     }
     yield* Console.log(`Extension: ${extensionStatus.connected ? "connected" : "disconnected"}${extensionStatus.version ? ` (${extensionStatus.version})` : ""}`)
+    if ((extensionStatus.rejectedConnections ?? 0) > 0) {
+      yield* Console.log(`Warning: ${extensionStatus.rejectedConnections} competing browser/profile connection attempt(s) rejected; the active connection was preserved. Use BrowserRig in one browser/profile at a time.`)
+    }
     if (extensionStatus.protocolVersion !== undefined && extensionStatus.protocolVersion !== null) {
       const compatibility = extensionStatus.protocolCompatible === false ? "incompatible" : "compatible"
       const legacy = extensionStatus.protocolLegacy === true ? ", inferred from legacy hello" : ""

@@ -54,7 +54,7 @@ export function createHttpRequestHandler(options: {
   }
   readonly shutdown: () => void
   readonly extensionStatus: () => Pick<ExtensionStatus,
-    "connected" | "version" | "protocolVersion" | "protocolCompatible" | "protocolLegacy" | "cdpClients"
+    "connected" | "version" | "protocolVersion" | "protocolCompatible" | "protocolLegacy" | "rejectedConnections" | "cdpClients"
   >
   readonly recordingRelay: RecordingRelay
   readonly registry: TargetRegistry
@@ -136,6 +136,7 @@ export function createHttpRequestHandler(options: {
         ...(extensionStatus.protocolVersion === undefined ? {} : { protocolVersion: extensionStatus.protocolVersion }),
         ...(extensionStatus.protocolCompatible === undefined ? {} : { protocolCompatible: extensionStatus.protocolCompatible }),
         ...(extensionStatus.protocolLegacy === undefined ? {} : { protocolLegacy: extensionStatus.protocolLegacy }),
+        ...(extensionStatus.rejectedConnections === undefined ? {} : { rejectedConnections: extensionStatus.rejectedConnections }),
         ...(extensionStatus.cdpClients === undefined ? {} : { cdpClients: extensionStatus.cdpClients }),
         activeTargets: options.registry.rootTargetCount(),
         childTargets: options.registry.childTargets.size,

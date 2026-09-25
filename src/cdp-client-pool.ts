@@ -14,6 +14,10 @@ export class CdpClientPool<Client extends object> implements Iterable<Client> {
   private nextAliasId = 1
   private connectionGeneration = 0
 
+  has(client: Client): boolean {
+    return this.states.has(client)
+  }
+
   register(client: Client, browserRigSessionId?: string): void {
     if (this.states.has(client)) throw new Error("CDP client is already registered")
     this.states.set(client, {

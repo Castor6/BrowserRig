@@ -1,7 +1,7 @@
 ---
 title: Upstream Sync v0.6.0 to v0.7.1
 description: Approved browser evidence and debugger safety intake, frozen for implementation after v0.6.0 finalization.
-status: implementing
+status: awaiting-independent-review
 upstream_from: v0.6.0
 upstream_to: v0.7.1
 target_checked: 2026-09-25
@@ -52,7 +52,7 @@ including the completed WebMCP companion.
 
 | Order | Outcome | State | Branch | BrowserRig PR | Independent review | Validation |
 | --- | --- | --- | --- | --- | --- | --- |
-| 01 | Recording and screenshot evidence, debugger ownership, bounded title reads, image labels, and honest first-attempt smoke results | Pending | `feat/upstream-v0.7.1-browser-evidence` | Not opened | Not started | Not run |
+| 01 | Recording and screenshot evidence, debugger ownership, bounded title reads, image labels, and honest first-attempt smoke results | Pending | `feat/upstream-v0.7.1-browser-evidence` | [#50](https://github.com/Castor6/BrowserRig/pull/50) (draft) | Not started; no self-approval | [Batch 01 validation](#batch-01-validation) |
 
 The implementation agent must read the complete upstream diffs and tests,
 confirm existing coverage, and adapt the selected outcomes to BrowserRig's
@@ -84,6 +84,124 @@ fixtures missing the new title method. Corrected those fixtures and added
 selected-page media/title lifecycle regressions: 735 tests in 69 files passed.
 CLI and extension builds passed. Browser validation and exact commit evidence
 will be recorded before review. No full smoke or independent approval claimed.
+
+## Batch 01 validation
+
+Implementation base: `fb8781ae4197bdb5e5e39d1ffa7bfba00ec859fa` (PR #49 merged).
+First coherent implementation: `1196c14`; draft PR #50 opened immediately after
+that commit. Browser regression fixtures: `6f99789b4f8fb7533fd36f9de7bfb4dc9dbd1397`.
+Final behavioral correction: `90e2e94` (actual JPEG input geometry). Later evidence
+commits change only this ledger / PR metadata. Independent review remains pending;
+implementation authorization does not authorize merge or publication.
+
+### Required checks and ordinary browser coverage
+
+- At `6f99789`: `pnpm typecheck`, `pnpm test` (735 tests / 69 files),
+  `pnpm build:cli`, and `pnpm build:extension` passed. Built CLI `skill` output,
+  repository skill, and `~/.config/opencode/skills/browserrig/skill.md` compared
+  equal. Bundled Pixelmatch and PNGJS licenses are present in `dist/licenses/`.
+- At `90e2e94`: `pnpm typecheck`, `pnpm test` (740 tests / 70 files), and
+  `pnpm build:cli` passed after the recording correction. Extension code is
+  unchanged from the successful `6f99789` build and reload.
+- CI passed for [1196c14](https://github.com/Castor6/BrowserRig/actions/runs/36117530460),
+  [6f99789](https://github.com/Castor6/BrowserRig/actions/runs/36118187336), and
+  [90e2e94](https://github.com/Castor6/BrowserRig/actions/runs/36119079338).
+- Full mandatory smoke command at `6f99789`, **first attempt: 23 passed, 0 failed**.
+  Source relay at `21990`, `BROWSERRIG_ENDPOINT=http://127.0.0.1:21990`, official
+  isolated Brave 1.96.59 / Chromium 154.0.8037.58, copied current extension.
+  Command: `SMOKE_CASE=local-forms,local-cart,local-checkout,reconnect-evaluate,redirect-reconnect-evaluate,session-missing-selector,execute-target-url,execute-page-recovery,execute-page-detach-recovery,execute-fill-helpers,execute-snapshot-refs,handoff-navigation,handoff-cross-tab,handoff-target-detach,oopif-reconnect,dedicated-worker,network-capture,session-download-capability,execute-ghost-cursor,session-isolation,multi-client,stale-client-checkout,raw-first-checkout pnpm smoke`.
+  Log: `/tmp/browserrig-v071-brave/full23-first.log`. No timeout replay.
+  The later recording-only fix does not reclassify this as a new 23-case run.
+- Opt-in `execute-browser-evidence` at `6f99789` passed through Brave/extension:
+  960×640 equal PNGs changed 0 pixels; button color change changed 3,580 pixels;
+  visible image alt text was included and hidden image text was excluded.
+  Log: `/tmp/browserrig-v071-brave/focused-smoke-first.log`. The initial selector
+  also named nonexistent `recording-cdp`, so this log proves only the one listed
+  case. Separately, `SMOKE_CASE=recording-logical-session pnpm smoke` passed on
+  `6f99789`; `/tmp/browserrig-v071-brave/recording-smoke-first.log`.
+
+### Brave reload and debugger ownership
+
+Official arm64 asset: `brave-v1.96.59-darwin-arm64.zip`, SHA256
+`cfdd7c171613afd1a4dde15ddb577222c24325ad7044292ea150823c8e3aaa3b`, verified
+against the release checksum. App/profile/extension copies live only under
+`/tmp/browserrig-v071-brave/`; no user tabs were used. `termctrl` was unavailable;
+task-owned process groups and explicit PID tracking were used instead.
+
+Initial reload validation exposed two setup limitations, retained rather than
+silently retried: Sparkle's update-permission prompt blocked headless startup
+(`hang.sample` proves `SUUpdatePermissionPrompt`), resolved with the official
+`--disable-brave-update` process flag; the fresh profile disabled the reloaded
+unpacked extension as `unsupportedDeveloperExtension`, resolved by enabling
+that profile's developer mode. The test then used `chrome.developerPrivate.reload`
+on BrowserRig, confirmed ENABLED with no runtime errors, and regained relay
+readiness. No WebMCP feature flags or product defaults were changed.
+
+At source `6f99789`, a second synthetic extension independently attached one tab;
+BrowserRig attached another. Global `chrome.debugger.getTargets().attached`
+included both. After restarting only the task relay, BrowserRig announced only
+its owned tab (717260036), excluding the foreign tab (717260037). Both fixture
+tabs were closed. Proof: `ownership.json`, `ownership-reconnect.log`, and
+`reload-before-reconnect.log` under `/tmp/browserrig-v071-brave/`.
+
+### Recording geometry, first failure, and correction
+
+The initial `scripts/check-recording-geometry.ts` tree committed as `6f99789`
+passed direct Chromium 147 + real ffmpeg with DPR 2 and an odd 2560×1273 backing
+surface. 1280×720 and 1920×1080 CSS viewports both encoded 1280×720 at 25 fps;
+changed-pixel ratios versus CSS reference were 0.0010753 and 0.0002300.
+This establishes geometry/fidelity for a static fixture, not distinct motion.
+
+Additional live Brave evidence on `6f99789` found an actual encoder-input bug:
+a 756×419 JPEG in a Matroska track declaring output 1280×720 was misclassified
+by ffmpeg as one interlaced field (`No JPEG data found in image`). The same JPEG
+decoded successfully on its own. Original failure: `live-evidence-corrected.log`;
+frame signatures, raw synthetic JPEG, the minimal Matroska reproducer, and decoder
+logs are retained in `/tmp/browserrig-v071-brave/`. The ad-hoc harness initially
+used unsupported `session new/delete --json` flags; that separate harness error
+is retained in `live-evidence-first.log` and was corrected before recording.
+
+`90e2e94` reads bounded JPEG SOF metadata without decoding pixels and writes the
+actual first-frame dimensions in the Matroska input header. Output fit/rate and
+timestamp transport remain unchanged. Five parser tests cover baseline/progressive
+SOF, metadata/padding, and malformed/zero/truncated headers. The geometry script
+now includes a 756×419 source below the 1280×720 emulated viewport: it must decode,
+preserve source pixels, and pad missing pixels without inventing whole-viewport
+fidelity. That fixture's 0.65552 whole-image difference is expected missing-source
+area, explicitly not a fidelity pass.
+
+At `90e2e94`, all three geometry cases passed with the real cached Chromium 147
+and ffmpeg:
+
+```bash
+pnpm exec tsx scripts/check-recording-geometry.ts --browser '/Users/castor/Library/Caches/ms-playwright/chromium-1217/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing' --out /tmp/browserrig-v071-geometry-90e2e94
+```
+
+Log: `/tmp/browserrig-v071-geometry-90e2e94.log`. All outputs remain 1280×720,
+25 fps, zero dropped frames, no screenshot fallback; both complete-surface
+fidelity ratios remain 0.0010753 / 0.0002300.
+
+Live Brave at `90e2e94` used a 640×360 CSS viewport fitting its actual 756×419
+headless surface (an attempted oversized physical window was rejected by Chrome's
+visible-screen bound). JSON start/status/stop and sidecar counters agreed:
+87 received frames, 37 retained, 50 coalesced, 0 dropped, no screenshot fallback;
+ffprobe confirms 640×360 / 25 fps / 3.36 seconds. Equal screenshot diff changed
+0 pixels; a quadrant color change changed 48,684 pixels (0.2113021).
+`live-frame.png` and `diff.png` were visually inspected: all four quadrants and
+text fill the expected frame, and only the intended quadrant is highlighted.
+Proof: `/tmp/browserrig-v071-brave/live-evidence.json`, `live-fitting-90e2e94.log`,
+`live.mp4`, `live.mp4.json`, `before.png`, `same.png`, and `diff.png`.
+Counters establish receipt consistency, not guaranteed distinct-motion rate.
+
+### Delivery boundaries
+
+Changeset `.changeset/tiny-waves-begin.md` was generated with `pnpm changeset`:
+`browserrig` minor / `browserrig-extension` patch. No exact version edits,
+permission changes, DSH changes, upstream identity, #88 work, merge, or publication.
+Final cleanup stops only the task-owned relay/browser/processes; local evidence
+artifacts are retained for review. Native WebMCP remained default-on; these tests
+do not claim native tool invocation coverage. Batch state stays Pending until
+fresh independent approval and explicitly approved merge.
 
 ## Complete upstream disposition ledger
 

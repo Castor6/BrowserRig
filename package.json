@@ -74,7 +74,9 @@
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.1",
     "acorn": "^8.18.0",
+    "pixelmatch": "^7.2.0",
     "playwright-core": "^1.62.1",
+    "pngjs": "^7.0.0",
     "ws": "^8.21.3"
   },
   "peerDependencies": {
@@ -111,6 +113,7 @@
     "@effect/platform-node-shared": "4.0.0-rc.111",
     "@types/chrome": "^0.2.7",
     "@types/node": "^26.2.0",
+    "@types/pngjs": "^6.0.5",
     "@types/ws": "^8.18.1",
     "effect": "4.0.0-rc.111",
     "esbuild": "^0.28.2",

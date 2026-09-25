@@ -449,6 +449,8 @@ Other inspection helpers include:
 - `ariaSnapshot()` for a deeper accessibility-tree view with native text-control
   values, custom ARIA range values, and editable content omitted; concurrent
   guarded snapshots are supported, but await them before other same-page work
+- `screenshotDiff({ baseline })` for PNG changed-pixel metrics and highlighted
+  visual evidence at the same CSS viewport scale; see the [agent workflow](skills/browserrig/SKILL.md)
 - `screenshotWithLabels()` for an annotated screenshot and element metadata
 - `fillInput()` and `fillInputs()` when browser extensions interfere with
   Playwright's normal `locator.fill()`
@@ -510,6 +512,17 @@ browserrig recording start ./demo.webm --session github
 browserrig recording status --session github
 browserrig recording stop --session github
 ```
+
+Recording commands accept `--json`; CDP stop/status include capture-quality
+receipts that distinguish output rate from received/retained compositor frames
+and flag stop-time screenshot fallback. CDP retains the 25 fps default and the
+1280×720 viewport fit, with corrected high-DPI/backing-surface geometry.
+
+For visual comparisons, save a PNG with `page.screenshot({ path, scale: "css" })`
+and return `await screenshotDiff({ baseline: path })` after a UI change. Keep
+viewport/full-page settings equal. Optional `threshold` (default 0.1) controls
+pixel color tolerance; optional absolute PNG `path` writes a new private artifact.
+Dimension mismatches fail; images are bounded to 32 MiB / 16 megapixels.
 
 Automatic mode prefers browser tab capture for user-owned tabs and uses CDP
 screencast for relay-created tabs. Chrome grants tab/audio capture only after a

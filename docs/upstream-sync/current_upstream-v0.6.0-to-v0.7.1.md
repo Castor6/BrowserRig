@@ -1,7 +1,7 @@
 ---
 title: Upstream Sync v0.6.0 to v0.7.1
 description: Approved browser evidence and debugger safety intake, frozen for implementation after v0.6.0 finalization.
-status: approved-awaiting-finalization-merge
+status: implementing
 upstream_from: v0.6.0
 upstream_to: v0.7.1
 target_checked: 2026-09-25
@@ -57,7 +57,33 @@ including the completed WebMCP companion.
 The implementation agent must read the complete upstream diffs and tests,
 confirm existing coverage, and adapt the selected outcomes to BrowserRig's
 architecture. Report any material scope or behavior conflict before expanding
-this batch. No code change is part of this documentation finalization.
+this batch. The starting gate was satisfied by PR #49; implementation base is
+`fb8781ae4197bdb5e5e39d1ffa7bfba00ec859fa` on clean `main`.
+
+### Batch 01 implementation evidence
+
+Complete diffs and tests for #73, #79, and #87 were reviewed. Selected adaptation:
+
+- #73: CSS backing-surface normalization and viewport crop before the existing
+  1280×720 fit; JPEG100; shared quality receipts and JSON presentation;
+  bounded explicit PNG `screenshotDiff` on the selected execution page.
+  Preserve 25 fps default and existing explicit-rate behavior. Upstream native
+  output size, 60 fps default/ceiling, and strict frame-rate policy are not adopted.
+- #79: remove smoke timeout replay and unreachable expected-failure verdicts;
+  preserve first results. Existing `src/mcp.ts` registers tools without an eager
+  relay layer and ensures readiness per operational call. Unrelated runtime,
+  shutdown, network-copy, redaction, and release changes remain excluded.
+- #87: prove extension debugger ownership for inventory/grouping, bound selected
+  page title reads to five seconds, and include visible descendant image alt
+  labels. Retain rc.111 dependencies and existing package identity/permissions.
+- #88 and later ranges remain outside this implementation.
+
+Initial working-tree checks: typecheck passed after adding the three scoped PNG
+packages. First full unit run: 719 passed / 14 failed, all in existing execute
+fixtures missing the new title method. Corrected those fixtures and added
+selected-page media/title lifecycle regressions: 735 tests in 69 files passed.
+CLI and extension builds passed. Browser validation and exact commit evidence
+will be recorded before review. No full smoke or independent approval claimed.
 
 ## Complete upstream disposition ledger
 

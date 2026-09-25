@@ -213,6 +213,12 @@ Use the least expensive view that answers the question:
   before running other operations on the same page.
 - `screenshotWithLabels({ page, path? })` adds visual labels and metadata when
   layout matters.
+- `screenshotDiff({ baseline, path?, threshold?, fullPage? })` compares a saved
+  PNG (absolute path or Buffer) with the selected execution page at CSS-pixel
+  scale. It returns `matches`, dimensions, `changedPixels`, `totalPixels`,
+  `changedRatio`, and a red-highlighted PNG as execute media. Supply a fresh
+  absolute `.png` `path` to write a private file instead; existing files are
+  never overwritten.
 
 ```js
 return await snapshot()
@@ -232,6 +238,19 @@ return await screenshotWithLabels({ page })
 
 Saving an image and returning only `"ok"` proves file creation, not visual
 correctness. Return screenshot buffers through MCP when visual evidence matters.
+
+For visual comparison, capture a baseline with
+`await page.screenshot({ path: "/absolute/before.png", scale: "css" })`, then
+return `await screenshotDiff({ baseline: "/absolute/before.png" })` after the
+intended UI change. Keep the viewport and `fullPage` setting identical and settle
+animations first. Different dimensions fail without resizing. `threshold`
+(default 0.1, range 0..1) is per-pixel color tolerance, not allowed changed area;
+antialiasing changes count. Each PNG is limited to 32 MiB / 16 megapixels.
+Screenshots and diffs contain visible page content; inspect before sharing.
+
+Compact snapshot labels include visible descendant image alt text. They remain
+compact descriptions, not guaranteed exact accessible names; use `ref()` for
+controls and refresh after DOM changes.
 
 ## Execute Interface
 
@@ -434,12 +453,31 @@ cursor options.
 Completion: stop the recorder, inspect the resulting media rather than only its
 existence, and report the viewport, state, and interaction path actually tested.
 
+Recording start/stop/status accept `--json`. CDP stop/status return a `quality`
+receipt with output dimensions/rate, received and retained source-frame counts
+and rates, coalesced/dropped frames, and `screenshotFallback`. Source counts are
+compositor events, not distinct motion. A true fallback flag means the video
+holds one stop-time screenshot because no compositor frames arrived. Tab capture
+and older relays omit unavailable telemetry.
+
+CDP keeps its 25 fps default and fits the starting viewport within 1280×720.
+Uncapped JPEG100 source frames are normalized from the backing surface to CSS
+pixels, cropped to the starting viewport, then fitted to the output dimensions.
+Keep viewport/emulation fixed during capture and inspect an encoded frame before
+sharing; the entire viewport should fill the frame without padded-corner shrinkage.
+
 ## Troubleshooting
 
 1. Run `browserrig doctor`; it checks package metadata, CLI/relay build
    identity, extension protocol compatibility, sessions, targets, and artifacts.
 2. Use `status --json` to inspect exact sessions and target ownership.
 3. Reproduce once with the smallest execute before changing code.
+
+The updated extension verifies its debugger ownership before reconnect inventory
+and grouping; reload the unpacked extension after upgrading the shim. DevTools
+and foreign-extension attachments are excluded. `page.title()` has a five-second
+read deadline when its execution context is unavailable. This does not close or
+replace the page and is not cancellation for arbitrary scripts.
 
 Common diagnoses:
 

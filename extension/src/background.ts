@@ -1,3 +1,4 @@
+import { getOwnedDebuggerTabIds } from "./debugger-ownership.ts"
 import { extensionProtocolVersion, parseExtensionCommand, type ExtensionCommand as ShimCommand, type JsonObject } from "../../src/protocol.ts"
 import { encodeRecordingFrame } from "../../src/recording-protocol.ts"
 import type {
@@ -220,11 +221,8 @@ function startGroupReconciliation(currentGeneration: number): void {
 }
 
 async function reannounceAttachedTabs(currentSocket: WebSocket): Promise<void> {
-  const targets = await chrome.debugger.getTargets()
-  for (const target of targets) {
-    if (target.attached && typeof target.tabId === "number") {
-      sendOnSocket(currentSocket, { method: "debugger.attached", params: { tabId: target.tabId } })
-    }
+  for (const tabId of await getAttachedTabIds()) {
+    sendOnSocket(currentSocket, { method: "debugger.attached", params: { tabId } })
   }
 }
 
@@ -510,14 +508,7 @@ async function reconcileBrowserRigGroups(currentGeneration: number): Promise<voi
 }
 
 async function getAttachedTabIds(): Promise<Set<number>> {
-  const attachedTabIds = new Set<number>()
-  const targets = await chrome.debugger.getTargets()
-  for (const target of targets) {
-    if (target.attached && typeof target.tabId === "number") {
-      attachedTabIds.add(target.tabId)
-    }
-  }
-  return attachedTabIds
+  return getOwnedDebuggerTabIds(chrome.debugger)
 }
 
 async function groupBrowserRigTab(tabId: number, currentSocket: WebSocket): Promise<JsonObject> {

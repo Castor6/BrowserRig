@@ -785,3 +785,22 @@ and exact-instance checks. Teardown stops transport admission and waits for
 accepted requests, session workers, journal/catalog tails, and recording cleanup
 before disconnecting the browser. It does not introduce an explicit restart
 command, runtime installer, or Effect dependency upgrade.
+
+## Browser evidence and debugger ownership
+
+- `screenshotDiff({ baseline, path?, threshold?, fullPage? })` is a code-first
+  selected-page helper, with CSS-scale PNG comparisons, changed-pixel metrics,
+  red-highlighted media, bounded decoding, and exclusive private file output.
+- CDP recording keeps its 25 fps default, existing explicit-rate behavior, and
+  1280×720 fit. Uncapped JPEG100 frames avoid backing-surface caps; normalize
+  device pixels using first-frame surface metadata, crop the starting CSS
+  viewport, then scale to the fitted output. Geometry must remain fixed.
+- Recording stop/status quality receipts share counters with the sidecar and
+  explicitly report screenshot fallback. Counters do not measure distinct motion.
+- Extension reconnect and grouping inventory prove debugger ownership with a
+  read-only command; global `attached` also includes DevTools/other extensions.
+- Selected-page title reads have a five-second deadline without closing the tab.
+  This does not cancel arbitrary scripts. Snapshot descriptions include visible
+  descendant image alt text while preserving hidden/value omission rules.
+- Smoke cases produce one attempt and one verdict. Timeout results are never
+  silently replayed; explicit repetitions remain separately reported results.

@@ -259,7 +259,11 @@ require a new extension capture protocol and permission model.
   [`docs/upstream-sync/`](docs/upstream-sync/README.md). Never treat sync as
   product identity, release, or source-equivalence ownership. The first
   archived cycle completed selective intake through upstream `v0.5.1` on
-  2026-08-28; no later range is currently active.
+  2026-08-28. The user approved six outcome groups through `v0.8.2` on
+  2026-09-25; the active cycle is `v0.5.1 -> v0.6.0`, with `v0.7.1` and
+  `v0.8.2` queued. Native WebMCP will become default-on as an independent
+  companion change. The active ledger records exact scope and review state;
+  implementation approval does not advance the cursor or authorize publication.
 - **Trusted local execution**: `execute(code)` trusts the calling agent. It is
   not an untrusted-code security boundary.
 - **Code-first control**: `execute(code)` is the primary interface. Dedicated

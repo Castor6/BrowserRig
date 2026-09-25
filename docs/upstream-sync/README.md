@@ -17,9 +17,16 @@ branches or starting an agent.
 ## Current state
 
 - **Latest completed upstream sync:** `v0.5.1` (completed 2026-08-28)
-- **Active cycle:** none
-- **Active cycle status:** no approved upstream range is in progress
+- **Active cycle:** [`v0.5.1 -> v0.6.0`](current_upstream-v0.5.1-to-v0.6.0.md)
+- **Active cycle status:** implementation approved on 2026-09-25; preparing the runtime-safety batch for independent review
 - **BrowserRig package version:** independent from the upstream sync cursor
+
+The user approved the six recommended outcome groups through `v0.8.2`, plus
+default-on native WebMCP discovery, on 2026-09-25. The active record retains
+the complete scope and follow-on sequence. Implementation approval does not
+authorize merging pull requests or publishing packages; obtain explicit merge
+approval after a concrete reviewed batch is ready. Later version cycles remain
+queued until the preceding cycle closes.
 
 "Completed through `vX.Y.Z`" means every upstream pull request reachable in
 the reviewed range has a recorded outcome: adapted and landed, already covered,

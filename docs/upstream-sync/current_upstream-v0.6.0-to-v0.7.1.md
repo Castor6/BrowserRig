@@ -90,7 +90,8 @@ will be recorded before review. No full smoke or independent approval claimed.
 Implementation base: `fb8781ae4197bdb5e5e39d1ffa7bfba00ec859fa` (PR #49 merged).
 First coherent implementation: `1196c14`; draft PR #50 opened immediately after
 that commit. Browser regression fixtures: `6f99789b4f8fb7533fd36f9de7bfb4dc9dbd1397`.
-Final behavioral correction: `90e2e94` (actual JPEG input geometry). Later evidence
+Recording correction: `90e2e94` (actual JPEG input geometry). Final behavioral
+correction: `d4c7432` (review-requested PNG structure preflight). Later evidence
 commits change only this ledger / PR metadata. Independent review remains pending;
 implementation authorization does not authorize merge or publication.
 

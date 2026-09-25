@@ -308,14 +308,12 @@ const sensitive = yield* origin.json({
 const session = BrowserRigClient.reveal(sensitive)
 ```
 
-## Experimental WebMCP
+## Native WebMCP
 
-When the user has enabled `BROWSERRIG_EXPERIMENTAL_WEBMCP=true` in the calling
-agent's environment, each execute automatically discovers native website tools
-on the session-owned page. For CLI use, export the variable so continuation
-commands inherit it. MCP reads its server environment; DSH forwards its
-environment to the package-local CLI. An existing relay does not need restarting
-to apply this setting. Adopt an existing user tab before using its tools.
+Every execute automatically discovers native website tools on the session-owned
+page. CLI, MCP, DSH, and SDK calls need no environment switch, including
+continuations on a running relay. Adopt an existing user tab before using its
+tools. Discovery never invokes website tools.
 
 Inspect the execute response's `webmcp` field. First discovery and changes
 include tool definitions; an unchanged response uses `changed: false` and omits

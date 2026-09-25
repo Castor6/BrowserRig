@@ -22,7 +22,6 @@ import { defaultJournalBaseDir, formatJournalEntry, readJournalEntries } from ".
 import * as SessionStore from "./session-store.ts"
 import { browserRigVersion } from "./version.ts"
 import { resolveExplicitSessionSelector, resolveSessionDeletionId } from "./cli-session-selector.ts"
-import { experimentalWebMcpConfig } from "./webmcp-config.ts"
 import { formatWebMcpDiscovery } from "./webmcp.ts"
 
 const packageRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
@@ -282,7 +281,6 @@ const execute = Command.make(
         ...(explicitSessionId ? { sessionId: explicitSessionId } : {}),
         code: executeCode,
         createIfMissing: !explicitSessionId,
-        experimentalWebMcp: yield* experimentalWebMcpConfig,
         ...(targetUrlValue || targetIndexValue !== undefined
           ? {
             targetSelection: {

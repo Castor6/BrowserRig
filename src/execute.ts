@@ -458,6 +458,7 @@ class ExecuteCodeError extends Error {
 
 export type ExecuteOptions = {
   readonly targetSelection?: ExecuteTargetSelection
+  /** @deprecated Discovery is enabled by default. Explicit false opts out for this call only. */
   readonly experimentalWebMcp?: boolean
 }
 
@@ -551,7 +552,7 @@ export class ExecuteSandbox {
         },
       }),
       Effect.flatMap((result) => Effect.promise(async () => {
-        if (!options.experimentalWebMcp) return result
+        if (options.experimentalWebMcp === false) return result
         const discovery = this.webMcp ? await this.webMcp.report() : this.webMcpUnavailable
         return discovery ? { ...result, webmcp: this.networkCapture.redactValue(discovery) as WebMcpDiscovery } : result
       })),
@@ -853,7 +854,7 @@ export class ExecuteSandbox {
       })
       handoffTracker.count += 1
     }
-    const webMcpEnabled = options.experimentalWebMcp === true
+    const webMcpEnabled = options.experimentalWebMcp !== false
     if (!webMcpEnabled) {
       await this.webMcp?.stop()
       this.clearWebMcp()
@@ -880,7 +881,7 @@ export class ExecuteSandbox {
     const webMcpCalls: Promise<unknown>[] = []
     const assertWebMcpEnabled = () => {
       if (!acceptingWebMcpCalls) throw new Error("This WebMCP helper belongs to a finished execute call; use the current webmcp helper")
-      if (!webMcpEnabled) throw new Error("WebMCP is disabled. Set BROWSERRIG_EXPERIMENTAL_WEBMCP=true in the calling agent's environment.")
+      if (!webMcpEnabled) throw new Error("WebMCP is disabled by this execute call's legacy experimentalWebMcp option. Omit the option to discover tools.")
     }
     const webmcp: WebMcpHelpers = {
       list: async (listOptions) => {

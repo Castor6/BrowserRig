@@ -193,9 +193,9 @@ const cases: SmokeCase[] = [
     run: Effect.fnUntraced(function* () {
       const smokeSession = `br-webmcp-${Date.now()}`
       const pizzaUrl = "https://googlechromelabs.github.io/webmcp-tools/demos/pizza-maker/"
-      const execute = (code: string, enabled = true) => runBrowserRig([
+      const execute = (code: string) => runBrowserRig([
         "execute", "--json", "--session", smokeSession, code,
-      ], { experimentalWebMcp: enabled })
+      ])
       return yield* Effect.scoped(Effect.gen(function* () {
         yield* runBrowserRig(["session", "new", smokeSession])
         const initial = parseJsonObject(yield* execute(`await page.goto(${JSON.stringify(pizzaUrl)}); return page.url()`), "WebMCP discovery")
@@ -273,13 +273,9 @@ assert.equal((await webmcp.call(door.id)).status, 'Completed')
 assert.equal(await page.title(), 'The Whispering Woods')
 return { navigation: true }
         `)
-        const disabled = parseJsonObject(yield* execute(`
-const { default: assert } = await import('node:assert/strict')
-await assert.rejects(webmcp.list(), /disabled/)
-return { disabled: true, title: await page.title() }
-        `, false), "disabled WebMCP")
-        if (disabled.webmcp !== undefined || getObject(disabled.value)?.disabled !== true) return yield* Effect.fail(new Error("WebMCP remained enabled in a subsequent caller without opt-in"))
-        return { operations: parseJsonObject(output, "WebMCP operations").value, manual: manual.value, navigation: parseJsonObject(navigation, "WebMCP navigation").value, disabled: disabled.value }
+        const continuation = parseJsonObject(yield* execute("return page.title()"), "default WebMCP continuation")
+        if (getObject(continuation.webmcp)?.status !== "available") return yield* Effect.fail(new Error("WebMCP discovery missing from ordinary continuation"))
+        return { operations: parseJsonObject(output, "WebMCP operations").value, manual: manual.value, navigation: parseJsonObject(navigation, "WebMCP navigation").value, continuation: continuation.value }
       }).pipe(Effect.ensuring(runBrowserRig(["session", "delete", smokeSession]).pipe(Effect.ignore))))
     }),
   },
@@ -2203,7 +2199,6 @@ function boundedCleanup(label: string, run: () => PromiseLike<unknown>, timeoutM
 type RunBrowserRigOptions = {
   readonly retryOnTimeout?: boolean
   readonly sessionId?: string
-  readonly experimentalWebMcp?: boolean
 }
 
 function runBrowserRig(args: readonly string[], options: RunBrowserRigOptions = {}): Effect.Effect<string, Error> {
@@ -2227,7 +2222,7 @@ function runBrowserRigOnce(args: readonly string[], options: RunBrowserRigOption
     delete childEnv.BROWSERRIG_TARGET_INDEX
     delete childEnv.BROWSERRIG_SESSION
     if (options.sessionId) childEnv.BROWSERRIG_SESSION = options.sessionId
-    childEnv.BROWSERRIG_EXPERIMENTAL_WEBMCP = String(options.experimentalWebMcp === true)
+    delete childEnv.BROWSERRIG_EXPERIMENTAL_WEBMCP
     const child = cp.execFile(
       process.execPath,
       ["--import", "tsx", localCliPath, ...args],

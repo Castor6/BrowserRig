@@ -517,7 +517,7 @@ describe("BrowserRigSessions", () => {
     expect(sessions.listSummaries().map((session) => session.id)).toEqual([result.session.id])
   })
 
-  it("forwards WebMCP opt-in per request without retaining an earlier caller's setting", async () => {
+  it("forwards legacy WebMCP overrides per request without retaining an earlier caller's setting", async () => {
     const sandbox = makeFakeSandbox()
     const execute = vi.spyOn(sandbox, "execute")
     const sessions = new BrowserRigSessions("http://127.0.0.1:0", () => sandbox)

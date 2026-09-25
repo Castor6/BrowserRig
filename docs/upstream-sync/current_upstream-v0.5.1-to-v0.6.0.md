@@ -217,6 +217,9 @@ each preceding cycle closes.
   `feat/default-on-webmcp`. Remove the environment switch and agent-facing opt-in
   requirement across CLI, MCP, DSH, SDK, tests, documentation, and installed skill.
   Keep the native implementation and graceful unsupported-browser behavior.
+  Implementation is in progress on the stacked companion branch; independent
+  review and merge remain pending. Typecheck, 707 unit tests, CLI build, and
+  npm packaging pass. Native browser and DSH package validation are in progress.
 - **v0.6.0 -> v0.7.1:** adapt #87 (`1cdd1e4`) debugger ownership, bounded title
   reads, and image labels; include #88 (`3bb4e05`) where necessary for ownership
   checks. Adapt #73 (`a2e5bc9`) recording geometry, quality receipts, and

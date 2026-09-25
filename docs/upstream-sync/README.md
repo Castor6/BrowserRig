@@ -64,6 +64,25 @@ until those additional pull requests are reviewed and added to the same cycle.
 Do not jump over a minor series. Do not advance the completed cursor because a
 review started, a subset landed, or upstream published a newer release.
 
+## Browser compatibility and validation
+
+Google Chrome is the primary compatibility and browser-validation target for
+future upstream syncs, as requested by the user on 2026-09-25. Run browser smoke
+tests and extension reload checks in Chrome. Isolated Chromium fixtures may
+supplement those checks; record the browser and version used for each result.
+
+Brave-specific compatibility work, browser installation, extension reloads, and
+smoke coverage are not required. Skip upstream changes that only serve Brave,
+with a recorded reason, unless the user explicitly requests that support.
+Continue assessing shared Chromium, CDP, and extension fixes for their benefit
+to Chrome, including page preservation and protected-extension-frame handling.
+Other Chromium-family browsers may work through shared behavior, but their
+browser-specific differences do not block a Chrome-validated sync.
+
+This policy applies to future work. Preserve historical Brave test evidence in
+archived cycles. The currently queued v0.8.2 cycle remains stopped until the
+user requests resumption.
+
 ## Product decision gate
 
 The coordinator first produces a product-level recommendation. It explains:

@@ -23,6 +23,9 @@ local Node relay.
 
 - BrowserRig is a driver, not an LLM agent.
 - Use the user's already-running Chromium-family browser first.
+- Use Google Chrome as the primary compatibility and validation target. Other
+  Chromium-family browsers are best-effort; Brave-specific compatibility work
+  or browser installation is not required unless the user requests it.
 - Keep tabs in a loose attached-tab pool for v1.
 - Prefer a code-first `execute(code)` interface over many tiny action tools.
 - Execute runs inside relay-backed sessions. Bare CLI execute atomically creates
@@ -364,7 +367,8 @@ local Node relay.
   profiles with `dsh plugin --profile <name> add <tarball>`. Check
   `--dump-config`, peer warnings, `browserrig/dsh` import, and the package-local
   CLI without relying on a global BrowserRig install.
-- Extension shim changes require reloading the unpacked extension once in Brave.
+- Extension shim changes require reloading the unpacked extension once in
+  Google Chrome. Do not require a separate Brave reload or smoke run.
 - Relay-only changes should not require reloading the extension.
 - Use `termctrl` for long-running relay sessions during testing.
 - Run `SMOKE_CASE=local-forms,local-cart,local-checkout,reconnect-evaluate,redirect-reconnect-evaluate,session-missing-selector,execute-target-url,execute-page-recovery,execute-page-detach-recovery,execute-fill-helpers,execute-snapshot-refs,handoff-navigation,handoff-cross-tab,handoff-target-detach,oopif-reconnect,dedicated-worker,network-capture,session-download-capability,execute-ghost-cursor,session-isolation,multi-client,stale-client-checkout,raw-first-checkout pnpm smoke`

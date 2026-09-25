@@ -52,7 +52,7 @@ including the completed WebMCP companion.
 
 | Order | Outcome | State | Branch | BrowserRig PR | Independent review | Validation |
 | --- | --- | --- | --- | --- | --- | --- |
-| 01 | Recording and screenshot evidence, debugger ownership, bounded title reads, image labels, and honest first-attempt smoke results | Pending | `feat/upstream-v0.7.1-browser-evidence` | [#50](https://github.com/Castor6/BrowserRig/pull/50) (draft) | Not started; no self-approval | [Batch 01 validation](#batch-01-validation) |
+| 01 | Recording and screenshot evidence, debugger ownership, bounded title reads, image labels, and honest first-attempt smoke results | Pending | `feat/upstream-v0.7.1-browser-evidence` | [#50](https://github.com/Castor6/BrowserRig/pull/50) (draft) | Changes requested (P2 PNG preflight); fixed in `d4c7432`, awaiting fresh review | [Batch 01 validation](#batch-01-validation) |
 
 The implementation agent must read the complete upstream diffs and tests,
 confirm existing coverage, and adapt the selected outcomes to BrowserRig's
@@ -192,6 +192,54 @@ text fill the expected frame, and only the intended quadrant is highlighted.
 Proof: `/tmp/browserrig-v071-brave/live-evidence.json`, `live-fitting-90e2e94.log`,
 `live.mp4`, `live.mp4.json`, `before.png`, `same.png`, and `diff.png`.
 Counters establish receipt consistency, not guaranteed distinct-motion rate.
+
+### Independent review and PNG preflight correction
+
+The first independent review of `96841b9` returned **Changes requested** with one
+P2 finding. Scope and BrowserRig boundaries matched; 110 focused tests and an
+independent three-case recording-geometry run passed, including visual inspection.
+The reviewer reproduced an oversized PNG accepted through duplicate IHDR chunks:
+first IHDR 1×1, later IHDR 4097×4096 (16,781,312 pixels, above the 16,777,216 cap).
+The prior preflight inspected only the first header while PNGJS decoded the last.
+No approval is claimed from those otherwise successful checks.
+
+Correction `d4c7432754ae12697e54881b76cd173df4591205` was developed against the
+installed PNGJS 7 parser, synchronous reader and synchronous inflate pipeline.
+PNGJS reads chunk types as uint32 values, advances by chunk length plus 12 bytes,
+and replaces metadata on every IHDR before decompressing IDAT. BrowserRig now
+walks the entire chunk structure with those same boundaries before invoking
+`PNG.sync.read`: exactly one initial 13-byte IHDR, bounded dimensions, legal chunk
+type bytes, a consecutive IDAT sequence, and complete empty terminal IEND with
+no trailing bytes. It rejects duplicate IHDR even after IDAT. Chunk payload text
+containing `IHDR` is not interpreted as a header. PNGJS retains its CRC, color-mode
+and image-data validation; the preflight does not import private parser APIs.
+The same preflight protects both the supplied baseline and captured PNG.
+
+Red/green evidence:
+
+- Before changing production code, the two new oversized duplicate-IHDR tests
+  (before / after IDAT) failed because the unsafe decoder was reached. A decoder
+  spy deliberately throws before allocating the claimed pixels. A separate tiny,
+  fully decodable duplicate-header fixture confirms PNGJS's last-header behavior.
+  Log: `/tmp/browserrig-v071-review-red.log` (2 failed / 12 passed).
+- After the correction, all 26 screenshot tests passed. Regressions assert no
+  decoder or page screenshot call for the malformed oversized baseline, no
+  second decoder call for a malformed captured PNG, rejection of truncated or
+  nonterminal chunks, and support for valid interlaced, 16-bit, palette/transparent,
+  ancillary and split-IDAT PNGs. Log: `/tmp/browserrig-v071-review-green.log`.
+- `d4c7432`: `pnpm typecheck`, `pnpm test` (755 tests / 70 files),
+  `pnpm build:cli`, and `git diff --check` passed. Full suite log:
+  `/tmp/browserrig-v071-review-full.log`.
+- `d4c7432`: isolated Brave / source relay at 21990 passed the first targeted
+  `BROWSERRIG_ENDPOINT=http://127.0.0.1:21990 SMOKE_CASE=execute-browser-evidence pnpm smoke`.
+  Equal 960×640 PNGs changed 0 pixels; the intended color change changed 3,580.
+  Log: `/tmp/browserrig-v071-review-browser.log`. No extension, recording,
+  permissions, native WebMCP, version or Changeset scope changed. The historical
+  23-case result remains attributed to `6f99789`; it was not needlessly repeated.
+
+The task browser/relay were stopped after this targeted check. The existing
+minor/patch Changeset covers the corrected unreleased capability. A fresh
+independent reviewer must assess the fix before any merge approval request.
 
 ### Delivery boundaries
 

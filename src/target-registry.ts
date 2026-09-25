@@ -212,19 +212,22 @@ export class TargetRegistry {
     })
   }
 
-  addChildTarget(target: ChildTarget): void {
+  addChildTarget(target: ChildTarget): readonly ChildTarget[] {
+    const replaced: ChildTarget[] = []
     const existingForSession = this.childTargets.get(target.sessionId)
-    if (existingForSession) {
-      this.childTargetsByTargetId.delete(existingForSession.targetInfo.targetId)
+    if (existingForSession && existingForSession.targetInfo.targetId !== target.targetInfo.targetId) {
+      replaced.push(existingForSession)
+      this.detachChildTargetState(existingForSession.sessionId)
     }
     const existingForTargetId = this.childTargetsByTargetId.get(target.targetInfo.targetId)
-    if (existingForTargetId) {
-      this.childSessionTabs.delete(existingForTargetId.sessionId)
-      this.childTargets.delete(existingForTargetId.sessionId)
+    if (existingForTargetId && existingForTargetId.sessionId !== target.sessionId) {
+      replaced.push(existingForTargetId)
+      this.detachChildTargetState(existingForTargetId.sessionId)
     }
     this.childSessionTabs.set(target.sessionId, target.tabId)
     this.childTargets.set(target.sessionId, target)
     this.childTargetsByTargetId.set(target.targetInfo.targetId, target)
+    return replaced
   }
 
   rootTargetCount(): number {

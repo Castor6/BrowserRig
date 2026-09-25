@@ -26,7 +26,8 @@ describe("relay active-tab extension generation", () => {
       const original = yield* Effect.promise(() => connectFakeExtension(relay.url, {
         beforeResponse: (command) => {
           if (replacementPromise || !shouldReplace(command)) return true
-          replacementPromise = connectFakeExtension(relay.url)
+          original.close()
+          replacementPromise = waitForSocketClosed(original).then(() => connectFakeExtension(relay.url))
           return false
         },
       }))
@@ -37,7 +38,7 @@ describe("relay active-tab extension generation", () => {
         const response = yield* Effect.promise(() => adoptActiveTab(relay.url, "alpha"))
         expect(response.status).toBe(500)
         expect(yield* Effect.promise(() => response.json())).toMatchObject({
-          error: expect.stringMatching(/Extension (?:changed|replaced)/),
+          error: expect.stringMatching(/Extension (?:changed|replaced|disconnected|generation \d+ disconnected)/),
         })
 
         expect(replacementPromise).toBeDefined()

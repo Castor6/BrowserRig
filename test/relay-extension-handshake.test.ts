@@ -16,6 +16,158 @@ afterEach(() => {
 })
 
 describe("relay extension handshake", () => {
+  it("protects a compatible browser's handshake before its inventory is ready", async () => {
+    const port = 24_000 + Math.floor(Math.random() * 10_000)
+    await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
+      const relay = yield* startRelay({ port, sessionCatalogPath: null })
+      const first = yield* Effect.promise(() => connectExtension(relay.url))
+      let second: WebSocket | undefined
+      try {
+        first.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: extensionProtocolVersion } }))
+        yield* Effect.promise(() => waitForStatus(relay.url, (status) => status.protocolCompatible === true))
+        second = yield* Effect.promise(() => connectExtension(relay.url))
+        let rejectedCode: number | undefined
+        second.once("close", (code) => { rejectedCode = code })
+        second.send(JSON.stringify({ method: "hello", params: { version: "0.0.24", protocolVersion: extensionProtocolVersion } }))
+        yield* Effect.promise(() => waitFor(() => rejectedCode !== undefined))
+        expect(rejectedCode).toBe(4004)
+
+        first.send(JSON.stringify({ method: "ready" }))
+        const status = yield* Effect.promise(() => waitForStatus(relay.url, (candidate) => candidate.connected))
+        expect(status).toMatchObject({ version: "0.0.23", rejectedConnections: 1 })
+      } finally {
+        second?.close()
+        first.close()
+      }
+    })))
+  })
+  it.each([["rpc", false], ["malformed", false], ["rpc", true], ["malformed", true]] as const)("rejects ready after committed root %s probe failure (settled before ready: %s)", async (failure, settledBeforeReady) => {
+    const port = 24_000 + Math.floor(Math.random() * 10_000)
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
+      const relay = yield* startRelay({ port, sessionCatalogPath: null })
+      const options: { targetId?: string; error?: string } = { targetId: "committed-target" }
+      const extension = yield* Effect.promise(() => connectRespondingExtension(relay.url, options))
+      const closed = waitForClose(extension)
+      try {
+        extension.send(JSON.stringify({ method: "hello", params: { version: "0.0.24", protocolVersion: extensionProtocolVersion } }))
+        extension.send(JSON.stringify({ method: "debugger.attached", params: { tabId: 7 } }))
+        const committed = yield* Effect.promise(() => waitForStatus(relay.url, (candidate) => candidate.activeTargets === 1))
+        expect(committed.connected).toBe(false)
+
+        if (failure === "rpc") options.error = "Debugger is not attached to the tab with id: 7"
+        else delete options.targetId
+        extension.send(JSON.stringify({ method: "debugger.detached", params: { tabId: 7, reason: "target_closed" } }))
+        if (settledBeforeReady) {
+          yield* Effect.promise(() => waitFor(() => error.mock.calls.length >= 3))
+          yield* Effect.promise(() => new Promise<void>((resolve) => setImmediate(resolve)))
+        }
+        extension.send(JSON.stringify({ method: "ready" }))
+
+        const status = yield* Effect.promise(() => waitForStatus(relay.url, (candidate) => candidate.connected || candidate.activeTargets === 0))
+        expect(status).toMatchObject({ connected: false, activeTargets: 0 })
+        expect(yield* Effect.promise(() => closed)).toBe(1011)
+        expect(error).toHaveBeenCalled()
+        if (failure === "rpc") {
+          expect(error.mock.calls.some((call) => call[1] instanceof Error && call[1].message === options.error)).toBe(true)
+        }
+        expect(extension.commands.some((command) => command.method === "tabs.remove" || command.method === "debugger.detach")).toBe(false)
+      } finally {
+        extension.close()
+      }
+    })))
+  })
+  it("keeps an active browser's targets and CDP connection when another browser connects", async () => {
+    const port = 24_000 + Math.floor(Math.random() * 10_000)
+    await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
+      const relay = yield* startRelay({ port, sessionCatalogPath: null })
+      const firstOptions: { targetId: string; suspendedMethod?: ExtensionCommand["method"] } = { targetId: "active-target" }
+      const first = yield* Effect.promise(() => connectRespondingExtension(relay.url, firstOptions))
+      let second: WebSocket | undefined
+      let client: Awaited<ReturnType<typeof connectCdpClient>> | undefined
+      try {
+        first.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: extensionProtocolVersion } }))
+        first.send(JSON.stringify({ method: "debugger.attached", params: { tabId: 7 } }))
+        first.send(JSON.stringify({ method: "ready" }))
+        yield* Effect.promise(() => waitForStatus(relay.url, (status) => status.connected && status.activeTargets === 1))
+        client = yield* Effect.promise(() => connectCdpClient(relay.url))
+        yield* Effect.promise(() => sendCdp(client!, { id: 1, method: "Target.setAutoAttach", params: { autoAttach: true, waitForDebuggerOnStart: false, flatten: true } }))
+        const attached = client.events.find((event) => event.method === "Target.attachedToTarget")
+        const sessionId = attached?.params?.sessionId as string
+        expect(sessionId).toBeTypeOf("string")
+
+        firstOptions.suspendedMethod = "debugger.sendCommand"
+        const evaluation = () => first.commands.find((command) => command.params?.method === "Runtime.evaluate"
+          && (command.params.params as { expression?: string } | undefined)?.expression === "1 + 1")
+        const pending = sendCdp(client, { id: 2, method: "Runtime.evaluate", sessionId, params: { expression: "1 + 1" } }).then(() => true, () => false)
+        yield* Effect.promise(() => waitFor(() => evaluation() !== undefined))
+
+        for (let attempt = 0; attempt < 3; attempt++) {
+          second = yield* Effect.promise(() => connectExtension(relay.url))
+          let rejectedCode: number | undefined
+          second.once("close", (code) => { rejectedCode = code })
+          second.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: extensionProtocolVersion } }))
+          second.send(JSON.stringify({ method: "debugger.attached", params: { tabId: 7 } }))
+          second.send(JSON.stringify({ method: "ready" }))
+          yield* Effect.promise(() => waitFor(() => rejectedCode !== undefined))
+          expect(rejectedCode).toBe(4004)
+        }
+
+        expect(first.readyState).toBe(WebSocket.OPEN)
+        expect(client.events.some((event) => event.method === "Target.detachedFromTarget")).toBe(false)
+        first.respond(evaluation()!)
+        expect(yield* Effect.promise(() => pending)).toBe(true)
+        const status = yield* Effect.promise(() => fetch(`${relay.url}/extension/status`).then((response) => response.json()))
+        expect(status).toMatchObject({ connected: true, activeTargets: 1, rejectedConnections: 3 })
+      } finally {
+        client?.close()
+        second?.close()
+        first.close()
+      }
+    })))
+  })
+  it("settles an accepted CDP command before closing the relay", async () => {
+    const port = 24_000 + Math.floor(Math.random() * 10_000)
+    await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
+      const relay = yield* startRelay({ port, sessionCatalogPath: null })
+      const firstOptions: { targetId: string; suspendedMethod?: ExtensionCommand["method"] } = { targetId: "active-target" }
+      const first = yield* Effect.promise(() => connectRespondingExtension(relay.url, firstOptions))
+      let second: WebSocket | undefined
+      let client: Awaited<ReturnType<typeof connectCdpClient>> | undefined
+      try {
+        first.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: extensionProtocolVersion } }))
+        first.send(JSON.stringify({ method: "debugger.attached", params: { tabId: 7 } }))
+        first.send(JSON.stringify({ method: "ready" }))
+        yield* Effect.promise(() => waitForStatus(relay.url, (status) => status.connected && status.activeTargets === 1))
+        client = yield* Effect.promise(() => connectCdpClient(relay.url))
+        yield* Effect.promise(() => sendCdp(client!, { id: 1, method: "Target.setAutoAttach", params: { autoAttach: true, waitForDebuggerOnStart: false, flatten: true } }))
+        const attached = client.events.find((event) => event.method === "Target.attachedToTarget")
+        const sessionId = attached?.params?.sessionId as string
+        expect(sessionId).toBeTypeOf("string")
+
+        firstOptions.suspendedMethod = "debugger.sendCommand"
+        const evaluation = () => first.commands.find((command) => command.params?.method === "Runtime.evaluate"
+          && (command.params.params as { expression?: string } | undefined)?.expression === "1 + 1")
+        const pending = sendCdp(client, { id: 2, method: "Runtime.evaluate", sessionId, params: { expression: "1 + 1" } }).then(() => true, () => false)
+        yield* Effect.promise(() => waitFor(() => evaluation() !== undefined))
+
+        let closed = false
+        const closing = Effect.runPromise(relay.close()).then(() => { closed = true })
+        yield* Effect.promise(() => new Promise<void>((resolve) => setImmediate(resolve)))
+        expect(closed).toBe(false)
+        expect(first.readyState).toBe(WebSocket.OPEN)
+        first.respond(evaluation()!)
+        expect(yield* Effect.promise(() => pending)).toBe(true)
+        yield* Effect.promise(() => closing)
+        expect(closed).toBe(true)
+      } finally {
+        client?.close()
+        second?.close()
+        first.close()
+      }
+    })))
+  })
+
   it("rejects pre-hello events and keeps them from mutating target state", async () => {
     const port = 24_000 + Math.floor(Math.random() * 10_000)
     await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
@@ -147,7 +299,7 @@ describe("relay extension handshake", () => {
     })))
   })
 
-  it("replaces the previous socket inventory before accepting a new ready event", async () => {
+  it("accepts a new browser after the previous connection closes", async () => {
     const port = 24_000 + Math.floor(Math.random() * 10_000)
     await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
       const relay = yield* startRelay({ port, sessionCatalogPath: null })
@@ -160,6 +312,10 @@ describe("relay extension handshake", () => {
       yield* Effect.promise(() => sendCdp(client, { id: 1, method: "Target.setAutoAttach", params: { autoAttach: true, waitForDebuggerOnStart: false, flatten: true } }))
       expect(client.events.some((event) => event.method === "Target.attachedToTarget")).toBe(true)
 
+      const closed = waitForClose(first)
+      first.close()
+      yield* Effect.promise(() => closed)
+      yield* Effect.promise(() => waitForStatus(relay.url, (candidate) => !candidate.connected))
       const second = yield* Effect.promise(() => connectExtension(relay.url))
       second.send(JSON.stringify({ method: "hello", params: { version: "0.0.23", protocolVersion: extensionProtocolVersion } }))
       second.send(JSON.stringify({ method: "ready" }))
@@ -189,7 +345,7 @@ describe("relay extension handshake", () => {
   })
 })
 
-type ExtensionStatus = { readonly connected: boolean; readonly activeTargets: number }
+type ExtensionStatus = { readonly connected: boolean; readonly activeTargets: number; readonly protocolCompatible?: boolean }
 type CdpMessage = CdpEvent | CdpResponse
 
 async function connectRespondingExtension(

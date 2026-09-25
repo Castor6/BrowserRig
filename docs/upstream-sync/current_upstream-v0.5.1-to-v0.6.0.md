@@ -54,7 +54,7 @@ reviewed implementation has actually landed on `main`.
 
 | Order | Outcome | State | Branch | BrowserRig PR | Independent review | Validation |
 | --- | --- | --- | --- | --- | --- | --- |
-| 01 | Runtime, session, target, and connection safety from v0.6.0 | Pending | `fix/upstream-v0.6.0-runtime-safety` | Pending | Pending | Pending |
+| 01 | Runtime, session, target, and connection safety from v0.6.0 | Pending | `fix/upstream-v0.6.0-runtime-safety` | [#46](https://github.com/Castor6/BrowserRig/pull/46) (draft) | Pending | See implementation evidence below |
 
 ### Batch 01: runtime and target safety
 
@@ -86,6 +86,46 @@ Required validation: typecheck, unit tests, CLI build, focused lifecycle/CDP
 smokes, and the full smoke set before claiming cycle-wide browser validation.
 Extension changes additionally require the extension build, both package
 Changesets, and a Brave reload. Report environmental blockers accurately.
+
+## Batch 01 implementation evidence (not merged)
+
+The draft PR manually adapts the approved safety outcomes. The batch remains
+`Pending`; independent review and explicit merge approval are outstanding.
+
+| Selected outcome | Implementation / evidence |
+| --- | --- |
+| Preserve the active connection and bound liveness recovery (`6bda258`) | `ExtensionRpc.probeLiveness` removes its timer and pong listener on every exit; relay rejects contenders with 4004 and exposes `rejectedConnections` through the shared schema, CLI, and doctor. `extension-rpc`, `doctor`, and `relay-extension-handshake` regressions cover cancellation, pending RPC preservation, repeated contenders, compatible pre-ready handshakes, and reconnect after closure. |
+| Exact session-instance callbacks (#69) | The sandbox factory receives a callback captured by its session object. `updateTarget` rejects stale object identities. `session-manager` tests cover reset/recreate, late old-sandbox callbacks, failed adoption rollback, and persistence. |
+| Nested staged children and aliases (#69) | `TargetRegistry` discovers the complete preserved subtree before removing old children; child replacement recursively retires descendants. Relay detaches descendant announcements and aliases before parents. `target-registry`, `relay-child-dedupe`, `cdp-router`, and `cdp-runtime` cover generations and routing. Existing root aliases continue to omit a Chrome child session id. |
+| Catalog durability (#69) | Directory open/sync failures propagate after rename, with independent temporary-file cleanup. `session-catalog` fault injection covers temporary open, partial write, file sync, rename, directory open/sync, and cleanup close failures. |
+| Healthy named roots and fail-closed readiness (#70) | Named root selection excludes crashed owned roots without falling back to unrelated tabs. Raw ambiguity remains strict. Exhausted/malformed root probes fail reconciliation; completed failures remain visible when ready arrives later. `cdp-router` and `relay-extension-handshake` regressions cover these cases. |
+| Generation-bound Runtime recovery (#69) | The small `CdpRuntime` module captures extension/root/child identity and checks client routing before delayed reset commands. Tests cover root and child aliases, context/ACK order, cancellation, ownership loss, replacement, and idle generation changes. |
+| Selected-page handoff (#69) | Already covered at the starting BrowserRig source by `waitForHandoffPageContext` in `src/execute.ts`: it evaluates the supplied page and validates the exact target before/after readiness. Existing `execute-lifecycle` tests cover secondary-page handoff, target-generation replacement, detach without fallback, and crash without unrelated recovery. No replacement handoff implementation was imported. |
+| Accepted-work settlement (#69) | `RelayWork` stops new transport admission and retains accepted HTTP/CDP work; pending session continuations can finish. Session workers retain leases through uncancellable browser operations, journal hooks, and catalog writes. Recording cancellation retains active state through RPC/file/encoder cleanup. Tests cover aborted callers, drain ordering, pending CDP completion before socket close, and recording finalization races. Existing automatic managed-relay selection and instance checks are unchanged. |
+| CLI defaults / dependency cohort | Already covered: `src/cli.ts` boolean flags carry explicit false defaults; `package.json` and the lockfile pin Effect and both Node platform packages to rc.111, with bundled executable runtimes. No dependency, candidate installer, explicit restart CLI, release identity, or WebMCP changes were imported. |
+
+Validation is recorded against the final implementation commit in PR #46.
+Typecheck, unit tests, CLI build, and isolated-browser smoke results are being
+completed before independent review. The first draft CI run exposed tests that
+still assumed a new profile replaces a live socket; these tests were updated to
+close the original connection explicitly and continue checking generation
+isolation. Ordinary restored-tab grouping remains best effort and does not block
+readiness.
+
+Environment: no `termctrl` executable/tool or Brave installation is available.
+The browser fixture uses cached Chromium in a fresh temporary profile with a
+copy of the built extension pointed at isolated relay port 21990. No existing
+browser profile is launched, closed, or modified. The initial Playwright-owned
+browser fixture encountered debugger ownership contention (the later #87 intake
+addresses inventory ownership); it was replaced by a directly launched isolated
+Chromium process without a remote-debugging connection. The first smoke command
+stopped at the build-identity preflight because it used a bundled relay with the
+source smoke harness; the corrected run uses the source relay. These preliminary
+failures are retained here rather than reported as passing browser cases.
+
+No extension source was changed. The extension was rebuilt for the isolated
+fixture; there is no Brave reload claim or extension Changeset requirement.
+The agent workflow skill and installed OpenCode copy are synchronized.
 
 ## Upstream dispositions
 

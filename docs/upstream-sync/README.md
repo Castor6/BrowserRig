@@ -18,7 +18,7 @@ branches or starting an agent.
 
 - **Latest completed upstream sync:** `v0.5.1` (completed 2026-08-28)
 - **Active cycle:** [`v0.5.1 -> v0.6.0`](current_upstream-v0.5.1-to-v0.6.0.md)
-- **Active cycle status:** implementation approved on 2026-09-25; preparing the runtime-safety batch for independent review
+- **Active cycle status:** runtime-safety PR #46 independently approved on 2026-09-25; awaiting explicit merge approval
 - **BrowserRig package version:** independent from the upstream sync cursor
 
 The user approved the six recommended outcome groups through `v0.8.2`, plus

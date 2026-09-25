@@ -1,7 +1,7 @@
 ---
 title: Upstream Sync v0.5.1 to v0.6.0
 description: Approved implementation scope, upstream dispositions, and review evidence for the next BrowserRig intake cycle.
-status: implementing
+status: awaiting-merge-approval
 upstream_from: v0.5.1
 upstream_to: v0.6.0
 target_checked: 2026-09-25
@@ -54,7 +54,7 @@ reviewed implementation has actually landed on `main`.
 
 | Order | Outcome | State | Branch | BrowserRig PR | Independent review | Validation |
 | --- | --- | --- | --- | --- | --- | --- |
-| 01 | Runtime, session, target, and connection safety from v0.6.0 | Pending | `fix/upstream-v0.6.0-runtime-safety` | [#46](https://github.com/Castor6/BrowserRig/pull/46) (draft) | Changes requested; correction awaiting fresh review | See implementation evidence below |
+| 01 | Runtime, session, target, and connection safety from v0.6.0 | Pending | `fix/upstream-v0.6.0-runtime-safety` | [#46](https://github.com/Castor6/BrowserRig/pull/46) | Approve on 2026-09-25 at `1c337b7` after the review correction | Typecheck, 704 unit tests, builds/package, 23 baseline and 10 correction smoke cases; see exact commits below |
 
 ### Batch 01: runtime and target safety
 
@@ -89,8 +89,17 @@ Changesets, and a Brave reload. Report environmental blockers accurately.
 
 ## Batch 01 implementation evidence (not merged)
 
-The draft PR manually adapts the approved safety outcomes. The batch remains
-`Pending`; independent review and explicit merge approval are outstanding.
+The PR manually adapts the approved safety outcomes. The batch remains
+`Pending` until explicit merge approval and landing on `main`.
+
+A fresh independent reviewer approved `1c337b78b73e5893f421a0f2c1f97ba2f22e7c83`
+on 2026-09-25 after independently checking the complete change and the retired-tab
+revision correction. The reviewer ran 223 tests across 11 focused files and
+verified the final code's successful GitHub CI (run `36114491605`: typecheck,
+704 unit tests, CLI/extension builds, and extension packaging). No actionable
+findings remain. The full 23-case smoke evidence belongs to `e39eaa0`; the
+correction additionally passed 10 targeted browser cases. No final-HEAD full
+smoke rerun is claimed. This ledger-only update does not change the reviewed code.
 
 | Selected outcome | Implementation / evidence |
 | --- | --- |

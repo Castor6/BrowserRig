@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  pngjs@7.0.0: 8cf0baa92609aa7935ec5fc87f3054f1a630bd24675cc6a5ddc6fadee58d7222
+
 importers:
 
   .:
@@ -21,8 +24,8 @@ importers:
         specifier: ^1.62.1
         version: 1.62.1
       pngjs:
-        specifier: ^7.0.0
-        version: 7.0.0
+        specifier: 7.0.0
+        version: 7.0.0(patch_hash=8cf0baa92609aa7935ec5fc87f3054f1a630bd24675cc6a5ddc6fadee58d7222)
       ws:
         specifier: ^8.21.3
         version: 8.21.3
@@ -2287,11 +2290,11 @@ snapshots:
 
   pixelmatch@7.2.0:
     dependencies:
-      pngjs: 7.0.0
+      pngjs: 7.0.0(patch_hash=8cf0baa92609aa7935ec5fc87f3054f1a630bd24675cc6a5ddc6fadee58d7222)
 
   playwright-core@1.62.1: {}
 
-  pngjs@7.0.0: {}
+  pngjs@7.0.0(patch_hash=8cf0baa92609aa7935ec5fc87f3054f1a630bd24675cc6a5ddc6fadee58d7222): {}
 
   postcss@8.5.16:
     dependencies:

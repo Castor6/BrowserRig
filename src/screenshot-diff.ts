@@ -105,6 +105,11 @@ function validatePngStructure(buffer: Buffer): void {
   let offset = pngSignature.length
   let sawData = false
   let endedData = false
+  let paletteEntries = 0
+  let sawTransparency = false
+  let sawGamma = false
+  let color = 0
+  let depth = 0
   const invalid = () => new Error("Invalid screenshot PNG structure")
   while (offset < buffer.length) {
     if (buffer.length - offset < 12) throw invalid()
@@ -120,13 +125,35 @@ function validatePngStructure(buffer: Buffer): void {
       if (type !== 0x49484452 || length !== 13) throw invalid() // IHDR
       const width = buffer.readUInt32BE(offset + 8)
       const height = buffer.readUInt32BE(offset + 12)
+      depth = buffer[offset + 16]!
+      color = buffer[offset + 17]!
+      const depths = color === 0 ? [1, 2, 4, 8, 16] : color === 3 ? [1, 2, 4, 8] : [8, 16]
+      if (![0, 2, 3, 4, 6].includes(color) || !depths.includes(depth) ||
+          buffer[offset + 18] !== 0 || buffer[offset + 19] !== 0 || buffer[offset + 20]! > 1) throw invalid()
       if (width === 0 || height === 0 || width * height > maxImagePixels) {
         throw new Error("Screenshot exceeds the 16 megapixel comparison limit")
       }
     } else if (type === 0x49484452) {
       throw invalid()
     }
+    if (type === 0x504c5445) { // PLTE: PNGJS otherwise accumulates one JS array per entry.
+      if (paletteEntries || sawData || sawTransparency || color === 0 || color === 4 ||
+          length === 0 || length % 3 !== 0 || length > 768 ||
+          (color === 3 && length / 3 > 2 ** depth)) throw invalid()
+      paletteEntries = length / 3
+    }
+    if (type === 0x74524e53) { // tRNS
+      if (sawTransparency || sawData ||
+          !(color === 0 ? length === 2 : color === 2 ? length === 6 :
+            color === 3 && paletteEntries > 0 && length > 0 && length <= paletteEntries)) throw invalid()
+      sawTransparency = true
+    }
+    if (type === 0x67414d41) { // gAMA
+      if (sawGamma || sawData || paletteEntries || length !== 4) throw invalid()
+      sawGamma = true
+    }
     if (type === 0x49444154) { // IDAT
+      if (color === 3 && paletteEntries === 0) throw invalid()
       if (endedData) throw invalid()
       sawData = true
     } else if (sawData) {
@@ -139,6 +166,7 @@ function validatePngStructure(buffer: Buffer): void {
     offset = end
   }
   // Require a complete terminal IEND before PNGJS can inflate or allocate pixels.
-  // PNGJS remains responsible for CRCs, supported color modes and image data.
+  // PNGJS remains responsible for CRCs and image data. Its pinned patch bounds
+  // inflate by exact scanline bytes and avoids per-row / per-IDAT retained arrays.
   throw invalid()
 }

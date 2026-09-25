@@ -22,3 +22,5 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-tools@0.1.1-rc.2'
   - '@deepseek-ai/dsh-typert-protocol@0.1.1-rc.2'
   - '@deepseek-ai/dsh-user-approval@0.1.1-rc.2'
+patchedDependencies:
+  pngjs@7.0.0: patches/pngjs@7.0.0.patch

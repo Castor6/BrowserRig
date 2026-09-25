@@ -1,0 +1,92 @@
+diff --git a/lib/filter-parse-sync.js b/lib/filter-parse-sync.js
+index 6924d16101c6b19d90ff9504917ff4d818284227..bf03c78a98d0b8eaa253023ea32cef1e626443ef 100644
+--- a/lib/filter-parse-sync.js
++++ b/lib/filter-parse-sync.js
+@@ -4,12 +4,16 @@ let SyncReader = require("./sync-reader");
+ let Filter = require("./filter-parse");
+ 
+ exports.process = function (inBuffer, bitmapInfo) {
+-  let outBuffers = [];
++  // The filtered input bounds the unfiltered bytes. Do not retain a JS buffer
++  // object for every row in a tall image.
++  let output = Buffer.allocUnsafe(inBuffer.length);
++  let offset = 0;
+   let reader = new SyncReader(inBuffer);
+   let filter = new Filter(bitmapInfo, {
+     read: reader.read.bind(reader),
+     write: function (bufferPart) {
+-      outBuffers.push(bufferPart);
++      bufferPart.copy(output, offset);
++      offset += bufferPart.length;
+     },
+     complete: function () {},
+   });
+@@ -17,5 +21,5 @@ exports.process = function (inBuffer, bitmapInfo) {
+   filter.start();
+   reader.process();
+ 
+-  return Buffer.concat(outBuffers);
++  return output.subarray(0, offset);
+ };
+diff --git a/lib/parser-sync.js b/lib/parser-sync.js
+index 76cb134b79ddadb5fc58bfed996abdfbee593946..68578e59a2b4a7b9dbbead8b7ec498f5350f6a86 100644
+--- a/lib/parser-sync.js
++++ b/lib/parser-sync.js
+@@ -2,7 +2,7 @@
+ 
+ let hasSyncZlib = true;
+ let zlib = require("zlib");
+-let inflateSync = require("./sync-inflate");
++let interlaceUtils = require("./interlace");
+ if (!zlib.deflateSync) {
+   hasSyncZlib = false;
+ }
+@@ -46,9 +46,12 @@ module.exports = function (buffer, options) {
+     gamma = _gamma_;
+   }
+ 
+-  let inflateDataList = [];
++  // Bound compressed storage by the input, without one retained object per IDAT.
++  let inflateData = Buffer.allocUnsafe(buffer.length);
++  let compressedLength = 0;
+   function handleInflateData(inflatedData) {
+-    inflateDataList.push(inflatedData);
++    inflatedData.copy(inflateData, compressedLength);
++    compressedLength += inflatedData.length;
+   }
+ 
+   let reader = new SyncReader(buffer);
+@@ -71,21 +74,18 @@ module.exports = function (buffer, options) {
+     throw err;
+   }
+ 
+-  //join together the inflate datas
+-  let inflateData = Buffer.concat(inflateDataList);
+-  inflateDataList.length = 0;
+-
+-  let inflatedData;
+-  if (metaData.interlace) {
+-    inflatedData = zlib.inflateSync(inflateData);
+-  } else {
+-    let rowSize =
+-      ((metaData.width * metaData.bpp * metaData.depth + 7) >> 3) + 1;
+-    let imageSize = rowSize * metaData.height;
+-    inflatedData = inflateSync(inflateData, {
+-      chunkSize: imageSize,
+-      maxLength: imageSize,
+-    });
++  // Apply the exact scanline bound to both ordinary and Adam7 images before
++  // zlib expands any data. Include one filter byte for every nonempty pass row.
++  let passes = metaData.interlace
++    ? interlaceUtils.getImagePasses(metaData.width, metaData.height)
++    : [{ width: metaData.width, height: metaData.height }];
++  let imageSize = passes.reduce((size, pass) => size +
++    (Math.ceil(pass.width * metaData.bpp * metaData.depth / 8) + 1) * pass.height, 0);
++  let inflatedData = zlib.inflateSync(inflateData.subarray(0, compressedLength), {
++    maxOutputLength: imageSize,
++  });
++  if (inflatedData.length !== imageSize) {
++    throw new Error("Invalid PNG scanline length");
+   }
+   inflateData = null;
+ 

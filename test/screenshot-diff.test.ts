@@ -1,7 +1,7 @@
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { crc32, deflateSync } from "node:zlib"
+import zlib, { crc32, deflateSync } from "node:zlib"
 import { PNG } from "pngjs"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { createScreenshotDiff } from "../src/screenshot-diff.ts"
@@ -43,6 +43,64 @@ function png(...chunks: Buffer[]): Buffer {
 }
 
 describe("screenshotDiff", () => {
+  it("bounds interlaced inflation before expanding an overlong stream", async () => {
+    const baseline = png(header(1, 1, { depth: 8, color: 6, interlace: 1 }),
+      chunk("IDAT", deflateSync(Buffer.alloc(4 * 1024 * 1024))), chunk("IEND", Buffer.alloc(0)))
+    const inflate = vi.spyOn(zlib, "inflateSync")
+    const screenshot = vi.fn(async () => image())
+    await expect(createScreenshotDiff({ screenshot })({ baseline })).rejects.toThrow()
+    expect(inflate).toHaveBeenCalledWith(expect.any(Buffer), expect.objectContaining({ maxOutputLength: 5 }))
+    expect(inflate.mock.results[0]?.type).toBe("throw")
+    expect(screenshot).not.toHaveBeenCalled()
+  })
+
+  it.each(["oversized", "duplicate", "partial entry", "depth overflow", "after data"])("rejects %s palettes before PNGJS allocation", async kind => {
+    const palette = chunk("PLTE", Buffer.alloc(kind === "oversized" ? 3 * 1024 : kind === "partial entry" ? 4 : kind === "depth overflow" ? 9 : 3))
+    const data = chunk("IDAT", deflateSync(Buffer.from([0, 0])))
+    const baseline = png(header(1, 1, { depth: kind === "depth overflow" ? 1 : 8, color: 3, interlace: 0 }),
+      ...(kind === "after data" ? [data, palette] : [palette, ...(kind === "duplicate" ? [palette] : []), data]), chunk("IEND", Buffer.alloc(0)))
+    const screenshot = vi.fn(async () => image())
+    const decode = vi.spyOn(PNG.sync, "read").mockImplementation(() => { throw new Error("unsafe decoder reached") })
+    await expect(createScreenshotDiff({ screenshot })({ baseline })).rejects.toThrow("PNG structure")
+    expect(decode).not.toHaveBeenCalled()
+    expect(screenshot).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [0, 1], [0, 2], [0, 4], [0, 8], [0, 16], [2, 8], [2, 16],
+    [3, 1], [3, 2], [3, 4], [3, 8], [4, 8], [4, 16], [6, 8], [6, 16],
+  ])("bounds all Adam7 passes for color %s depth %s while preserving valid images", async (color, depth) => {
+    const channels = color === 2 ? 3 : color === 4 ? 2 : color === 6 ? 4 : 1
+    // Independently enumerated pass dimensions for a 9x9 image (all seven passes).
+    const passes = [[2, 2], [1, 2], [3, 1], [2, 3], [5, 2], [4, 5], [9, 4]]
+    const bytes = passes.reduce((total, [width, height]) => total + (Math.ceil(width! * channels * depth! / 8) + 1) * height!, 0)
+    const make = (extra: number) => png(header(9, 9, { color: color!, depth: depth!, interlace: 1 }),
+      ...(color === 3 ? [chunk("PLTE", Buffer.from([255, 0, 0])), chunk("tRNS", Buffer.from([128]))] : []),
+      chunk("IDAT", deflateSync(Buffer.alloc(bytes + extra))), chunk("IEND", Buffer.alloc(0)))
+    const baseline = make(0)
+    const inflate = vi.spyOn(zlib, "inflateSync")
+    expect(await createScreenshotDiff({ screenshot: async () => baseline })({ baseline })).toMatchObject({ matches: true, width: 9, height: 9 })
+    expect(inflate).toHaveBeenCalledWith(expect.any(Buffer), expect.objectContaining({ maxOutputLength: bytes }))
+    const screenshot = vi.fn(async () => baseline)
+    await expect(createScreenshotDiff({ screenshot })({ baseline: make(1) })).rejects.toThrow()
+    await expect(createScreenshotDiff({ screenshot })({ baseline: make(-1) })).rejects.toThrow("scanline length")
+    expect(screenshot).not.toHaveBeenCalled()
+  })
+
+  it("also rejects excess noninterlaced scanlines before taking a screenshot", async () => {
+    const baseline = png(header(1, 1), chunk("IDAT", deflateSync(Buffer.alloc(6))), chunk("IEND", Buffer.alloc(0)))
+    const screenshot = vi.fn(async () => image())
+    await expect(createScreenshotDiff({ screenshot })({ baseline })).rejects.toThrow()
+    expect(screenshot).not.toHaveBeenCalled()
+  })
+
+  it.each([0, 1, 2, 3, 4])("preserves PNG filter %s on tall images without retaining every row", async filterType => {
+    const original = new PNG({ width: 1, height: 4096 })
+    original.data.fill(173)
+    const baseline = PNG.sync.write(original, { filterType })
+    expect(await createScreenshotDiff({ screenshot: async () => baseline })({ baseline })).toMatchObject({ matches: true, height: 4096 })
+  })
+
   it.each([false, true])("rejects a second oversized IHDR before decoding (after IDAT: %s)", async afterData => {
     const ihdr = header(1, 1)
     const oversized = header(4097, 4096)

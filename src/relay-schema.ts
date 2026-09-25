@@ -62,6 +62,7 @@ export const ExecuteRequest = Schema.Struct({
   code: Schema.String,
   createIfMissing: Schema.Boolean,
   targetSelection: Schema.optionalKey(TargetSelection),
+  // Legacy per-call opt-out: omitted/true enables discovery; false disables it.
   experimentalWebMcp: Schema.optionalKey(Schema.Boolean),
 })
 

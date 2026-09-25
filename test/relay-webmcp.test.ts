@@ -18,7 +18,7 @@ describe("relay WebMCP bridge", () => {
         factories.set(id, this.options.createWebMcp!)
         const collector = this.options.createWebMcp!(targetId)
         collectors.set(id, collector)
-        expect(options?.experimentalWebMcp).toBe(true)
+        expect(options?.experimentalWebMcp).toBeUndefined()
         await collector.start()
         return {
           text: "ready", isError: false, logs: [], warnings: [],
@@ -39,7 +39,7 @@ describe("relay WebMCP bridge", () => {
           const result = yield* Effect.promise(async () => {
             const response = await fetch(`${relay.url}/cli/execute`, {
               method: "POST", headers: { "content-type": "application/json" },
-              body: JSON.stringify({ sessionId: id, code: targetId, createIfMissing: true, experimentalWebMcp: true }),
+              body: JSON.stringify({ sessionId: id, code: targetId, createIfMissing: true }),
             })
             expect(response.status).toBe(200)
             return await response.json() as { webmcp: { tools: { name: string }[] } }

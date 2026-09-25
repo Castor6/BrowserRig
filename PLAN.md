@@ -429,16 +429,17 @@ reconciles existing client announcements, browser grouping, and page status.
   channel. MCP emits native image attachments without temporary files or
   duplicated base64 metadata.
 
-### Experimental WebMCP
+### Native WebMCP
 
 - Keep automatic WebMCP discovery scoped to the session page selected by the
   agent for the user's task. Exclude browser-wide discovery from v1 to avoid
   adding unrelated tool definitions to the agent's context and consuming
   unnecessary tokens.
-- Opt in with `BROWSERRIG_EXPERIMENTAL_WEBMCP=true` in the calling CLI, MCP,
-  or DSH environment. Each execute request carries the resolved boolean to
-  the relay; an omitted flag is off. The setting is not read from the shared
-  relay's startup environment or persisted in the session catalog.
+- Enable discovery by default in the shared execute path for CLI, MCP, DSH,
+  and SDK callers, including reused relays. Do not read an environment toggle.
+  Retain the deprecated `experimentalWebMcp` API/wire field for compatibility:
+  omitted/true enables discovery; explicit false opts out for that call only.
+  It is not persisted in the session catalog.
 - Automatically discover native WebMCP tools on the current session-owned
   page. Tools in unrelated open or merely attached tabs are not collected.
   Existing user tabs must be adopted before using the helpers.

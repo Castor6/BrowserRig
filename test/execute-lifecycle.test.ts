@@ -13,23 +13,42 @@ import { BrowserRigSessions } from "../src/session-manager.ts"
 import { WebMcpSession, type WebMcpEvent } from "../src/webmcp.ts"
 
 describe("execute lifecycle", () => {
-  it("only discovers WebMCP when the current request opts in and expires saved helpers", async () => {
+  it("discovers tools by default across ordinary executions and expires saved helpers", async () => {
     const f = makeWebMcpSandboxFixture()
-    const disabled = await Effect.runPromise(f.sandbox.execute("return typeof webmcp.call"))
-    expect(disabled).toMatchObject({ isError: false, value: "function" })
-    expect(disabled.webmcp).toBeUndefined()
-    expect(f.create).not.toHaveBeenCalled()
-    const enabled = await Effect.runPromise(f.sandbox.execute("state.oldWebMcp = webmcp; return 42", { experimentalWebMcp: true }))
-    expect(enabled.webmcp).toMatchObject({ status: "available", totalTools: 1, changed: true })
-    const expired = await Effect.runPromise(f.sandbox.execute("state.oldWebMcp.list()", { experimentalWebMcp: true }))
+    const first = await Effect.runPromise(f.sandbox.execute("state.oldWebMcp = webmcp; return 42"))
+    expect(first).toMatchObject({ isError: false, value: 42, webmcp: { status: "available", totalTools: 1, changed: true } })
+    const repeated = await Effect.runPromise(f.sandbox.execute("return typeof webmcp.call"))
+    expect(repeated).toMatchObject({ isError: false, value: "function", webmcp: { changed: false } })
+    expect(repeated.webmcp?.tools).toBeUndefined()
+    expect(f.create).toHaveBeenCalledTimes(1)
+    const expired = await Effect.runPromise(f.sandbox.execute("state.oldWebMcp.list()"))
     expect(expired.isError).toBe(true)
     expect(expired.text).toContain("finished execute")
     expect(expired.webmcp).toMatchObject({ changed: false })
-    const off = await Effect.runPromise(f.sandbox.execute("webmcp.list()"))
+    const off = await Effect.runPromise(f.sandbox.execute("webmcp.list()", { experimentalWebMcp: false }))
     expect(off.isError).toBe(true)
-    expect(off.text).toContain("BROWSERRIG_EXPERIMENTAL_WEBMCP=true")
+    expect(off.text).toContain("legacy experimentalWebMcp option")
     expect(off.webmcp).toBeUndefined()
     expect(f.listeners.size).toBe(0)
+    const resumed = await Effect.runPromise(f.sandbox.execute("return 43"))
+    expect(resumed).toMatchObject({ isError: false, value: 43, webmcp: { status: "available", totalTools: 1, changed: true } })
+  })
+
+  it("keeps ordinary execution available when native WebMCP is unsupported", async () => {
+    const f = makeWebMcpSandboxFixture(false, false, true)
+    const result = await Effect.runPromise(f.sandbox.execute("return 42"))
+    expect(result).toMatchObject({ isError: false, value: 42, webmcp: { status: "unsupported", totalTools: 0 } })
+  })
+
+  it("discovers by default in read-only sessions but rejects invocation", async () => {
+    const f = makeWebMcpSandboxFixture(false, true)
+    const invoked = vi.fn()
+    f.onInvoke = invoked
+    const result = await Effect.runPromise(f.sandbox.execute("const tool = (await webmcp.list()).tools[0]; return webmcp.call(tool.id)"))
+    expect(result.isError).toBe(true)
+    expect(result.text).toContain("read-only")
+    expect(result.webmcp).toMatchObject({ status: "available", totalTools: 1 })
+    expect(invoked).not.toHaveBeenCalled()
   })
 
   it.each([false, true])("waits for unawaited WebMCP calls before finishing (script failure: %s)", async (failScript) => {
@@ -42,7 +61,7 @@ describe("execute lifecycle", () => {
       const tool = (await webmcp.list()).tools[0];
       webmcp.call(tool.id, {});
       ${failScript ? 'throw new Error("script failed")' : 'return "script returned"'}
-    `, { experimentalWebMcp: true })).then((value) => { settled = true; return value })
+    `)).then((value) => { settled = true; return value })
     await started
     await Promise.resolve()
     expect(settled).toBe(false)
@@ -66,7 +85,7 @@ describe("execute lifecycle", () => {
         return "resolved"
       },
     })
-    const result = await Effect.runPromise(f.sandbox.execute("const tool = (await webmcp.list()).tools[0]; return webmcp.call(tool.id)", { experimentalWebMcp: true }))
+    const result = await Effect.runPromise(f.sandbox.execute("const tool = (await webmcp.list()).tools[0]; return webmcp.call(tool.id)"))
     expect(result).toMatchObject({ isError: false, value: { status: "Completed", output: "submitted" }, aftermath: { handoffs: 1 } })
     expect(order).toEqual(["handoff", "invoke"])
   })
@@ -600,13 +619,14 @@ function makeAdoptedBrowserFixture(options: {
   return { browser, newPageCalls: () => newPageCalls }
 }
 
-function makeWebMcpSandboxFixture(manualSubmit = false) {
+function makeWebMcpSandboxFixture(manualSubmit = false, readOnly = false, unsupported = false) {
   const browser = makeAdoptedBrowserFixture({ targetId: "webmcp-target", targetUrl: "https://example.test/tools" })
   const listeners = new Set<(event: WebMcpEvent) => void>()
   const emit = (event: WebMcpEvent) => { for (const listener of listeners) listener(event) }
   const f = { onInvoke: () => {} }
   const create = vi.fn((targetId: string) => new WebMcpSession(targetId, {
     send: async (method) => {
+      if (method === "WebMCP.enable" && unsupported) throw new Error("WebMCP.enable was not found")
       if (method === "WebMCP.enable") emit({ method: "WebMCP.toolsAdded", params: { tools: [{
         name: "search", frameId: "main", inputSchema: { type: "object" },
         ...(manualSubmit ? { backendNodeId: 1 } : {}),
@@ -616,7 +636,7 @@ function makeWebMcpSandboxFixture(manualSubmit = false) {
     },
     subscribe: (listener) => { listeners.add(listener); return () => { listeners.delete(listener) } },
     childSessions: () => [],
-  }))
+  }, readOnly))
   const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:0", sessionId: "alpha", createWebMcp: create })
   Object.assign(sandbox, { browser: browser.browser })
   return Object.assign(f, { sandbox, create, listeners, emit })

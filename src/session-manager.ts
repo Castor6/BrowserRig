@@ -409,6 +409,7 @@ export class BrowserRigSessions {
     readonly code: string
     readonly createIfMissing: boolean
     readonly targetSelection?: ExecuteTargetSelection
+    /** @deprecated Discovery is enabled by default. Explicit false opts out for this call only. */
     readonly experimentalWebMcp?: boolean
   }): Effect.Effect<{ readonly result: ExecuteResult; readonly session: SessionSummary & { readonly created?: boolean } }, Error> {
     const manager = this

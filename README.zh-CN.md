@@ -215,13 +215,12 @@ DSH Bundle 是 BrowserRig 之上的轻量原生适配器，而不是第二个浏
 绑定。它同样不会重复提供点击、填写和导航等微型工具层。直接使用 CLI、MCP 和库
 的用户仍然独立于 DSH。
 
-## 实验性 WebMCP
+## 原生 WebMCP
 
-在调用 BrowserRig 的智能体环境中启用原生网站工具发现（默认关闭）：
-
-```bash
-export BROWSERRIG_EXPERIMENTAL_WEBMCP=true
-```
+原生网站工具发现默认开启，CLI、MCP、DSH 和 SDK 的普通执行无需环境开关。
+同一个运行中的 relay 上的后续调用也自动发现工具。已弃用的 API 字段
+`experimentalWebMcp` 保持兼容：省略或 `true` 开启，显式 `false` 仅关闭本次
+调用的发现。旧环境变量不再读取。
 
 原生 WebMCP 需要兼容的 Chrome，以及已启用该功能的网站。网站如果配置了有效的
 [Origin Trial 试用凭证](https://developer.chrome.com/docs/ai/webmcp)，用户无需

@@ -237,13 +237,11 @@ out of version, and ambient CLI session or target selectors cannot override the
 DSH task binding. There is also no duplicate click/fill/navigation micro-tool
 layer. Direct CLI, MCP, and library users remain independent of DSH.
 
-## Experimental WebMCP
+## Native WebMCP
 
-Enable native website tool discovery in the environment of the agent calling
-BrowserRig (off by default):
+Native website tool discovery is enabled by default in every execute:
 
 ```bash
-export BROWSERRIG_EXPERIMENTAL_WEBMCP=true
 browserrig execute 'await page.goto("https://googlechromelabs.github.io/webmcp-tools/demos/pizza-maker/"); return page.title()'
 ```
 
@@ -260,10 +258,11 @@ const result = await webmcp.call(tool.id, { size: "Small" });
 return { result, size: await page.locator("#size-text").innerText() };
 ```
 
-Set the same environment variable in an MCP server's `env` configuration or
-before launching DSH. Each execute request carries its own setting, so it also
-works with an already-running shared relay. No additional MCP micro-tools or
-extension update is needed.
+CLI, MCP, DSH, and SDK executions use the same default, including subsequent
+calls on a running relay. No environment switch or extension update is needed.
+The deprecated API/wire field `experimentalWebMcp` remains compatible: omission
+or `true` enables discovery; explicit `false` opts out for that call only.
+The former environment variable is no longer read.
 
 Definitions are included automatically on first discovery and after changes.
 Unchanged responses carry `changed: false` without repeating the definitions.

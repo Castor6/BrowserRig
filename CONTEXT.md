@@ -77,8 +77,8 @@ _Avoid_: Temporary bridge, extension reload helper
 An experimental browser capability through which a website registers structured
 tools in its live document. BrowserRig discovers and invokes those tools through
 Chrome's native CDP domain and the existing extension transport, reusing the
-page's state and login. It is enabled by the calling agent's
-`BROWSERRIG_EXPERIMENTAL_WEBMCP` environment variable.
+page's state and login. Discovery is enabled by default for normal execute calls
+across CLI, MCP, DSH, and SDK; invocation remains explicit.
 _Avoid_: remote MCP server, backend `/mcp` endpoint, extension-hosted agent
 
 **WebMCP Tool Handle**:

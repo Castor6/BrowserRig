@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { ConfigProvider, Effect } from "effect"
 import { WebMcpSession, type WebMcpEvent, type WebMcpTransport } from "../src/webmcp.ts"
-import { experimentalWebMcpConfig } from "../src/webmcp-config.ts"
 import type { JsonObject } from "../src/protocol.ts"
 
 const tool = (name = "search", frameId = "main", extra: JsonObject = {}) => ({
@@ -31,16 +29,6 @@ function fixture(initialTools: JsonObject[] = [tool()], children: string[] = [],
 afterEach(() => vi.useRealTimers())
 
 describe("native WebMCP", () => {
-  it("is opt-in in the caller's configuration", async () => {
-    for (const [value, expected] of [[undefined, false], ["true", true], ["false", false]] as const) {
-      const config = ConfigProvider.fromUnknown(value === undefined ? {} : { BROWSERRIG_EXPERIMENTAL_WEBMCP: value })
-      expect(await Effect.runPromise(experimentalWebMcpConfig.pipe(Effect.provideService(ConfigProvider.ConfigProvider, config)))).toBe(expected)
-    }
-    await expect(Effect.runPromise(experimentalWebMcpConfig.pipe(Effect.provideService(
-      ConfigProvider.ConfigProvider, ConfigProvider.fromUnknown({ BROWSERRIG_EXPERIMENTAL_WEBMCP: "oops" }),
-    )))).rejects.toThrow()
-  })
-
   it("discovers full definitions, reports changes once, and does not expose mutable registry entries", async () => {
     const f = fixture()
     await f.session.start()

@@ -4,7 +4,7 @@ import { makeToolSpecs, mcpErrorMessage, mcpToolRequiresRelayCompatibility, pars
 import type * as RelayClient from "../src/relay-client.ts"
 
 describe("MCP tool results", () => {
-  it("passes WebMCP opt-in from the MCP environment to the shared relay", async () => {
+  it("uses default WebMCP discovery without reading a legacy environment switch", async () => {
     const seen: unknown[] = []
     const relay = {
       extensionStatus: Effect.succeed({ connected: true }),
@@ -14,12 +14,13 @@ describe("MCP tool results", () => {
       }),
     } as unknown as RelayClient.Interface
     const execute = makeToolSpecs(relay, { id: "current", established: false }).find((spec) => spec.name === "execute")!
-    for (const value of [true, false]) {
+    for (const value of [undefined, true, false, "invalid"]) {
       await Effect.runPromise(execute.handle({ code: "page.url()" }).pipe(Effect.provideService(
-        ConfigProvider.ConfigProvider, ConfigProvider.fromUnknown({ BROWSERRIG_EXPERIMENTAL_WEBMCP: value }),
+        ConfigProvider.ConfigProvider, ConfigProvider.fromUnknown(value === undefined ? {} : { BROWSERRIG_EXPERIMENTAL_WEBMCP: value }),
       )))
     }
-    expect(seen).toMatchObject([{ experimentalWebMcp: true }, { experimentalWebMcp: false }])
+    expect(seen).toHaveLength(4)
+    for (const request of seen) expect(request).not.toHaveProperty("experimentalWebMcp")
   })
 
   it("keeps discovery in both MCP text and structured output after a script error", () => {

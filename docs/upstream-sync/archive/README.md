@@ -6,7 +6,8 @@ description: Naming and immutability rules for completed BrowserRig upstream syn
 # Archived Upstream Sync Cycles
 
 Completed upstream sync records move here only after their closure audit
-succeeds.
+succeeds. Any explicit user-directed exception is recorded in that cycle;
+an exception is not an independent approval.
 
 Name each record with its completion date and exact upstream range:
 
@@ -29,6 +30,8 @@ Archived records are immutable except for factual corrections. Add each archive
 to the index in [`../README.md`](../README.md).
 
 ## Records
+
+- [`2026-09-25: v0.6.0 -> v0.7.1`](2026-09-25_upstream-v0.6.0-to-v0.7.1.md)
 
 - [`2026-09-25: v0.5.1 -> v0.6.0`](2026-09-25_upstream-v0.5.1-to-v0.6.0.md)
 

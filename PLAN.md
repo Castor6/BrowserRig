@@ -252,6 +252,11 @@ require a new extension capture protocol and permission model.
 - **Driver, not agent**: BrowserRig never calls models or plans tasks.
 - **User browser first**: the primary target is an already-running
   Chromium-family browser with the extension installed.
+- **Chrome compatibility priority**: Google Chrome is the primary compatibility
+  and browser-validation target. Future upstream intake does not require
+  Brave-specific fixes, installation, reloads, or smoke coverage. Keep assessing
+  shared Chromium fixes for their Chrome benefit; other Chromium-family
+  browsers remain best-effort. Preserve historical browser test evidence.
 - **Product-led upstream intake**: advance one adjacent upstream minor series
   at a time to that series' latest patch. Review upstream pull requests, adapt
   selected behavior serially through independently reviewed batches, and keep
@@ -722,7 +727,7 @@ These items are accepted directions but are not current priorities:
 - Harden extension reconnect handling with `addEventListener`, one source for
   the `hello` message, and a bounded outbound event queue if lost debugger events
   continue to matter in practice.
-- Add optional managed browser launch, including Brave and profile selection.
+- Add optional managed Chrome launch and profile selection.
 - Scope the saved human-shell current session by browser profile, in addition to
   relay endpoint, if multiple profiles become a supported workflow.
 - Add stricter workspace or session ownership only if the loose shared attached

@@ -63,6 +63,12 @@ BrowserRig before creating deterministic branches and the active cycle record.
 
 ## Preserved product exclusions
 
+Apply the [Chrome-first compatibility policy](README.md#browser-compatibility-and-validation)
+when this queue resumes. Chrome is the primary browser for smoke and extension
+reload checks; no Brave installation, compatibility work, or separate test run
+is required. Assess #91/#94 shared Chromium behavior for its Chrome benefit,
+and record any Brave-only outcome as skipped unless explicitly requested.
+
 Keep BrowserRig identity, extension permissions/protocol, DSH packaging and
 release ownership. Keep native CDP WebMCP enabled by default; no experimental
 environment switch, upstream page-JavaScript transport, or new WebMCP metadata.

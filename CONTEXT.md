@@ -291,9 +291,10 @@ _Avoid_: Secret Profile, encrypted response
 
 ## Flagged Ambiguities
 
-- "Chrome" means **User Browser** unless browser-specific behavior is being
-  discussed. BrowserRig should support Chromium-family browsers such as
-  Brave, Chrome, Edge, Chromium, and Vivaldi.
+- "Chrome" names Google Chrome, the primary compatibility and validation
+  target. **User Browser** retains the broader Chromium-family meaning;
+  other Chromium-family browsers are best-effort. Brave-specific compatibility
+  and validation are not required unless the user requests them.
 - "Sandbox" means **Execute Sandbox** for persistence and convenience; it is
   not a hard security boundary against untrusted code.
 

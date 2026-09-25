@@ -1,3 +1,4 @@
+import { PNG } from "pngjs"
 import type { Browser, BrowserContext, Page } from "playwright-core"
 import { describe, expect, it, vi } from "vitest"
 import { Effect } from "effect"
@@ -13,6 +14,38 @@ import { BrowserRigSessions } from "../src/session-manager.ts"
 import { WebMcpSession, type WebMcpEvent } from "../src/webmcp.ts"
 
 describe("execute lifecycle", () => {
+  it("binds screenshotDiff to the selected page and extracts its PNG media", async () => {
+    const f = makeWebMcpSandboxFixture()
+    const browser = (f.sandbox as unknown as { browser: Browser }).browser
+    const page = browser.contexts()[0]!.pages()[0]!
+    const screenshot = vi.fn(async () => PNG.sync.write(new PNG({ width: 2, height: 2 })))
+    page.screenshot = screenshot
+    const result = await Effect.runPromise(f.sandbox.execute("state.before = await page.screenshot(); return await screenshotDiff({ baseline: state.before })"))
+    expect(result).toMatchObject({ isError: false, value: { matches: true, changedPixels: 0, changedRatio: 0 } })
+    expect(result.media).toHaveLength(1)
+    expect(result.media?.[0]).toMatchObject({ mimeType: "image/png" })
+    expect(screenshot).toHaveBeenLastCalledWith({ type: "png", scale: "css", fullPage: false })
+  })
+
+  it("bounds a stalled adopted-page title without closing or replacing the tab", async () => {
+    vi.useFakeTimers()
+    const f = makeWebMcpSandboxFixture()
+    const browser = (f.sandbox as unknown as { browser: Browser }).browser
+    const page = browser.contexts()[0]!.pages()[0]!
+    page.title = () => new Promise(() => {})
+    page.close = vi.fn()
+    try {
+      await Effect.runPromise(f.sandbox.adoptPage({ targetId: "webmcp-target", url: page.url() }))
+      const read = Effect.runPromise(f.sandbox.execute("return await page.title()"))
+      await vi.advanceTimersByTimeAsync(5_100)
+      expect(await read).toMatchObject({ isError: true, text: expect.stringContaining("page.title() timed out") })
+      expect(await Effect.runPromise(f.sandbox.execute("return page.url()"))).toMatchObject({ isError: false, value: page.url() })
+      expect(page.close).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("discovers tools by default across ordinary executions and expires saved helpers", async () => {
     const f = makeWebMcpSandboxFixture()
     const first = await Effect.runPromise(f.sandbox.execute("state.oldWebMcp = webmcp; return 42"))
@@ -520,6 +553,7 @@ function makeMultiPageBrowserFixture(options: readonly {
         fixture.closed = true
         fixture.visible = false
       },
+      title: async () => "Fixture",
       context: () => context,
       evaluate: option.evaluate ?? (() => Promise.resolve(true)),
       isClosed: () => fixture.closed,
@@ -590,6 +624,7 @@ function makeAdoptedBrowserFixture(options: {
   let page!: Page
   const mainFrame = { url: () => options.targetUrl }
   page = {
+    title: async () => "Fixture",
     context: () => context,
     evaluate: options.evaluate ?? (() => Promise.resolve(true)),
     isClosed: () => false,

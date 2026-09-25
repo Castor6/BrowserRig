@@ -37,7 +37,6 @@ type ExtensionStatus = {
 type SmokeCase = {
   readonly name: string
   readonly optIn?: boolean
-  readonly expectedFailure?: boolean
   readonly run: (page: Page) => Effect.Effect<unknown, Error>
 }
 
@@ -59,7 +58,7 @@ type OwnerCdpPage = {
 type CaseRunResult = {
   readonly name: string
   readonly iteration: number
-  readonly status: "pass" | "fail" | "expected-fail" | "unexpected-pass"
+  readonly status: "pass" | "fail"
   readonly durationMs: number
   readonly beforeStatus: ExtensionStatus
   readonly afterStatus: ExtensionStatus
@@ -185,7 +184,30 @@ const runLocalCheckoutFlow = Effect.fnUntraced(function* (page: Page) {
   return { complete: yield* textContent(page.locator(".complete-header"), "sauce complete") }
 })
 
-const cases: SmokeCase[] = [
+export const cases: readonly SmokeCase[] = [
+  {
+    name: "execute-browser-evidence",
+    optIn: true,
+    run: Effect.fnUntraced(function* () {
+      const session = `br-evidence-${Date.now()}`
+      return yield* Effect.gen(function* () {
+        yield* runBrowserRig(["session", "new", session])
+        return yield* runBrowserRig(["execute", "--session", session, `
+await page.setViewportSize({ width: 960, height: 640 });
+await page.setContent('<style>button { background: white; color: black }</style><button><img alt="Garden Bowl"><span>Garden Bowl</span><span>$15.00</span></button><button><img aria-hidden="true" alt="Hidden secret"><img alt="">Save</button>');
+const outline = await snapshot();
+if (!outline.includes('Garden Bowl Garden Bowl $15.00') || !outline.includes('button "Save"') || outline.includes('Hidden secret')) throw new Error('Image label regression: ' + outline);
+const baseline = await page.screenshot({ scale: 'css' });
+const equal = await screenshotDiff({ baseline });
+if (!equal.matches || equal.changedPixels !== 0) throw new Error('Equal screenshot differs');
+await page.locator('button').first().evaluate(el => el.style.background = 'red');
+const changed = await screenshotDiff({ baseline, threshold: 0 });
+if (changed.matches || changed.changedPixels <= 0 || changed.changedRatio <= 0) throw new Error('Changed screenshot was missed');
+return { outline, equalPixels: equal.changedPixels, changedPixels: changed.changedPixels, width: changed.width, height: changed.height };
+        `])
+      }).pipe(Effect.ensuring(runBrowserRig(["session", "delete", session]).pipe(Effect.ignore)))
+    }),
+  },
   {
     name: "execute-webmcp",
     // Requires native WebMCP and the demo's valid Origin Trial enrollment.
@@ -812,7 +834,6 @@ return {
 }
           `,
           ],
-          { retryOnTimeout: true },
         )
         if (!output.includes("alpha") || !output.includes("beta") || !output.includes("gamma") || !output.includes("delta") || !output.includes("controlled: 'epsilon'") || !output.includes("controlledState: 'epsilon'") || !output.includes("frame: 'zeta'") || !output.includes("focusEvents: '0'") || !output.includes("frameFocusEvents: '0'") || !output.includes("closed shadow roots")) {
           return yield* Effect.fail(new Error(`execute fill helpers did not fill fields: ${output}`))
@@ -1650,7 +1671,7 @@ const main = Effect.fn("Smoke.main")(function* () {
   )
 
   const failed = results.filter((result) => {
-    return result.status === "fail" || result.status === "unexpected-pass"
+    return result.status === "fail"
   })
   const summary = summarize(results)
     yield* Console.log(`summary: ${formatValue(summary)}`)
@@ -1661,7 +1682,7 @@ const main = Effect.fn("Smoke.main")(function* () {
 
 function printCaseResult(result: CaseRunResult): Effect.Effect<void> {
   return Effect.gen(function* () {
-    const icon = result.status === "pass" ? "PASS" : result.status === "expected-fail" ? "XFAIL" : result.status === "unexpected-pass" ? "XPASS" : "FAIL"
+    const icon = result.status === "pass" ? "PASS" : "FAIL"
     yield* Console.log(`${icon} ${result.name}#${result.iteration} ${result.durationMs}ms after=${result.afterStatus.activeTargets} child=${result.afterStatus.childTargets} cdp=${result.afterStatus.cdpClients}`)
     if (result.value !== undefined) {
       yield* Console.log(formatValue(result.value))
@@ -1702,7 +1723,7 @@ const runCase = Effect.fn("Smoke.runCase")(function* (options: {
     return {
       name: options.testCase.name,
       iteration: options.iteration,
-      status: options.testCase.expectedFailure ? "unexpected-pass" : "pass",
+      status: "pass",
       durationMs: end - start,
       beforeStatus,
       afterStatus,
@@ -1713,7 +1734,7 @@ const runCase = Effect.fn("Smoke.runCase")(function* (options: {
   return {
     name: options.testCase.name,
     iteration: options.iteration,
-    status: options.testCase.expectedFailure ? "expected-fail" : "fail",
+    status: "fail",
     durationMs: end - start,
     beforeStatus,
     afterStatus,
@@ -2197,20 +2218,10 @@ function boundedCleanup(label: string, run: () => PromiseLike<unknown>, timeoutM
 }
 
 type RunBrowserRigOptions = {
-  readonly retryOnTimeout?: boolean
   readonly sessionId?: string
 }
 
 function runBrowserRig(args: readonly string[], options: RunBrowserRigOptions = {}): Effect.Effect<string, Error> {
-  return runBrowserRigOnce(args, options).pipe(
-    Effect.catchIf(
-      (error) => options.retryOnTimeout === true && isBrowserRigTimeout(error),
-      () => runBrowserRigOnce(args, options),
-    ),
-  )
-}
-
-function runBrowserRigOnce(args: readonly string[], options: RunBrowserRigOptions): Effect.Effect<string, Error> {
   return Effect.callback<string, Error>((resume) => {
     let completed = false
     const endpointPort = new URL(endpointUrl).port
@@ -2246,15 +2257,6 @@ function runBrowserRigOnce(args: readonly string[], options: RunBrowserRigOption
       }
     })
   })
-}
-
-function isBrowserRigTimeout(error: Error): boolean {
-  const cause = error.cause
-  if (!cause || typeof cause !== "object" || Array.isArray(cause)) {
-    return false
-  }
-  const execError = cause as { readonly killed?: unknown; readonly signal?: unknown; readonly code?: unknown }
-  return execError.killed === true || execError.signal === "SIGTERM" || execError.code === 130
 }
 
 function readRecordingMetadata(filePath: string): Effect.Effect<RecordingMetadata, Error> {
@@ -2425,12 +2427,12 @@ function parseStatusSessionIds(value: unknown): readonly string[] {
   })
 }
 
-function summarize(results: readonly CaseRunResult[]) {
+export function summarize(results: readonly CaseRunResult[]) {
   return {
     pass: results.filter((result) => result.status === "pass").length,
     fail: results.filter((result) => result.status === "fail").length,
-    expectedFail: results.filter((result) => result.status === "expected-fail").length,
-    unexpectedPass: results.filter((result) => result.status === "unexpected-pass").length,
+    expectedFail: 0,
+    unexpectedPass: 0,
   }
 }
 
@@ -2469,4 +2471,4 @@ function formatError(error: Error): string {
   return lines.join("\n")
 }
 
-main().pipe(Effect.provide(NodeServices.layer), NodeRuntime.runMain)
+if (import.meta.main) main().pipe(Effect.provide(NodeServices.layer), NodeRuntime.runMain)

@@ -1,3 +1,5 @@
+import { installPageReadTimeout } from "./page-read-timeout.ts"
+import { createScreenshotDiff, type ScreenshotDiffOptions, type ScreenshotDiffResult } from "./screenshot-diff.ts"
 import { Effect, Schema, Scope } from "effect"
 import { chromium, type Browser, type BrowserContext, type ConsoleMessage, type ElementHandle, type Frame, type Locator, type Page } from "playwright-core"
 import * as acorn from "acorn"
@@ -245,6 +247,7 @@ type SandboxGlobals = {
   readonly fillInput: (target: InputTarget, value: string) => Promise<void>
   readonly fillInputs: (page: Page, fields: ReadonlyArray<InputField>) => Promise<void>
   readonly screenshotWithLabels: (options: ScreenshotWithLabelsOptions) => Promise<ScreenshotWithLabelsResult>
+  readonly screenshotDiff: (options: ScreenshotDiffOptions) => Promise<ScreenshotDiffResult>
   readonly ariaSnapshot: AriaSnapshotHelper
   readonly snapshot: SnapshotHelper
   readonly ref: SnapshotRefHelper
@@ -810,6 +813,7 @@ export class ExecuteSandbox {
     installDownloadCapabilityGuards(context)
     const targetSelection = options.targetSelection
     const page = await this.getSessionPage({ context, ...(targetSelection ? { targetSelection } : {}) })
+    installPageReadTimeout(page)
     this.networkCapture.bindPage(this.page)
     const showGhostCursor = async (options?: ShowGhostCursorOptions) => {
       const cursorOptions = ghostCursorOptions(options)
@@ -919,6 +923,7 @@ export class ExecuteSandbox {
       fillInput: (target, value) => fillInput({ page, target, value }),
       fillInputs,
       screenshotWithLabels,
+      screenshotDiff: createScreenshotDiff(page),
       ariaSnapshot,
       snapshot,
       ref,
@@ -1467,11 +1472,11 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
         return normalize(element.getAttribute("title") ?? "")
       }
       const safeText = (element: Element): string => {
-        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT)
         const parts: string[] = []
         let node = walker.nextNode()
         while (node) {
-          const parent = node.parentElement
+          const parent = node instanceof Element ? node : node.parentElement
           let hidden = false
           let ancestor = parent
           while (ancestor && element.contains(ancestor)) {
@@ -1484,7 +1489,8 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
             ancestor = ancestor.parentElement
           }
           if (!hidden && !parent?.closest("input, textarea, select, script, style")) {
-            parts.push(node.textContent ?? "")
+            if (node.nodeType === Node.TEXT_NODE) parts.push(node.textContent ?? "")
+            else if (node instanceof HTMLImageElement) parts.push(node.getAttribute("alt") ?? "")
           }
           node = walker.nextNode()
         }
@@ -2564,6 +2570,7 @@ export async function runUserCode({ code, globals }: { readonly code: string; re
       "fillInput",
       "fillInputs",
       "screenshotWithLabels",
+      "screenshotDiff",
       "ariaSnapshot",
       "snapshot",
       "ref",
@@ -2585,6 +2592,7 @@ export async function runUserCode({ code, globals }: { readonly code: string; re
       globals.fillInput,
       globals.fillInputs,
       globals.screenshotWithLabels,
+      globals.screenshotDiff,
       globals.ariaSnapshot,
       globals.snapshot,
       globals.ref,

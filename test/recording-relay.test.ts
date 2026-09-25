@@ -613,16 +613,41 @@ describe("RecordingRelay tab capture", () => {
 })
 
 describe("RecordingRelay CDP screencast", () => {
+  it.each([
+    { requested: undefined, expected: 25 },
+    { requested: 30, expected: 30 },
+    { requested: 1, expected: 1 },
+    { requested: 60, expected: 30 },
+  ])("uses $expected fps for requested $requested while fitting the viewport within 1280×720", async ({ requested, expected }) => {
+    const startVideoEncoder = vi.fn(async () => ({ write: async () => {}, finish: async () => {}, cancel: async () => {} }))
+    const relay = new RecordingRelay({
+      isExtensionConnected: () => true,
+      sendToExtension: async () => ({}),
+      sendDebuggerCommand: async ({ method }) => method === "Page.getLayoutMetrics"
+        ? { cssVisualViewport: { clientWidth: 1921, clientHeight: 1081 } }
+        : {},
+      startVideoEncoder,
+    })
+    try {
+      await expect(relay.startRecording({ tabId: 7, owner: "relay", outputPath: "/tmp/recording-quality-unit.mp4", mode: "cdp", ...(requested === undefined ? {} : { frameRate: requested }) })).resolves.toMatchObject({ success: true })
+      expect(startVideoEncoder).toHaveBeenCalledWith(expect.objectContaining({ frameRate: expected, width: 1278, height: 720, viewportWidth: 1921, viewportHeight: 1081 }))
+    } finally {
+      await relay.cancelRecording({ tabId: 7 })
+    }
+  })
+
   it("acknowledges compositor frames and timestamps source frames for constant-rate encoding", async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-"))
     temporaryPaths.push(directory)
     const outputPath = path.join(directory, "demo.mp4")
     const debuggerCommands: Array<{ readonly method: string; readonly params: object }> = []
     const encodedFrames: Array<{ readonly contents: string; readonly timestampMs: number; readonly durationMs: number }> = []
+    const surfaceWidths: Array<number | undefined> = []
     let now = 1_000
     const encoder: VideoEncoder = {
-      write: async (frame, timestampMs, durationMs) => {
+      write: async (frame, timestampMs, durationMs, surfaceWidth) => {
         encodedFrames.push({ contents: frame.toString(), timestampMs, durationMs })
+        surfaceWidths.push(surfaceWidth)
       },
       finish: async () => {
         await fs.writeFile(outputPath, "video")
@@ -666,7 +691,7 @@ describe("RecordingRelay CDP screencast", () => {
     expect(debuggerCommands[2]).toEqual({
       tabId: 7,
       method: "Page.startScreencast",
-      params: { format: "jpeg", quality: 80, maxWidth: 1280, maxHeight: 638, everyNthFrame: 1 },
+      params: { format: "jpeg", quality: 100, everyNthFrame: 1 },
     })
 
     now = 1_100
@@ -686,11 +711,19 @@ describe("RecordingRelay CDP screencast", () => {
     const stop = await relay.stopRecording({ sessionId: "demo" })
 
     expect(stop).toMatchObject({ success: true, artifactType: "mp4", frameCount: 5 })
+    expect(stop).toMatchObject({ quality: {
+      width: 1280, height: 638, frameRate: 10,
+      sourceFrameCount: 2, encodedSourceFrameCount: 2,
+      coalescedFrameCount: 0, droppedFrameCount: 0,
+      achievedSourceFrameRate: 4, achievedEncodedSourceFrameRate: 4,
+      screenshotFallback: false,
+    } })
     expect(encodedFrames).toEqual([
       { contents: "first", timestampMs: 0, durationMs: 300 },
       { contents: "second", timestampMs: 300, durationMs: 200 },
     ])
     expect(debuggerCommands.filter((command) => command.method === "Page.screencastFrameAck")).toHaveLength(2)
+    expect(surfaceWidths).toEqual([1920, 1920])
     expect(debuggerCommands.at(-1)?.method).toBe("Page.stopScreencast")
     expect(JSON.parse(await fs.readFile(`${outputPath}.json`, "utf8"))).toMatchObject({
       artifactType: "mp4",
@@ -719,6 +752,30 @@ describe("RecordingRelay CDP screencast", () => {
       outputPath: "/tmp/browserrig-frames",
       mode: "cdp",
     })).resolves.toEqual({ success: false, error: "CDP recording output path must end in .webm or .mp4" })
+  })
+
+  it("reports the stop-time screenshot fallback separately from compositor frames", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "browserrig-recording-"))
+    temporaryPaths.push(directory)
+    const outputPath = path.join(directory, "fallback.mp4")
+    let now = 0
+    const relay = new RecordingRelay({
+      isExtensionConnected: () => true,
+      sendToExtension: async () => ({}),
+      sendDebuggerCommand: async ({ method }) => method === "Page.captureScreenshot" ? { data: Buffer.from("screenshot").toString("base64") } : {},
+      startVideoEncoder: async () => ({ write: async () => {}, finish: async () => { await fs.writeFile(outputPath, "video") }, cancel: async () => {} }),
+      now: () => now,
+    })
+    await expect(relay.startRecording({ tabId: 7, owner: "relay", outputPath, mode: "cdp" })).resolves.toMatchObject({ success: true, frameRate: 25 })
+    now = 1000
+    expect(await relay.statusRecording({ tabId: 7 })).toMatchObject({ quality: { sourceFrameCount: 0, screenshotFallback: false } })
+    const result = await relay.stopRecording({ tabId: 7 })
+    expect(result).toMatchObject({ success: true, frameCount: 25, quality: {
+      sourceFrameCount: 0, encodedSourceFrameCount: 1, achievedSourceFrameRate: 0,
+      achievedEncodedSourceFrameRate: 1, screenshotFallback: true,
+    } })
+    if (!result.success) throw new Error(result.error)
+    expect(JSON.parse(await fs.readFile(`${outputPath}.json`, "utf8"))).toMatchObject(result.quality!)
   })
 
   it("caps timestamp discontinuities by wall-clock duration", async () => {

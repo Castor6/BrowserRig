@@ -296,3 +296,15 @@ _Avoid_: Secret Profile, encrypted response
   Brave, Chrome, Edge, Chromium, and Vivaldi.
 - "Sandbox" means **Execute Sandbox** for persistence and convenience; it is
   not a hard security boundary against untrusted code.
+
+## Screenshot diff
+
+A selected execution page's CSS-scale PNG comparison against an explicit saved
+baseline. It returns changed-pixel metrics and highlighted visual evidence; it
+never resizes mismatched images or maintains an implicit baseline.
+
+## Recording quality receipt
+
+Output dimensions/rate and compositor received/retained/coalesced/dropped frame
+counters exposed alongside a recording. These counters do not certify distinct
+motion. `screenshotFallback` identifies a single stop-time screenshot held as video.

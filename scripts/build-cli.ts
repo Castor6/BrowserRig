@@ -15,6 +15,7 @@ const buildInputs = [
   path.join(root, "package.json"),
   path.join(root, "pnpm-lock.yaml"),
   path.join(root, "pnpm-workspace.yaml"),
+  path.join(root, "patches", "pngjs@7.0.0.patch"),
   path.join(root, "scripts", "build-cli.ts"),
   path.join(root, "tsconfig.json"),
   path.join(root, "tsconfig.build.json"),
@@ -57,13 +58,24 @@ await copyBundledLicenses(Object.keys(executableBuild.metafile.inputs))
 
 // The library entry deliberately keeps Effect external so applications can
 // provide the peer runtime used to compose BrowserRig effects.
-await build({
+const libraryBuild = await build({
   entryPoints: {
     index: path.join(root, "src", "index.ts"),
   },
   ...buildOptions,
   packages: "external",
+  metafile: true,
 })
+// Consumers must never depend on their package manager applying our PNG patch.
+// The decoder is bundled in executables; the client-only library has no PNG path.
+for (const result of [executableBuild, libraryBuild]) {
+  for (const output of Object.values(result.metafile.outputs)) {
+    if (output.imports.some(item => item.external && /^(?:pngjs)(?:\/|$)/.test(item.path))) {
+      throw new Error("PNG decoder must be bundled with its allocation bounds")
+    }
+  }
+}
+await fs.copyFile(path.join(root, "patches", "pngjs@7.0.0.patch"), path.join(dist, "licenses", "pngjs-7.0.0-browserrig.patch"))
 await execFileAsync(path.join(root, "node_modules", ".bin", "tsc"), ["-p", path.join(root, "tsconfig.build.json")])
 await fs.chmod(path.join(dist, "cli.js"), 0o755)
 await fs.chmod(path.join(dist, "mcp.js"), 0o755)

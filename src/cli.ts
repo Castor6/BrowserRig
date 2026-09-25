@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { formatRecordingQuality } from "./recording-presentation.ts"
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Config, Console, Deferred, Effect, FileSystem, Layer, Option } from "effect"
@@ -657,8 +658,9 @@ const recordingStart = Command.make(
     audio: Flag.boolean("audio").pipe(Flag.withDefault(false), Flag.withDescription("Include tab audio")),
     frameRate: Flag.integer("frame-rate").pipe(Flag.optional, Flag.withDescription("Output frame rate, defaults to 30 for tab-capture and 25 for CDP")),
     maxDurationMs: Flag.integer("max-duration-ms").pipe(Flag.optional, Flag.withDescription("Auto-stop guard in milliseconds, defaults to 900000")),
+    json: Flag.boolean("json").pipe(Flag.withDefault(false), Flag.withDescription("Print machine-readable JSON")),
   },
-  Effect.fn("Cli.recordingStart")(function* ({ outputPath, session, tabId, mode, audio, frameRate, maxDurationMs }) {
+  Effect.fn("Cli.recordingStart")(function* ({ outputPath, session, tabId, mode, audio, frameRate, maxDurationMs, json }) {
     const relay = yield* RelayClient.Service
     yield* ensureCliRelayAndExtension()
     const target = yield* recordingTarget({ session, tabId })
@@ -677,7 +679,7 @@ const recordingStart = Command.make(
     if (!result.success) {
       return yield* Effect.fail(new Error(result.error ?? "Failed to start recording"))
     }
-    yield* Console.log(`Recording started: ${result.path ?? resolvedOutputPath} tab=${result.tabId ?? "unknown"} mode=${result.mode ?? "tab-capture"} artifact=${result.artifactType ?? "webm"} mime=${result.mimeType ?? "video/webm"}`)
+    yield* Console.log(json ? JSON.stringify(result, null, 2) : `Recording started: ${result.path ?? resolvedOutputPath} tab=${result.tabId ?? "unknown"} mode=${result.mode ?? "tab-capture"} artifact=${result.artifactType ?? "webm"} mime=${result.mimeType ?? "video/webm"} fps=${result.frameRate ?? "unknown"}`)
   }),
 ).pipe(Command.withDescription("Start recording an attached tab"))
 
@@ -686,8 +688,9 @@ const recordingStop = Command.make(
   {
     session: Flag.string("session").pipe(Flag.optional, Flag.withAlias("s"), Flag.withDescription("Stop recording for this CDP session id")),
     tabId: Flag.integer("tab-id").pipe(Flag.optional, Flag.withDescription("Stop recording for this Chrome tab id")),
+    json: Flag.boolean("json").pipe(Flag.withDefault(false), Flag.withDescription("Print machine-readable JSON")),
   },
-  Effect.fn("Cli.recordingStop")(function* ({ session, tabId }) {
+  Effect.fn("Cli.recordingStop")(function* ({ session, tabId, json }) {
     const relay = yield* RelayClient.Service
     yield* ensureCliRelay()
     const target = yield* recordingTarget({ session, tabId })
@@ -695,8 +698,10 @@ const recordingStop = Command.make(
     if (!result.success) {
       return yield* Effect.fail(new Error(result.error ?? "Failed to stop recording"))
     }
+    if (json) return yield* Console.log(JSON.stringify(result, null, 2))
     const frames = result.frameCount === undefined ? "" : `, frames=${result.frameCount}`
     yield* Console.log(`Recording saved: ${result.path ?? "unknown"} (${result.size ?? 0} bytes, ${result.duration ?? 0}ms, mode=${result.mode ?? "tab-capture"}, artifact=${result.artifactType ?? "webm"}${frames})`)
+    yield* Console.log(formatRecordingQuality(result.quality))
   }),
 ).pipe(Command.withDescription("Stop recording and write the artifact"))
 
@@ -722,6 +727,7 @@ const recordingStatus = Command.make(
     }
     const frames = result.frameCount === undefined ? "" : ` frameCount=${result.frameCount}`
     yield* Console.log(`Recording: active tab=${result.tabId ?? "unknown"} mode=${result.mode ?? "tab-capture"} artifact=${result.artifactType ?? "webm"} path=${result.path ?? "unknown"} size=${result.size ?? 0}${frames} startedAt=${result.startedAt ?? "unknown"}`)
+    yield* Console.log(formatRecordingQuality(result.quality))
   }),
 ).pipe(Command.withDescription("Check current recording status"))
 

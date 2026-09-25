@@ -16,17 +16,19 @@ branches or starting an agent.
 
 ## Current state
 
-- **Latest completed upstream sync:** `v0.6.0` (completed 2026-09-25)
-- **Active cycle:** [`v0.6.0 -> v0.7.1`](current_upstream-v0.6.0-to-v0.7.1.md)
-- **Active cycle status:** approved scope, frozen target; implementation starts after the v0.6.0 documentation finalization PR merges
+- **Latest completed upstream sync:** `v0.7.1` (completed 2026-09-25, PR #50)
+- **Active cycle:** none; the user stopped this run after PR #50
+- **Analyzed, not implemented:** [`v0.7.1 -> v0.8.2`](queued_upstream-v0.7.1-to-v0.8.2.md)
+- **WebMCP companion:** default-on native discovery completed in PR #48
 - **BrowserRig package version:** independent from the upstream sync cursor
 
-The user approved the six recommended outcome groups through `v0.8.2`, plus
-default-on native WebMCP discovery, on 2026-09-25. The active record retains
-the complete scope and follow-on sequence. Implementation approval does not
-authorize merging pull requests or publishing packages; obtain explicit merge
-approval after a concrete reviewed batch is ready. Later version cycles remain
-queued until the preceding cycle closes.
+On 2026-09-25 the user approved six selected outcome groups through `v0.8.2` and
+native WebMCP default discovery. After the v0.7.1 corrections and validation,
+the user explicitly waived further review, approved merging PR #50, and stopped
+this run. The archive preserves both actual review verdicts and this exception;
+it does not claim final independent approval. The queued record preserves all
+remaining analysis, but work must wait for the user's instruction to resume.
+No package publication or Version Packages merge is authorized.
 
 "Completed through `vX.Y.Z`" means every upstream pull request reachable in
 the reviewed range has a recorded outcome: adapted and landed, already covered,
@@ -287,6 +289,8 @@ starts only after the finalization PR merges.
 Archived cycle records are immutable except for factual corrections.
 
 ## Archive
+
+- [`2026-09-25: v0.6.0 -> v0.7.1`](archive/2026-09-25_upstream-v0.6.0-to-v0.7.1.md)
 
 - [`2026-09-25: v0.5.1 -> v0.6.0`](archive/2026-09-25_upstream-v0.5.1-to-v0.6.0.md)
 

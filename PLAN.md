@@ -260,9 +260,13 @@ require a new extension capture protocol and permission model.
   product identity, release, or source-equivalence ownership. The first
   archived cycle completed selective intake through upstream `v0.5.1` on
   2026-08-28. The user approved six outcome groups through `v0.8.2` on
-  2026-09-25; the active cycle is `v0.5.1 -> v0.6.0`, with `v0.7.1` and
-  `v0.8.2` queued. Native WebMCP will become default-on as an independent
-  companion change. The active ledger records exact scope and review state;
+  2026-09-25. PR #46 merged and an independent closure audit completed the
+  `v0.6.0` cycle on that date. The prepared active cycle is `v0.6.0 -> v0.7.1`;
+  implementation starts after the documentation finalization PR merges, with
+  `v0.8.2` queued next. Upstream #88 belongs only to that later range. Native
+  WebMCP default discovery landed in companion PR #48 as `c3a6b3d` after
+  independent review and explicit user merge approval on 2026-09-25.
+  The active ledger records exact scope and review state;
   implementation approval does not advance the cursor or authorize publication.
 - **Trusted local execution**: `execute(code)` trusts the calling agent. It is
   not an untrusted-code security boundary.

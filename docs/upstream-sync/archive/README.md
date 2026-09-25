@@ -30,4 +30,6 @@ to the index in [`../README.md`](../README.md).
 
 ## Records
 
+- [`2026-09-25: v0.5.1 -> v0.6.0`](2026-09-25_upstream-v0.5.1-to-v0.6.0.md)
+
 - [`2026-08-28: v0.4.0 -> v0.5.1`](2026-08-28_upstream-v0.4.0-to-v0.5.1.md)

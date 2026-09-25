@@ -16,9 +16,9 @@ branches or starting an agent.
 
 ## Current state
 
-- **Latest completed upstream sync:** `v0.5.1` (completed 2026-08-28)
-- **Active cycle:** [`v0.5.1 -> v0.6.0`](current_upstream-v0.5.1-to-v0.6.0.md)
-- **Active cycle status:** runtime-safety PR #46 independently approved on 2026-09-25; awaiting explicit merge approval
+- **Latest completed upstream sync:** `v0.6.0` (completed 2026-09-25)
+- **Active cycle:** [`v0.6.0 -> v0.7.1`](current_upstream-v0.6.0-to-v0.7.1.md)
+- **Active cycle status:** approved scope, frozen target; implementation starts after the v0.6.0 documentation finalization PR merges
 - **BrowserRig package version:** independent from the upstream sync cursor
 
 The user approved the six recommended outcome groups through `v0.8.2`, plus
@@ -278,11 +278,17 @@ request:
    `archive/YYYY-MM-DD_upstream-vX.Y.Z-to-vA.B.C.md`, using the completion date;
 2. records the closure audit and actual completion date;
 3. advances the latest completed upstream sync in this file;
-4. removes the active-cycle pointer and adds the archive entry below.
+4. removes the completed-cycle pointer and adds the archive entry below.
+
+If the user has already approved the next range, the same finalization may
+prepare its sole active record with a freshly checked target. Implementation
+starts only after the finalization PR merges.
 
 Archived cycle records are immutable except for factual corrections.
 
 ## Archive
+
+- [`2026-09-25: v0.5.1 -> v0.6.0`](archive/2026-09-25_upstream-v0.5.1-to-v0.6.0.md)
 
 - [`2026-08-28: v0.4.0 -> v0.5.1`](archive/2026-08-28_upstream-v0.4.0-to-v0.5.1.md)
 

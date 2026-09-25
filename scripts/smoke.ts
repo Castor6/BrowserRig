@@ -186,6 +186,29 @@ const runLocalCheckoutFlow = Effect.fnUntraced(function* (page: Page) {
 
 export const cases: readonly SmokeCase[] = [
   {
+    name: "execute-browser-evidence",
+    optIn: true,
+    run: Effect.fnUntraced(function* () {
+      const session = `br-evidence-${Date.now()}`
+      return yield* Effect.gen(function* () {
+        yield* runBrowserRig(["session", "new", session])
+        return yield* runBrowserRig(["execute", "--session", session, `
+await page.setViewportSize({ width: 960, height: 640 });
+await page.setContent('<style>button { background: white; color: black }</style><button><img alt="Garden Bowl"><span>Garden Bowl</span><span>$15.00</span></button><button><img aria-hidden="true" alt="Hidden secret"><img alt="">Save</button>');
+const outline = await snapshot();
+if (!outline.includes('Garden Bowl Garden Bowl $15.00') || !outline.includes('button "Save"') || outline.includes('Hidden secret')) throw new Error('Image label regression: ' + outline);
+const baseline = await page.screenshot({ scale: 'css' });
+const equal = await screenshotDiff({ baseline });
+if (!equal.matches || equal.changedPixels !== 0) throw new Error('Equal screenshot differs');
+await page.locator('button').first().evaluate(el => el.style.background = 'red');
+const changed = await screenshotDiff({ baseline, threshold: 0 });
+if (changed.matches || changed.changedPixels <= 0 || changed.changedRatio <= 0) throw new Error('Changed screenshot was missed');
+return { outline, equalPixels: equal.changedPixels, changedPixels: changed.changedPixels, width: changed.width, height: changed.height };
+        `])
+      }).pipe(Effect.ensuring(runBrowserRig(["session", "delete", session]).pipe(Effect.ignore)))
+    }),
+  },
+  {
     name: "execute-webmcp",
     // Requires native WebMCP and the demo's valid Origin Trial enrollment.
     optIn: true,

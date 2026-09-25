@@ -793,7 +793,8 @@ command, runtime installer, or Effect dependency upgrade.
   red-highlighted media, bounded decoding, and exclusive private file output.
 - CDP recording keeps its 25 fps default, existing explicit-rate behavior, and
   1280×720 fit. Uncapped JPEG100 frames avoid backing-surface caps; normalize
-  device pixels using first-frame surface metadata, crop the starting CSS
+  device pixels using first-frame surface metadata, declare the actual first
+  JPEG dimensions in the Matroska input header, crop the starting CSS
   viewport, then scale to the fitted output. Geometry must remain fixed.
 - Recording stop/status quality receipts share counters with the sidecar and
   explicitly report screenshot fallback. Counters do not measure distinct motion.

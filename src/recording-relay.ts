@@ -1,3 +1,4 @@
+import { jpegDimensions } from "./jpeg-dimensions.ts"
 import type { RecordingQuality } from "./relay-schema.ts"
 import { execFile, spawn } from "node:child_process"
 import crypto from "node:crypto"
@@ -1087,7 +1088,7 @@ async function startFfmpegVideoEncoder(options: Parameters<StartVideoEncoder>[0]
   return {
     write: async (frame, timestampMs, durationMs, surfaceWidth) => {
       if (cancelled) throw new Error("ffmpeg recording was cancelled")
-      acquisition ??= createFfmpegVideoEncoder({ ...options, surfaceWidth: surfaceWidth ?? options.viewportWidth })
+      acquisition ??= createFfmpegVideoEncoder({ ...options, inputSize: jpegDimensions(frame), surfaceWidth: surfaceWidth ?? options.viewportWidth })
       const encoder = await acquisition
       if (cancelled) throw new Error("ffmpeg recording was cancelled")
       await encoder.write(frame, timestampMs, durationMs)
@@ -1103,7 +1104,7 @@ async function startFfmpegVideoEncoder(options: Parameters<StartVideoEncoder>[0]
   }
 }
 
-async function createFfmpegVideoEncoder(options: Parameters<StartVideoEncoder>[0] & { readonly surfaceWidth: number }): Promise<VideoEncoder> {
+async function createFfmpegVideoEncoder(options: Parameters<StartVideoEncoder>[0] & { readonly surfaceWidth: number; readonly inputSize: { readonly width: number; readonly height: number } }): Promise<VideoEncoder> {
   const temporaryOutputPath = `${options.outputPath}.partial-${process.pid}-${crypto.randomUUID()}`
   const outputArgs = options.artifactType === "webm"
     ? ["-c:v", "libvpx", "-crf", "8", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "2M", "-threads", "1"]
@@ -1149,7 +1150,8 @@ async function createFfmpegVideoEncoder(options: Parameters<StartVideoEncoder>[0
   })
   try {
     await once(child, "spawn")
-    await writeStreamChunk(child.stdin, mjpegMatroskaHeader(options.width, options.height))
+    // Output geometry can make ffmpeg misclassify a smaller JPEG as interlaced.
+    await writeStreamChunk(child.stdin, mjpegMatroskaHeader(options.inputSize.width, options.inputSize.height))
   } catch (error) {
     await exit
     await fs.rm(temporaryOutputPath, { force: true })

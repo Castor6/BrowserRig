@@ -554,7 +554,7 @@ function makeMultiPageBrowserFixture(options: readonly {
         fixture.visible = false
       },
       title: async () => "Fixture",
-    context: () => context,
+      context: () => context,
       evaluate: option.evaluate ?? (() => Promise.resolve(true)),
       isClosed: () => fixture.closed,
       mainFrame: () => mainFrame,

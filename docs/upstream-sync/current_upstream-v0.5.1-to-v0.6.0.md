@@ -104,13 +104,32 @@ The draft PR manually adapts the approved safety outcomes. The batch remains
 | Accepted-work settlement (#69) | `RelayWork` stops new transport admission and retains accepted HTTP/CDP work; pending session continuations can finish. Session workers retain leases through uncancellable browser operations, journal hooks, and catalog writes. Recording cancellation retains active state through RPC/file/encoder cleanup. Tests cover aborted callers, drain ordering, pending CDP completion before socket close, and recording finalization races. Existing automatic managed-relay selection and instance checks are unchanged. |
 | CLI defaults / dependency cohort | Already covered: `src/cli.ts` boolean flags carry explicit false defaults; `package.json` and the lockfile pin Effect and both Node platform packages to rc.111, with bundled executable runtimes. No dependency, candidate installer, explicit restart CLI, release identity, or WebMCP changes were imported. |
 
-Validation is recorded against the final implementation commit in PR #46.
-Typecheck, unit tests, CLI build, and isolated-browser smoke results are being
-completed before independent review. The first draft CI run exposed tests that
-still assumed a new profile replaces a live socket; these tests were updated to
-close the original connection explicitly and continue checking generation
-isolation. Ordinary restored-tab grouping remains best effort and does not block
-readiness.
+Validation on 2026-09-25:
+
+- `pnpm typecheck`: passed after the final code change.
+- `pnpm test`: 64 files, 702 tests passed after the final code change.
+- `pnpm build:cli`: passed after the final code change.
+- `pnpm build:extension`: passed; no extension source changes.
+- Full required 23-case smoke command from `AGENTS.md`: **23 passed, 0 failed**
+  against source relay at implementation commit `e39eaa0`, using isolated
+  Chromium and port 21990. The subsequent code change only preserves request
+  id/session id on a newly rejected CDP request during teardown; the transport
+  settlement integration test verifies the rejected request is not forwarded and
+  the previously accepted command completes before sockets close. Full unit
+  validation above includes that final correction.
+- The complete smoke log is `/tmp/browserrig-v060-full-smoke.log` in the
+  implementation environment. All selected cases completed below the configured
+  90-second CLI timeout; no timeout replay was needed. The harness's existing
+  optional retry mechanism is unchanged and remains scheduled for #79 intake.
+- The created Chromium process and source relay were stopped after validation;
+  no task-owned browser/relay process remains. The installed OpenCode skill is
+  byte-identical to the repository skill.
+
+The first draft CI run exposed tests that still assumed a new profile replaces
+a live socket; these tests now close the original connection explicitly and
+continue checking generation isolation. Ordinary restored-tab grouping remains
+best effort and does not block readiness. Final GitHub CI status is available
+on PR #46; independent review remains pending.
 
 Environment: no `termctrl` executable/tool or Brave installation is available.
 The browser fixture uses cached Chromium in a fresh temporary profile with a

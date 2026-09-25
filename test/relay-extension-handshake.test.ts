@@ -156,6 +156,11 @@ describe("relay extension handshake", () => {
         yield* Effect.promise(() => new Promise<void>((resolve) => setImmediate(resolve)))
         expect(closed).toBe(false)
         expect(first.readyState).toBe(WebSocket.OPEN)
+        yield* Effect.promise(() => expect(sendCdp(client!, {
+          id: 3, method: "Runtime.evaluate", sessionId, params: { expression: "2 + 2" },
+        })).rejects.toThrow("Relay is draining accepted work"))
+        expect(client.messages.find((message) => "id" in message && message.id === 3)).toMatchObject({ sessionId })
+        expect(first.commands.some((command) => (command.params?.params as { expression?: string } | undefined)?.expression === "2 + 2")).toBe(false)
         first.respond(evaluation()!)
         expect(yield* Effect.promise(() => pending)).toBe(true)
         yield* Effect.promise(() => closing)

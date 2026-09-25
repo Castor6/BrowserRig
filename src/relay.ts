@@ -803,8 +803,10 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     debugLog?.(`client+ ${browserRigSessionId ?? "raw"} total=${cdpClients.size}`)
     socket.on("message", (data) => {
       Effect.runPromise(transportWork.track(handleCdpMessage(socket, data.toString()), browserRigSessionId !== undefined && sessions.hasPendingWork(browserRigSessionId))).catch((error: unknown) => {
+        const request = parseJsonObject(data.toString())
         sendCdpResponse(socket, {
-          id: 0,
+          id: isCdpRequest(request) ? request.id : 0,
+          ...(isCdpRequest(request) && request.sessionId !== undefined ? { sessionId: request.sessionId } : {}),
           error: { message: error instanceof Error ? error.message : String(error) },
         })
       })

@@ -16,6 +16,86 @@ afterEach(() => {
 })
 
 describe("relay extension handshake", () => {
+  it("retires an unstaged inventory attach after tab removal without retrying or rejecting ready", async () => {
+    const port = 24_000 + Math.floor(Math.random() * 10_000)
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
+      const relay = yield* startRelay({ port, sessionCatalogPath: null })
+      const options: { targetId: string; suspendedMethod?: ExtensionCommand["method"]; error?: string } = {
+        targetId: "removed-target", suspendedMethod: "debugger.sendCommand",
+      }
+      const extension = yield* Effect.promise(() => connectRespondingExtension(relay.url, options))
+      try {
+        extension.send(JSON.stringify({ method: "hello", params: { version: "test", protocolVersion: extensionProtocolVersion } }))
+        extension.send(JSON.stringify({ method: "debugger.attached", params: { tabId: 7 } }))
+        yield* Effect.promise(() => waitFor(() => extension.commands.some((command) => command.params?.method === "Page.enable")))
+        const enable = extension.commands.find((command) => command.params?.method === "Page.enable")!
+        delete options.suspendedMethod
+        options.error = "Debugger detached while enabling removed tab"
+        extension.send(JSON.stringify({ method: "tabs.removed", params: { tabId: 7 } }))
+        extension.respond(enable)
+        extension.send(JSON.stringify({ method: "ready" }))
+        const status = yield* Effect.promise(() => waitForStatus(relay.url, (candidate) => candidate.connected))
+        expect(status).toMatchObject({ connected: true, activeTargets: 0 })
+        expect(extension.readyState).toBe(WebSocket.OPEN)
+        expect(extension.commands.filter((command) => command.method === "debugger.sendCommand").map((command) => command.params?.method)).toEqual(["Page.enable"])
+        expect(error).not.toHaveBeenCalled()
+      } finally {
+        extension.close()
+      }
+    })))
+  })
+
+  it("keeps a new re-announcement separate from retired retry backoff", async () => {
+    const port = 24_000 + Math.floor(Math.random() * 10_000)
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    const originalSetTimeout = globalThis.setTimeout
+    let releaseBackoff: (() => void) | undefined
+    const timerSpy = vi.spyOn(globalThis, "setTimeout").mockImplementation(((callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) => {
+      if (delay === 100 && !releaseBackoff) {
+        const timer = originalSetTimeout(() => callback(...args), 30_000)
+        releaseBackoff = () => {
+          clearTimeout(timer)
+          callback(...args)
+        }
+        return timer
+      }
+      return originalSetTimeout(callback, delay, ...args)
+    }) as typeof globalThis.setTimeout)
+    await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
+      const relay = yield* startRelay({ port, sessionCatalogPath: null })
+      const options: { targetId: string; suspendedMethod?: ExtensionCommand["method"] } = {
+        targetId: "replacement-target", suspendedMethod: "debugger.sendCommand",
+      }
+      const extension = yield* Effect.promise(() => connectRespondingExtension(relay.url, options))
+      try {
+        extension.send(JSON.stringify({ method: "hello", params: { version: "test", protocolVersion: extensionProtocolVersion } }))
+        extension.send(JSON.stringify({ method: "debugger.attached", params: { tabId: 7 } }))
+        yield* Effect.promise(() => waitFor(() => extension.commands.some((command) => command.params?.method === "Page.enable")))
+        const enable = extension.commands.find((command) => command.params?.method === "Page.enable")!
+        extension.send(JSON.stringify({ id: enable.id, error: "Transient enable failure" }))
+        yield* Effect.promise(() => waitFor(() => releaseBackoff !== undefined))
+        delete options.suspendedMethod
+        extension.send(JSON.stringify({ method: "tabs.removed", params: { tabId: 7 } }))
+        extension.send(JSON.stringify({ method: "debugger.attached", params: { tabId: 7 } }))
+        // The new revision must finish before the old retry timer is released.
+        yield* Effect.promise(() => waitForStatus(relay.url, (candidate) => candidate.activeTargets === 1))
+        releaseBackoff!()
+        extension.send(JSON.stringify({ method: "ready" }))
+        const status = yield* Effect.promise(() => waitForStatus(relay.url, (candidate) => candidate.connected))
+        expect(status).toMatchObject({ connected: true, activeTargets: 1 })
+        expect(extension.commands.filter((command) => command.params?.method === "Page.enable")).toHaveLength(2)
+        expect(extension.commands.filter((command) => command.params?.method === "Target.setAutoAttach")).toHaveLength(1)
+        expect(error).toHaveBeenCalledTimes(1)
+        expect(extension.readyState).toBe(WebSocket.OPEN)
+      } finally {
+        releaseBackoff?.()
+        timerSpy.mockRestore()
+        extension.close()
+      }
+    })))
+  })
+
   it("protects a compatible browser's handshake before its inventory is ready", async () => {
     const port = 24_000 + Math.floor(Math.random() * 10_000)
     await Effect.runPromise(Effect.scoped(Effect.gen(function* () {

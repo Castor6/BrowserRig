@@ -54,7 +54,7 @@ reviewed implementation has actually landed on `main`.
 
 | Order | Outcome | State | Branch | BrowserRig PR | Independent review | Validation |
 | --- | --- | --- | --- | --- | --- | --- |
-| 01 | Runtime, session, target, and connection safety from v0.6.0 | Pending | `fix/upstream-v0.6.0-runtime-safety` | [#46](https://github.com/Castor6/BrowserRig/pull/46) (draft) | Pending | See implementation evidence below |
+| 01 | Runtime, session, target, and connection safety from v0.6.0 | Pending | `fix/upstream-v0.6.0-runtime-safety` | [#46](https://github.com/Castor6/BrowserRig/pull/46) (draft) | Changes requested; correction awaiting fresh review | See implementation evidence below |
 
 ### Batch 01: runtime and target safety
 
@@ -104,7 +104,7 @@ The draft PR manually adapts the approved safety outcomes. The batch remains
 | Accepted-work settlement (#69) | `RelayWork` stops new transport admission and retains accepted HTTP/CDP work; pending session continuations can finish. Session workers retain leases through uncancellable browser operations, journal hooks, and catalog writes. Recording cancellation retains active state through RPC/file/encoder cleanup. Tests cover aborted callers, drain ordering, pending CDP completion before socket close, and recording finalization races. Existing automatic managed-relay selection and instance checks are unchanged. |
 | CLI defaults / dependency cohort | Already covered: `src/cli.ts` boolean flags carry explicit false defaults; `package.json` and the lockfile pin Effect and both Node platform packages to rc.111, with bundled executable runtimes. No dependency, candidate installer, explicit restart CLI, release identity, or WebMCP changes were imported. |
 
-Validation on 2026-09-25:
+Initial implementation validation on 2026-09-25:
 
 - `pnpm typecheck`: passed after the final code change.
 - `pnpm test`: 64 files, 702 tests passed after the final code change.
@@ -129,7 +129,7 @@ The first draft CI run exposed tests that still assumed a new profile replaces
 a live socket; these tests now close the original connection explicitly and
 continue checking generation isolation. Ordinary restored-tab grouping remains
 best effort and does not block readiness. Final GitHub CI status is available
-on PR #46; independent review remains pending.
+on PR #46; see the review correction below for the current verdict.
 
 Environment: no `termctrl` executable/tool or Brave installation is available.
 The browser fixture uses cached Chromium in a fresh temporary profile with a
@@ -145,6 +145,45 @@ failures are retained here rather than reported as passing browser cases.
 No extension source was changed. The extension was rebuilt for the isolated
 fixture; there is no Brave reload claim or extension Changeset requirement.
 The agent workflow skill and installed OpenCode copy are synchronized.
+
+### Independent review correction: retired tab revisions
+
+The first independent review of `7b60062` returned **Changes requested** with
+one P2 finding. An inventory worker captured only the extension generation:
+if `tabs.removed` arrived while `Page.enable` was pending, a later command error
+retried the removed tab and could poison readiness for the entire connection.
+This was the missing adaptation of upstream #69's unstaged-attach invalidation
+and retry-backoff re-announcement regressions.
+
+The correction keeps the existing inline relay architecture. Worker identities
+now include the tab revision as well as connection generation. Revision checks
+cover permit acquisition, inner verification retries, outer retry/backoff, and
+failure bookkeeping. Retired work cannot retry, add, or clear a current tab's
+readiness failure. A fresh re-announcement gets its own worker; retirement cannot
+remove the semaphore while another worker for that tab remains active. Genuine
+current-generation RPC and malformed-target failures still fail closed.
+
+Validation of the review correction on 2026-09-25:
+
+- Two new handshake regressions cover pending `Page.enable` followed by removal
+  and a late error, and removal/re-announcement while the old retry backoff is
+  deliberately held. Both failed against pre-correction `7b60062`; the corrected
+  focused suite passed 37 tests. Existing live-target readiness-failure tests
+  remain enabled and passing.
+- `pnpm typecheck`, `pnpm test` (64 files / 704 tests), and `pnpm build:cli`
+  passed for the corrected code.
+- Ten targeted isolated Chromium smoke cases passed: `reconnect-evaluate`,
+  `redirect-reconnect-evaluate`, `execute-page-detach-recovery`,
+  `handoff-target-detach`, `oopif-reconnect`, `dedicated-worker`,
+  `session-isolation`, `multi-client`, `stale-client-checkout`, and
+  `raw-first-checkout`. Log: `/tmp/browserrig-v060-revision-smoke.log`.
+  These ran against the correction's source relay at isolated port 21990.
+  The earlier full 23-case evidence remains attributed to `e39eaa0` above.
+- Task-owned Chromium and relay processes were stopped after the run. No
+  extension source or workflow changes were required by this correction.
+
+The batch remains `Pending`. The correction is pushed to the same draft PR #46
+for a fresh independent review; it is not an approval or merge.
 
 ## Upstream dispositions
 

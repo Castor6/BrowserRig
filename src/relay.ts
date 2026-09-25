@@ -176,6 +176,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
   const rootLifecycleSemaphores = new Map<number, Semaphore.Semaphore>()
   const rootRevisions = new Map<number, number>()
   type RootReconciliationWorker = {
+    readonly tabId: number
     attachIfMissing: boolean
     generation: number
     pending: boolean
@@ -1639,6 +1640,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     readonly browserRigSessionId?: string
     readonly alreadyAttached?: boolean
     readonly expectedExtensionGeneration?: number
+    readonly expectedRootRevision?: number
     readonly extensionRpcGeneration?: number
     readonly reuseExisting?: boolean
     readonly autoAttachParams?: JsonObject
@@ -1649,6 +1651,9 @@ const makeRelay = Effect.fnUntraced(function* (options: {
       if (relayClosing) return yield* Effect.fail(new Error("Relay is closing"))
       if (options.expectedExtensionGeneration !== undefined && options.expectedExtensionGeneration !== extensionGeneration) {
         return yield* Effect.fail(new Error("Extension changed before target reconciliation acquired its permit"))
+      }
+      if (options.expectedRootRevision !== undefined) {
+        yield* assertRootRevision(options.tabId, options.expectedRootRevision)
       }
       if (options.reuseExisting) {
         const existing = registry.getRootTargetByTabId(options.tabId)
@@ -1671,13 +1676,21 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     }))
   })
 
-  const reconcileAttachedRootUnlocked = Effect.fnUntraced(function* (tabId: number, generation: number) {
+  const assertRootRevision = Effect.fnUntraced(function* (tabId: number, revision: number) {
+    if ((rootRevisions.get(tabId) ?? 0) !== revision) {
+      return yield* Effect.fail(new Error("Tab detached during root reconciliation"))
+    }
+  })
+
+  const reconcileAttachedRootUnlocked = Effect.fnUntraced(function* (tabId: number, generation: number, revision: number) {
     const expected = registry.tabTargets.get(tabId)
     const staged = registry.stagedRootTarget(tabId)
     if (!expected && !staged) return
     let targetInfo: ReturnType<typeof getTargetInfo> | undefined
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      yield* assertRootRevision(tabId, revision)
       const result = yield* Effect.result(sendDebuggerCommandAtGeneration(generation, { tabId, method: "Target.getTargetInfo", params: {} }))
+      yield* assertRootRevision(tabId, revision)
       if (result._tag === "Success") {
         targetInfo = getTargetInfo(result.success.targetInfo)
         break
@@ -1706,7 +1719,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     })
   })
 
-  const reconcileAttachedRoot = Effect.fnUntraced(function* (tabId: number, expectedExtensionGeneration?: number) {
+  const reconcileAttachedRoot = Effect.fnUntraced(function* (tabId: number, expectedExtensionGeneration: number, revision: number) {
     const semaphore = rootLifecycleSemaphores.get(tabId) ?? Semaphore.makeUnsafe(1)
     rootLifecycleSemaphores.set(tabId, semaphore)
     yield* semaphore.withPermit(Effect.gen(function* () {
@@ -1714,7 +1727,8 @@ const makeRelay = Effect.fnUntraced(function* (options: {
       if (expectedExtensionGeneration !== undefined && expectedExtensionGeneration !== extensionGeneration) {
         return yield* Effect.fail(new Error("Extension changed before target reconciliation acquired its permit"))
       }
-      yield* reconcileAttachedRootUnlocked(tabId, expectedExtensionGeneration ?? extensionGeneration)
+      yield* assertRootRevision(tabId, revision)
+      yield* reconcileAttachedRootUnlocked(tabId, expectedExtensionGeneration, revision)
     }))
   })
 
@@ -1725,8 +1739,11 @@ const makeRelay = Effect.fnUntraced(function* (options: {
     errorMessage: string,
     generation = extensionGeneration,
   ): void {
-    if (relayClosing) return
-    const workerKey = `${generation}:${tabId}`
+    if (relayClosing || generation !== extensionGeneration) return
+    const revision = rootRevisions.get(tabId) ?? 0
+    const isCurrent = () => generation === extensionGeneration && (rootRevisions.get(tabId) ?? 0) === revision
+    const failureKey = `${generation}:${tabId}`
+    const workerKey = `${failureKey}:${revision}`
     const existing = rootReconciliationWorkers.get(workerKey)
     if (existing) {
       existing.pending = true
@@ -1735,6 +1752,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
       return
     }
     const worker: RootReconciliationWorker = {
+      tabId,
       attachIfMissing,
       generation,
       pending: false,
@@ -1745,22 +1763,23 @@ const makeRelay = Effect.fnUntraced(function* (options: {
       let retries = 0
       let reconciled = true
       do {
-        if (generation !== extensionGeneration) return false
+        if (!isCurrent()) return false
         worker.pending = false
         const mayAttach = worker.attachIfMissing
         worker.attachIfMissing = false
         try {
           if (registry.tabTargets.has(tabId)) {
-            await Effect.runPromise(reconcileAttachedRoot(tabId, generation))
+            await Effect.runPromise(reconcileAttachedRoot(tabId, generation, revision))
           } else if (mayAttach && !relayClosing) {
             await Effect.runPromise(attachTab({
               tabId,
               owner: "user",
               alreadyAttached: true,
               expectedExtensionGeneration: generation,
+              expectedRootRevision: revision,
             }))
           }
-          if (generation !== extensionGeneration) {
+          if (!isCurrent()) {
             return false
           }
           retries = 0
@@ -1771,10 +1790,10 @@ const makeRelay = Effect.fnUntraced(function* (options: {
             worker.pending = true
           }
         } catch (error) {
+          // Retired work neither retries the removed tab nor poisons the current inventory.
+          if (!isCurrent()) return false
           console.error(errorMessage, error)
-          if (generation !== extensionGeneration) {
-            reconciled = false
-          } else if (retries < 2 && !relayClosing) {
+          if (retries < 2 && !relayClosing) {
             retries += 1
             worker.attachIfMissing ||= mayAttach
             await new Promise((resolve) => setTimeout(resolve, 100 * retries))
@@ -1784,16 +1803,18 @@ const makeRelay = Effect.fnUntraced(function* (options: {
           }
         }
       } while (worker.pending && !relayClosing)
-      if (generation === extensionGeneration) {
-        if (reconciled) failedRootReconciliations.delete(workerKey)
-        else failedRootReconciliations.add(workerKey)
+      if (isCurrent()) {
+        if (reconciled) failedRootReconciliations.delete(failureKey)
+        else failedRootReconciliations.add(failureKey)
       }
       return reconciled
     })().finally(() => {
       if (rootReconciliationWorkers.get(workerKey) === worker) {
         rootReconciliationWorkers.delete(workerKey)
       }
-      if (!registry.tabTargets.has(tabId)) rootLifecycleSemaphores.delete(tabId)
+      if (!registry.routingRootTarget(tabId) && !Array.from(rootReconciliationWorkers.values()).some((pending) => pending.tabId === tabId)) {
+        rootLifecycleSemaphores.delete(tabId)
+      }
     })
     rootReconciliationWorkers.set(workerKey, worker)
   }

@@ -27,11 +27,11 @@ No later cycle is active. All batch states remain Pending until reviewed and lan
 - From: `v0.7.1`, `ebb37682f34771a5271f0c0c8305c1687ac4a601`.
 - To: `v0.8.2`, `868a8832e340cb4445da8fc555db57c16eeb6fa5`.
 - Tag refresh: 2026-09-26; v0.8.2 remains the newest v0.8 patch.
-- Eight reachable commits; no claim of implementation or final code review.
+- Eight reachable commits; implementation and review coverage are tracked by batch below.
 
 | Upstream evidence | Proposed disposition | Preserved analysis and limits |
 | --- | --- | --- |
-| [#88](https://github.com/anomalyco/browser-control/pull/88), `3bb4e05b178e2b482877ab56297aa89fa6f72b91` | Compare for already-covered behavior; adapt only a remaining safety need | Simplifies debugger ownership callers/proof. PR #50 already adopts #87 ownership checks; do not import a refactor without a demonstrated benefit. This commit is after v0.7.1. |
+| [#88](https://github.com/anomalyco/browser-control/pull/88), `3bb4e05b178e2b482877ab56297aa89fa6f72b91` | Already covered; skip unnecessary refactor | Independent review confirmed PR #50 already adopts the #87 ownership safety behavior. #88 only simplifies callers/proof; no remaining safety gap was found. |
 | [#89](https://github.com/anomalyco/browser-control/pull/89), `b1410ca101094bd0fa3d756c98985ac73630e77b` | Selective adaptation | Compact snapshot semantics/search, plain-text contenteditable filling, filesystem compatibility, and ordinary MCP recording controls. Keep explicit snapshot diff/ref invalidation and native WebMCP; exclude demonstration/flight recording and relaxed raw-client routing. |
 | [#90](https://github.com/anomalyco/browser-control/pull/90), `7cb2061a23a75cc24d44403ff367c010af2e80cd` | Skip | Upstream release metadata does not control BrowserRig versions or releases. |
 | [#91](https://github.com/anomalyco/browser-control/pull/91), `8bb33c886bdf995f85c0c228e13c1019b32f22d7` | Adapt | Preserve unresponsive pages and repair over a fresh connection; improve selected-page diagnostics. Do not add implicit named-session creation during adoption. Review changes against BrowserRig's target identity and recovery guarantees. |
@@ -44,7 +44,7 @@ No later cycle is active. All batch states remain Pending until reviewed and lan
 
 | Batch | Scope | Branch | State | BrowserRig PR / independent review / validation |
 | --- | --- | --- | --- | --- |
-| 01 | Snapshot semantics/search, plain-text contenteditable fill, and #88 reconciliation | `feat/upstream-v0.8.2-snapshot-input` | Pending | [PR #52](https://github.com/Castor6/BrowserRig/pull/52); independent review pending; validation below |
+| 01 | Snapshot semantics/search, plain-text contenteditable fill, and #88 reconciliation | `feat/upstream-v0.8.2-snapshot-input` | Pending | [PR #52](https://github.com/Castor6/BrowserRig/pull/52); independent Approve at `8f57e73`, CI passed; awaiting explicit merge approval; validation below |
 | 02 | Filesystem compatibility and ordinary MCP recording controls from #89 | `feat/upstream-v0.8.2-filesystem-recording` | Pending | Not started |
 | 03 | #91/#94 page preservation and protected frames; selected #93 hostile-page regressions | `fix/upstream-v0.8.2-page-preservation` | Pending | Not started |
 
@@ -223,5 +223,21 @@ Validation after this correction:
   visibility correction. Existing full-suite evidence remains recorded above.
   Chrome was isolated and closed by the check; no task relay was started.
 
-Fresh focused review and final-head CI remain pending. No merge or cursor
-advancement is authorized by this correction.
+### Independent approval and merge gate
+
+On 2026-09-26 a fresh independent reviewer returned **Approve** for
+`8f57e735583a220a6a90a20e346b84c9ce0a2938`. The reviewer checked the complete PR,
+the scoped #88/#89 evidence, and the final `c7f1b50..8f57e73` correction. All
+previous findings are closed; no new material finding remains.
+
+The reviewer independently passed all 24 Chrome checks, 32 focused unit tests,
+and the earlier ARIA/native-modal reproduction with corrected assertions.
+[CI validate for the reviewed head](https://github.com/Castor6/BrowserRig/actions/runs/36214991775)
+passed typecheck, the full unit suite, and builds. The full 23-case relay smoke
+remains the historical run above; subsequent focused validation covers the
+corrections without claiming a fresh full-set run.
+
+The `browserrig: minor` Changeset and unchanged extension-source scope were
+confirmed. This approval record changes documentation only. Batch 01 remains
+Pending until explicit user merge approval and landing; batches 02/03 remain
+unstarted and the completed cursor stays at v0.7.1. No publication is authorized.

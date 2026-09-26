@@ -1,0 +1,1 @@
+{"manifest_version":3,"name":"BrowserRig protected frame fixture","version":"1.0.0","content_scripts":[{"matches":["http://127.0.0.1/*"],"js":["inject.js"]}],"web_accessible_resources":[{"resources":["menu.html"],"matches":["http://127.0.0.1/*"]}]}

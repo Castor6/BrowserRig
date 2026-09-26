@@ -1332,6 +1332,9 @@ export class ExecuteSandbox {
     // A detach or replacement can arrive while an uncancellable probe settles.
     // Never apply its result to the replacement generation.
     if (recovery !== "recreate") assertCurrent()
+    else if (this.pendingPageTarget || (this.defaultPageTargetId !== undefined && this.defaultPageTargetId !== targetId) || (this.page !== undefined && this.page !== page)) {
+      throw new SessionPageRecoveryError({ message: "The session target changed while closing its old page; retry after the target transition settles.", reason: "target-unavailable", cause: new Error("Session page generation changed during close") })
+    }
     if (recovery === "use") {
       this.pageHealthCheckRequired = false
       this.pageCrashed = false

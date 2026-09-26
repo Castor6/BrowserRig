@@ -50,7 +50,7 @@ effect when that PR lands on main.
 | --- | --- | --- | --- | --- |
 | 01 | Snapshot semantics/search, plain-text contenteditable fill, and #88 reconciliation | `feat/upstream-v0.8.2-snapshot-input` | Complete | [PR #52](https://github.com/Castor6/BrowserRig/pull/52); independent Approve at `8f57e73`, CI passed; user authorized autonomous merges on 2026-09-26; effective on landing |
 | 02 | Filesystem compatibility and ordinary MCP recording controls from #89 | `feat/upstream-v0.8.2-filesystem-recording` | Complete | [PR #53](https://github.com/Castor6/BrowserRig/pull/53); independent Approve at `7843610`, CI passed; effective on landing |
-| 03 | #91/#94 page preservation and protected frames; selected #93 hostile-page regressions | `fix/upstream-v0.8.2-page-preservation` | Pending | Not started |
+| 03 | #91/#94 page preservation and protected frames; selected #93 hostile-page regressions | `fix/upstream-v0.8.2-page-preservation` | Pending | [Draft PR #54](https://github.com/Castor6/BrowserRig/pull/54); implementation and validation in progress; independent review pending |
 
 ## Preserved product exclusions
 
@@ -350,3 +350,51 @@ changes documentation only; publication remains unauthorized.
   protected-frame tracker, and relay frame routing. The initial typecheck found
   one missing import, corrected before the passing typecheck. Full-suite and
   browser evidence are pending. Batch remains Pending until independent review.
+
+### Batch 03 regression and browser evidence
+
+- First coherent commit `cb0a252` was pushed and draft PR #54 opened immediately.
+  Initial full unit suite passed 827 tests in 72 files. Expanded unit suite
+  passed 831 tests; a final close-during-replacement regression adds one more
+  case. Final-head verification and review remain required.
+- #93 selected `heavy-spa-slow-context` and `typing-freezes-page` fixtures run in
+  `scripts/check-page-preservation.ts`, asserting exact target/tab/owner identity,
+  no replacement warning, eventual readability, partial input preservation, and
+  adopted-tab survival after deletion. Chrome 153.0.8010.53 passed all three
+  cases (owned SPA, adopted SPA, typing freeze):
+  `/tmp/browserrig-v082-batch03-hostile-third.log`. Chrome recovered the SPA
+  before the follow-up probe; unit tests independently force failed health
+  checks and fresh-connection recovery. No live forced-repair success is claimed.
+- Hostile first attempt failed request validation because the test omitted the
+  required `createIfMissing`; second attempt incorrectly demanded an adopted
+  failure even though the page was already healthy. The final fixture accepts
+  success or the correct bounded diagnosis; product behavior was not changed
+  to satisfy that assertion. First/second logs remain under the same prefix.
+- Existing handoff-navigation/cross-tab/target-detach and OOPIF smoke cases cover
+  the relevant #93 auth-redirect and cross-origin routing invariants. Its payment
+  model's rejection of autofill and sentinel forced-click strategy are site/agent
+  behavior, outside this driver correction. Its expected-failure generic stalled
+  read naming and implicit named-session adoption are excluded. No complete
+  upstream gauntlet, telemetry, or timeout replay is imported.
+- Real extra-extension iframe validation reproduced Chrome's cross-extension
+  rejection, named `target/cross-extension-page`, exposed `protectedUi`, and hid
+  the phantom child. Browser CDP independently confirmed the original physical
+  target, URL and title survived while Chrome set `attached: false`. The first
+  run failed its assumption that dismissal alone restores automation. Chrome
+  requires explicit reattachment in this fixture. Second/third test attempts
+  used `browser.close()` in user code to refresh the client; that existing path
+  triggers the page-close listener and clears the default reference, so their
+  subsequent read saw blank. This is not the new repair path, which clears
+  listeners first; no fix to user-code `browser.close()` semantics is claimed.
+- Final supported recovery uses exact-target activation, active adoption, reset
+  of that adopted session (release only), and active re-adoption. Original target
+  identity and document readability pass, without extension permission changes.
+  Evidence: `/tmp/browserrig-v082-batch03-protected-fourth.log`; prior first,
+  second and third logs remain. The test-only inspector and isolated browser
+  harness are reproducible with `scripts/page-preservation-browser.mjs`.
+- Late health results and close completion cannot erase a replacement session
+  page. Late debugger success/error cannot clear/set protection on a newer root.
+  The initial generation fixture accidentally held page-status initialization's
+  Runtime.evaluate; its debug log identifies the cause. Restricting the held
+  command to the fixture expression makes all four relay cases pass. This was
+  a test fixture correction, with no product timeout replay.

@@ -553,7 +553,9 @@ Common diagnoses:
   menu opened by focusing a field. Finish or dismiss it in the browser and retry.
   Do not reset the page, access vault contents, or weaken browser security.
   Masked context errors and locator timeouts receive the same guidance while
-  the relay knows that the default tab is blocked.
+  the relay knows that the default tab is blocked. Chrome can also revoke debugger
+  attachment; dismissal alone may not restore it. Activate the preserved tab
+  and explicitly re-attach with `session adopt --active --session <id>`.
 - Fill timeout on login fields: inspect first, then try `fillInput` after
   confirming the selector or locator resolves. String selectors search open
   shadow roots recursively; closed shadow roots remain unavailable.

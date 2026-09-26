@@ -856,3 +856,9 @@ or root generation. Masked context failures and locator timeouts on that blocked
 default page receive `target/cross-extension-page` and ask the human to finish
 or dismiss the UI; they do not trigger page-health recovery. Permissions and
 extension protocol remain unchanged.
+
+Chrome 153 live validation also shows debugger attachment can be revoked while
+the protected frame opens. Dismissal alone is not an automatic-recovery promise.
+The physical tab survives; explicit active adoption, release of that adopted
+session, and re-adoption can refresh stale client state without closing the tab.
+The relay does not weaken the permission boundary or replay timed-out actions.

@@ -328,6 +328,51 @@ describe("execute lifecycle", () => {
   })
 
 
+  it.each(["replace", "detach"] as const)("does not apply a late health result after target %s", async (change) => {
+    let finish!: () => void
+    let started!: () => void
+    const checking = new Promise<void>((resolve) => { started = resolve })
+    const fixture = makeMultiPageBrowserFixture([
+      { targetId: "old", targetUrl: "https://example.test/form", evaluate: () => { started(); return new Promise<void>((resolve) => { finish = resolve }) } },
+      { targetId: "new", targetUrl: "https://example.test/replacement", initiallyVisible: false },
+    ])
+    const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:1" })
+    Object.assign(sandbox, { browser: fixture.browser })
+    await Effect.runPromise(sandbox.execute("return page.url()"))
+    sandbox.markTargetCrashed("old")
+    const pending = Effect.runPromise(sandbox.execute("return page.url()"))
+    await checking
+    if (change === "replace") {
+      fixture.replace("old", "new")
+      sandbox.markTargetReplaced("old", "new")
+    } else {
+      fixture.detach("old")
+      sandbox.markTargetDetached("old")
+    }
+    finish()
+    expect(await pending).toMatchObject({ isError: true, diagnostic: "session-page/target-unavailable" })
+    expect(fixture.newPageCalls()).toBe(1)
+    if (change === "replace") {
+      expect(await Effect.runPromise(sandbox.execute("return page.url()"))).toMatchObject({ isError: false, value: "https://example.test/replacement" })
+    }
+  })
+
+  it("does not erase a replacement that arrives while closing a crashed page", async () => {
+    const fixture = makeMultiPageBrowserFixture([
+      { targetId: "old", targetUrl: "https://example.test/form", evaluate: async () => { throw new Error("Target crashed") } },
+      { targetId: "new", targetUrl: "https://example.test/replacement", initiallyVisible: false },
+    ])
+    const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:1" })
+    Object.assign(sandbox, { browser: fixture.browser })
+    await Effect.runPromise(sandbox.execute("return page.url()"))
+    const old = fixture.browser.contexts()[0]!.pages()[0]!
+    old.close = async () => { fixture.replace("old", "new"); sandbox.markTargetReplaced("old", "new") }
+    sandbox.markTargetCrashed("old")
+    expect(await Effect.runPromise(sandbox.execute("return page.url()"))).toMatchObject({ isError: true, diagnostic: "session-page/target-unavailable" })
+    expect(await Effect.runPromise(sandbox.execute("return page.url()"))).toMatchObject({ isError: false, value: "https://example.test/replacement" })
+    expect(fixture.newPageCalls()).toBe(1)
+  })
+
   it("binds screenshotDiff to the selected page and extracts its PNG media", async () => {
     const f = makeWebMcpSandboxFixture()
     const browser = (f.sandbox as unknown as { browser: Browser }).browser

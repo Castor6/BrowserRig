@@ -92,6 +92,12 @@ describe("relay protected frames", () => {
         extension.send(JSON.stringify({ method: "hello", params: { version: "test", protocolVersion: 3 } }))
         extension.send(JSON.stringify({ method: "ready" }))
         const owner = await openSocket(`${endpoint}/devtools/browser/test?browserRigSessionId=owner`)
+        const outsider = await openSocket(`${endpoint}/devtools/browser/test?browserRigSessionId=outsider`)
+        const outsiderEvents: CdpEvent[] = []
+        outsider.on("message", (data) => {
+          const message = JSON.parse(data.toString()) as CdpEvent | CdpReply
+          if ("method" in message) outsiderEvents.push(message)
+        })
         const events: CdpEvent[] = []
         owner.on("message", (data) => {
           const message = JSON.parse(data.toString()) as CdpEvent | CdpReply
@@ -146,6 +152,8 @@ describe("relay protected frames", () => {
             ["Page.frameDetached", "menu-frame", "remove"],
           ])
           expect(events.filter((event) => event.method === "Page.frameDetached").map((event) => event.sessionId)).toEqual([rootSession])
+          expect(outsiderEvents.some((event) => event.method.startsWith("Page."))).toBe(false)
+          expect((await send(owner, { method: "Runtime.evaluate", params: { expression: "1" }, sessionId: "protected-child" })).error?.message).toContain("Unknown CDP session")
 
           // Chrome now refuses every debugger command for the tab; the relay records the block on the root target.
           rejectDebuggerCommands = true
@@ -170,6 +178,7 @@ describe("relay protected frames", () => {
           expect((await send(owner, { method: "Runtime.evaluate", params: { expression: "1" }, sessionId: rootSession })).error).toBeUndefined()
           expect(await protectedUi(relay.url)).toBeUndefined()
         } finally {
+          outsider.close()
           owner.close()
           extension.close()
         }
@@ -227,4 +236,67 @@ describe("relay protected frames", () => {
       })
     })))
   })
+  it.each([false, true])("ignores a late command outcome from a replaced root (success: %s)", async (success) => {
+    await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
+      const relay = yield* startRelay({ port: yield* Effect.promise(freePort), sessionCatalogPath: null })
+      yield* Effect.tryPromise(async () => {
+        const endpoint = relay.url.replace("http://", "ws://")
+        const extension = await openSocket(`${endpoint}/extension`)
+        let rootId = "old-root"
+        let held: ExtensionCommand | undefined
+        let hold = true
+        let receive!: () => void
+        const received = new Promise<void>((resolve) => { receive = resolve })
+        extension.on("message", (data) => {
+          const command = JSON.parse(data.toString()) as ExtensionCommand
+          if (command.params?.method === "Runtime.evaluate" && (command.params.params as JsonObject)?.expression === "1") {
+            if (hold) { held = command; hold = false; receive(); return }
+            extension.send(JSON.stringify({ id: command.id, error: crossExtensionError }))
+            return
+          }
+          extension.send(JSON.stringify({ id: command.id, result: command.method === "tabs.create" ? { tabId: 1 }
+            : command.params?.method === "Target.getTargetInfo" ? { targetInfo: targetInfo(rootId) } : {} }))
+        })
+        extension.send(JSON.stringify({ method: "hello", params: { version: "test", protocolVersion: 3 } }))
+        extension.send(JSON.stringify({ method: "ready" }))
+        const owner = await openSocket(`${endpoint}/devtools/browser/test?browserRigSessionId=owner`)
+        let id = 0
+        const send = async (request: Omit<CdpRequest, "id">) => {
+          const requestId = ++id
+          const response = nextMessage(owner, (message) => "id" in message && message.id === requestId)
+          owner.send(JSON.stringify({ ...request, id: requestId }))
+          return await response as CdpReply
+        }
+        try {
+          await send({ method: "Target.setAutoAttach", params: { autoAttach: true, waitForDebuggerOnStart: false, flatten: true } })
+          await send({ method: "Target.createTarget", params: { url: "about:blank" } })
+          const alias = (await send({ method: "Target.attachToTarget", params: { targetId: rootId, flatten: true } })).result?.sessionId
+          assertString(alias)
+          const old = send({ method: "Runtime.evaluate", params: { expression: "1" }, sessionId: alias })
+          await received
+          rootId = "new-root"
+          const attached = nextMessage(owner, (message) => "method" in message && message.method === "Target.attachedToTarget" && (message.params?.targetInfo as JsonObject)?.targetId === rootId)
+          extension.send(JSON.stringify({ method: "debugger.attached", params: { tabId: 1 } }))
+          await attached
+          if (success) {
+            const newAlias = (await send({ method: "Target.attachToTarget", params: { targetId: rootId, flatten: true } })).result?.sessionId
+            assertString(newAlias)
+            await send({ method: "Runtime.evaluate", params: { expression: "1" }, sessionId: newAlias })
+            expect(await protectedUi(relay.url)).toBe(true)
+          }
+          extension.send(JSON.stringify({ id: held!.id, ...(success ? { result: {} } : { error: crossExtensionError }) }))
+          await old
+          expect(await protectedUi(relay.url)).toBe(success ? true : undefined)
+        } finally {
+          owner.close()
+          extension.close()
+        }
+      })
+    })))
+  })
+
 })
+
+function assertString(value: unknown): asserts value is string {
+  if (typeof value !== "string") throw new Error("Expected a session alias")
+}

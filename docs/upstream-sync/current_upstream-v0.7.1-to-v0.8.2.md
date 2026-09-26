@@ -49,7 +49,7 @@ effect when that PR lands on main.
 | Batch | Scope | Branch | State | BrowserRig PR / independent review / validation |
 | --- | --- | --- | --- | --- |
 | 01 | Snapshot semantics/search, plain-text contenteditable fill, and #88 reconciliation | `feat/upstream-v0.8.2-snapshot-input` | Complete | [PR #52](https://github.com/Castor6/BrowserRig/pull/52); independent Approve at `8f57e73`, CI passed; user authorized autonomous merges on 2026-09-26; effective on landing |
-| 02 | Filesystem compatibility and ordinary MCP recording controls from #89 | `feat/upstream-v0.8.2-filesystem-recording` | Pending | [PR #53](https://github.com/Castor6/BrowserRig/pull/53); implementation and validation complete; independent review pending |
+| 02 | Filesystem compatibility and ordinary MCP recording controls from #89 | `feat/upstream-v0.8.2-filesystem-recording` | Complete | [PR #53](https://github.com/Castor6/BrowserRig/pull/53); independent Approve at `7843610`, CI passed; effective on landing |
 | 03 | #91/#94 page preservation and protected frames; selected #93 hostile-page regressions | `fix/upstream-v0.8.2-page-preservation` | Pending | Not started |
 
 ## Preserved product exclusions
@@ -312,5 +312,20 @@ unstarted and the completed cursor stays at v0.7.1. No publication is authorized
   compare equal. No domain-language change requires a CONTEXT.md edit.
 - Task-owned relay PIDs 16473/16732 and Chrome harness PID 16475 were stopped;
   port 21990 is released. Review requires no running test process.
-- Fresh independent review and final-head CI are pending. Batch 02 stays Pending;
-  this PR does not authorize or perform merges or publication.
+### Batch 02 independent approval
+
+On 2026-09-26 a fresh independent reviewer returned **Approve** for
+`784361065f0c8e2a68fa6785d28bb8e49b7ad0f6` after comparing the full PR with the
+scoped upstream #89 code and tests. No material findings remain. The reviewer
+independently passed 106 tests across MCP, session catalog, recording relay,
+HTTP API, and relay client, and verified skill equality and the final media
+with ffprobe. [Reviewed-head CI](https://github.com/Castor6/BrowserRig/actions/runs/36215918372)
+passed typecheck, all 808 tests in 70 files, and builds.
+
+The reviewer confirmed the minor Changeset, narrow directory-sync fallback,
+shared RelayClient routing, and absence of extension/DSH/recording-core changes.
+Windows and audio/tab-capture remain untested live; the reviewer inspected the
+Chrome lifecycle evidence rather than rerunning it. Cycle-wide full smoke is
+still required at closure. Under the recorded autonomous merge authorization,
+batch 02 becomes Complete when PR #53 lands after its final checks. This record
+changes documentation only; publication remains unauthorized.

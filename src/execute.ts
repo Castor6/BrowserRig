@@ -525,6 +525,7 @@ export class ExecuteSandbox {
   private defaultPageTargetId: string | undefined
   private ownsPage = false
   private pageHealthCheckRequired = false
+  private pageDocumentGeneration = 0
   private pageCrashed = false
   private pageProtectedUi = false
   private pendingPageTarget: { readonly targetId: string; readonly warnReplaced: boolean; readonly repaired?: boolean } | undefined
@@ -1067,6 +1068,15 @@ export class ExecuteSandbox {
     return true
   }
 
+  /** Only current-root main-document navigations reach this synchronous relay notification. */
+  markTargetNavigated(targetId: string): boolean {
+    if (this.defaultPageTargetId !== targetId) return false
+    this.pageDocumentGeneration += 1
+    // Keep the pending health check: the old Playwright Page may still be crashed.
+    this.pageCrashed = false
+    return true
+  }
+
   /** Relay report that protected extension UI started or stopped blocking the default page's tab. */
   markTargetProtectedUi(targetId: string, protectedUi: boolean): boolean {
     if (this.defaultPageTargetId !== targetId) {
@@ -1306,6 +1316,7 @@ export class ExecuteSandbox {
     const timeoutMs = this.options.pageHealthCheckTimeoutMs ?? sessionPageHealthCheckTimeoutMs
     const targetId = this.defaultPageTargetId
     const originalUrl = page.url()
+    const documentGeneration = this.pageDocumentGeneration
     const assertCurrent = () => {
       if (this.page !== page || this.defaultPageTargetId !== targetId || this.pendingPageTarget) {
         throw new SessionPageRecoveryError({ message: "The session page changed during its health check; retry after the target transition settles.", reason: "target-unavailable", cause: new Error("Session page generation changed") })
@@ -1325,7 +1336,7 @@ export class ExecuteSandbox {
       }),
       close: async () => {
         assertCurrent()
-        if (page.url() !== originalUrl) throw new Error("Session page navigated during its health check; keep the tab")
+        if (this.pageDocumentGeneration !== documentGeneration || page.url() !== originalUrl) throw new Error("Session page navigated during its health check; keep the tab")
         await page.close()
       },
     }))

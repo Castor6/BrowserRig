@@ -154,10 +154,11 @@ describe("execute lifecycle", () => {
   })
 
 
-  it("repairs a stale relay-owned page over a fresh connection instead of replacing it", async () => {
+  it.each(["stale context", "crash then navigation", "crash then same-URL reload"])("repairs %s over a fresh connection without replacing the tab", async (scenario) => {
+    let url = "https://example.test/sign-in"
     const makePage = (evaluate: () => Promise<boolean>) => ({
       isClosed: () => false,
-      url: () => "https://example.test/sign-in",
+      url: () => url,
       title: async () => "Fixture",
       context: (): BrowserContext => context as unknown as BrowserContext,
       on: vi.fn(),
@@ -201,16 +202,23 @@ describe("execute lifecycle", () => {
       expect(failure.diagnostic).toMatch(/^execution-context\/context-destroyed/)
       expect(sandbox.getStatus().connected).toBe(false)
 
+      if (scenario !== "stale context") {
+        sandbox.markTargetCrashed("fixture-target")
+        if (scenario === "crash then navigation") url = "https://example.test/recovered"
+        expect(sandbox.markTargetNavigated("other-target")).toBe(false)
+        expect(sandbox.markTargetNavigated("fixture-target")).toBe(true)
+      }
+
       // Reconnecting exposes the same target id through a fresh page object.
       pages.splice(0, pages.length, repairedPage)
       const continued = await Effect.runPromise(sandbox.execute("return { url: page.url() }"))
-      expect(continued).toMatchObject({ isError: false, value: { url: "https://example.test/sign-in" } })
-      expect(continued.warnings).toEqual([defaultPageRepairedWarning])
+      expect(continued).toMatchObject({ isError: false, value: { url } })
+      expect(continued.warnings).toContain(defaultPageRepairedWarning)
       expect(stalePage.close).not.toHaveBeenCalled()
       expect(context.newPage).toHaveBeenCalledTimes(1)
       expect(browser.close).toHaveBeenCalledTimes(1)
       expect(connect).toHaveBeenCalledTimes(2)
-      expect(sandbox.getStatus()).toMatchObject({ connected: true, pageUrl: "https://example.test/sign-in" })
+      expect(sandbox.getStatus()).toMatchObject({ connected: true, pageUrl: url })
     } finally {
       await Effect.runPromise(sandbox.disconnectSettled())
       connect.mockRestore()
@@ -355,6 +363,26 @@ describe("execute lifecycle", () => {
     if (change === "replace") {
       expect(await Effect.runPromise(sandbox.execute("return page.url()"))).toMatchObject({ isError: false, value: "https://example.test/replacement" })
     }
+  })
+
+  it("keeps a crashed tab when a same-URL main document reload arrives during its probe", async () => {
+    let started!: () => void
+    const checking = new Promise<void>((resolve) => { started = resolve })
+    const fixture = makeMultiPageBrowserFixture([
+      { targetId: "old", targetUrl: "https://example.test/form", evaluate: () => { started(); return new Promise(() => {}) } },
+    ])
+    const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:1", pageHealthCheckTimeoutMs: 30 })
+    Object.assign(sandbox, { browser: fixture.browser })
+    await Effect.runPromise(sandbox.execute("return page.url()"))
+    const original = fixture.browser.contexts()[0]!.pages()[0]!
+    const close = vi.spyOn(original, "close")
+    sandbox.markTargetCrashed("old")
+    const pending = Effect.runPromise(sandbox.execute("return page.url()"))
+    await checking
+    expect(sandbox.markTargetNavigated("old")).toBe(true)
+    expect(await pending).toMatchObject({ isError: true })
+    expect(close).not.toHaveBeenCalled()
+    expect(fixture.newPageCalls()).toBe(1)
   })
 
   it("does not erase a replacement that arrives while closing a crashed page", async () => {
@@ -652,11 +680,12 @@ describe("execute lifecycle", () => {
     expect(error instanceof Error ? error.message : "").toContain("could not be closed")
   })
 
-  it("fails fast without closing an unhealthy adopted page", async () => {
+  it.each([false, true])("never closes an unhealthy adopted page (crashed=%s)", async (crashed) => {
     let closed = false
     const error = await Effect.runPromise(recoverSessionPage({
       ownsPage: false,
       url: "https://example.test/form",
+      crashed,
       timeoutMs: 20,
       healthCheck: () => Promise.reject(new Error("Execution context was destroyed")),
       close: () => {

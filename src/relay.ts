@@ -1185,6 +1185,7 @@ const makeRelay = Effect.fnUntraced(function* (options: {
         forgetProtectedFrames(tabId)
         contextDebugLog?.(`main-frame-navigated frame=${boundedToken(typeof frame.id === "string" ? frame.id : undefined)} loader=${boundedToken(typeof frame.loaderId === "string" ? frame.loaderId : undefined)} ${targetDiagnosticIdentity(target)} ${summarizeDiagnosticUrl(frame.url)}`)
         registry.updateTargetUrl(tabId, frame.url)
+        sessions.markTargetNavigated(target.targetInfo.targetId)
       }
       if (typeof frame?.id === "string" && typeof frame.parentId === "string" && params) {
         registry.rememberFrameEvent({ tabId, frameId: frame.id, navigated: params })

@@ -12,6 +12,7 @@ Run each check once and retain the first output, including failures:
 
 ```sh
 BROWSERRIG_PORT=21990 pnpm exec tsx scripts/check-page-preservation.ts
+BROWSERRIG_PORT=21990 pnpm exec tsx scripts/check-crash-navigation.ts
 BROWSERRIG_PORT=21990 BROWSERRIG_TEST_INSPECTOR=http://127.0.0.1:21992 pnpm exec tsx scripts/check-protected-frame.ts
 ```
 
@@ -28,3 +29,9 @@ failure, followed by readable state on the same target. Deterministic unit
 checks separately force both health attempts to fail and check the fresh
 connection path and target-generation races. Generic stalled-read naming,
 implicit named-session creation, and forced overlay clicks are not introduced.
+
+The crash-navigation check crashes a relay-owned page, navigates the same target
+to a recovered HTTP form (including a same-URL reload), writes draft input through
+independent CDP, then verifies a fresh BrowserRig connection preserves the exact
+physical tab and draft. Unit tests additionally cover navigation during a probe,
+true unrecovered crashes, adopted tabs, and target replacement races.

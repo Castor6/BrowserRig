@@ -237,6 +237,13 @@ export class BrowserRigSessions {
     return Array.from(this.sessions.values()).some((session) => session.sandbox.networkStatus().active)
   }
 
+  markTargetNavigated(targetId: string): void {
+    // Synchronous delivery to the live session object, with no delayed id-only callback.
+    for (const session of this.sessions.values()) {
+      if (session.target?.id === targetId) session.sandbox.markTargetNavigated(targetId)
+    }
+  }
+
   markTargetCrashed(targetId: string): string[] {
     const affectedSessionIds: string[] = []
     for (const session of this.sessions.values()) {

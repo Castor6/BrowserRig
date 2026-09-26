@@ -71,6 +71,7 @@ export interface ExecuteSandboxLike {
   networkCancel(): Effect.Effect<{ readonly cancelled: boolean }>
   authRefresh(options: { readonly name: string; readonly urlFilter?: string; readonly timeoutMs?: number }): Effect.Effect<NetworkCaptureResult, Error>
   redactNetworkCaptureText(text: string): string
+  markTargetNavigated(targetId: string): boolean
   markTargetCrashed(targetId: string): boolean
   markTargetProtectedUi(targetId: string, protectedUi: boolean): boolean
   markTargetDetached(targetId: string): boolean

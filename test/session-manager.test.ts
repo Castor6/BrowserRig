@@ -96,6 +96,7 @@ const makeFakeSandbox = (options?: {
         })).pipe(Effect.tap(() => Effect.sync(() => {
           persistenceTarget = { id: selection.targetId, owner: "user" }
         }))),
+    markTargetNavigated: (targetId) => persistenceTarget?.id === targetId,
     markTargetCrashed: (targetId) => {
       crashedTargets.push(targetId)
       return persistenceTarget?.id === targetId

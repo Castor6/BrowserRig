@@ -158,7 +158,10 @@ local Node relay.
   diagnostic or target crash, the next normal execute performs a bounded page
   health check: preserve ordinary live pages and reconnect once to the exact target.
   Only crashed, blank, or chrome-error relay-owned pages may be recreated after
-  closing; never close or replace unhealthy adopted user tabs. Crash events
+  closing; never close or replace unhealthy adopted user tabs. Main-document
+  navigation clears crash classification while retaining the pending health check
+  for stale Playwright connections; document generations also guard same-URL
+  reloads during a probe against destructive recovery. Crash events
   reject pending debugger commands for only that tab and remain visible in
   status/doctor until navigation or detach.
   Do not add a passive `page.on("dialog")` listener for aftermath: it would

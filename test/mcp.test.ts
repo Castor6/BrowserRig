@@ -85,6 +85,7 @@ describe("MCP tool results", () => {
     const args = Object.keys(invalid).length === 0 ? {} : { outputPath: "demo.webm", ...invalid }
     const result = await Effect.runPromise(Effect.result(spec.handle(args)))
     expect(result._tag).toBe("Failure")
+    if (result._tag === "Failure") expect(result.failure.message).not.toBe("An error occurred in Effect.try")
     expect(recordingStart).not.toHaveBeenCalled()
   })
 

@@ -348,7 +348,7 @@ export function makeToolSpecs(relay: RelayClient.Interface, currentSession: Curr
       readOnly: false,
       destructive: false,
       idempotent: false,
-      handle: (input) => Effect.try((): RecordingStartRequest => {
+      handle: (input) => Effect.try({ try: (): RecordingStartRequest => {
         const object = requireObject(input)
         const mode = optionalRecordingStringField(object, "mode")
         if (mode !== undefined && mode !== "auto" && mode !== "tab-capture" && mode !== "cdp") {
@@ -369,7 +369,7 @@ export function makeToolSpecs(relay: RelayClient.Interface, currentSession: Curr
           ...(frameRate === undefined ? {} : { frameRate }),
           ...(maxDurationMs === undefined ? {} : { maxDurationMs }),
         }
-      }).pipe(Effect.flatMap((request) => relay.recordingStart(request))),
+      }, catch: recordingArgumentError }).pipe(Effect.flatMap((request) => relay.recordingStart(request))),
     },
     {
       name: "recording_stop",
@@ -378,7 +378,10 @@ export function makeToolSpecs(relay: RelayClient.Interface, currentSession: Curr
       readOnly: false,
       destructive: false,
       idempotent: false,
-      handle: (input) => Effect.try(() => ({ sessionId: optionalRecordingStringField(input, "session") ?? currentSession.id })).pipe(
+      handle: (input) => Effect.try({
+        try: () => ({ sessionId: optionalRecordingStringField(input, "session") ?? currentSession.id }),
+        catch: recordingArgumentError,
+      }).pipe(
         Effect.flatMap((target) => relay.recordingStop(target)),
       ),
     },
@@ -389,7 +392,10 @@ export function makeToolSpecs(relay: RelayClient.Interface, currentSession: Curr
       readOnly: true,
       destructive: false,
       idempotent: true,
-      handle: (input) => Effect.try(() => ({ sessionId: optionalRecordingStringField(input, "session") ?? currentSession.id })).pipe(
+      handle: (input) => Effect.try({
+        try: () => ({ sessionId: optionalRecordingStringField(input, "session") ?? currentSession.id }),
+        catch: recordingArgumentError,
+      }).pipe(
         Effect.flatMap((target) => relay.recordingStatus(target)),
       ),
     },
@@ -400,7 +406,10 @@ export function makeToolSpecs(relay: RelayClient.Interface, currentSession: Curr
       readOnly: false,
       destructive: true,
       idempotent: true,
-      handle: (input) => Effect.try(() => ({ sessionId: optionalRecordingStringField(input, "session") ?? currentSession.id })).pipe(
+      handle: (input) => Effect.try({
+        try: () => ({ sessionId: optionalRecordingStringField(input, "session") ?? currentSession.id }),
+        catch: recordingArgumentError,
+      }).pipe(
         Effect.flatMap((target) => relay.recordingCancel(target)),
       ),
     },
@@ -645,6 +654,10 @@ function requiredStringField(input: unknown, field: string): string {
     throw new Error(`${field} is required`)
   }
   return value
+}
+
+function recordingArgumentError(cause: unknown): Error {
+  return cause instanceof Error ? cause : new Error(String(cause))
 }
 
 function optionalRecordingStringField(input: unknown, field: string): string | undefined {

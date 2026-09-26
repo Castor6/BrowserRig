@@ -1,4 +1,5 @@
 import { selectors, type BrowserContext, type Frame, type Locator, type Page } from "playwright-core"
+import { snapshotSummaryName } from "./snapshot-summary.ts"
 import { runtimeFailureKind } from "./runtime-diagnostics.ts"
 
 const redactionCleanupErrorMessage = "BrowserRig could not confirm ARIA snapshot value-redaction cleanup"
@@ -8,6 +9,7 @@ const redactionSelectorSource = `({
     const separator = body.indexOf("_")
     const action = body.slice(0, separator)
     const token = body.slice(separator + 1)
+    if (action === "summary") return this.queryAll(root, body)[0] ?? null
     const stateKey = "__browserRigAriaRedactionState__"
     let state = globalThis[stateKey]
 
@@ -119,6 +121,13 @@ const redactionSelectorSource = `({
     return root instanceof Element ? root : document.documentElement
   },
   queryAll(root, body) {
+    if (body.startsWith("summary_")) {
+      const __name = (target) => target
+      const nameFor = ${snapshotSummaryName.toString()}
+      const expected = JSON.parse(body.slice("summary_".length))
+      return Array.from(root.querySelectorAll("summary")).filter(element =>
+        !element.getAttribute("role") && nameFor(element) === expected)
+    }
     return [this.query(root, body)]
   },
 })`
@@ -171,6 +180,10 @@ export async function ariaSnapshotWithoutTextControlValues(
 
 export async function registerAriaSnapshotSelector(context: BrowserContext): Promise<void> {
   await selectorForContext(context)
+}
+
+export async function snapshotSummarySelector(context: BrowserContext): Promise<string> {
+  return `${await selectorForContext(context)}=summary_`
 }
 
 async function selectorForContext(context: BrowserContext): Promise<string> {

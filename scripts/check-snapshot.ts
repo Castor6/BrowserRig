@@ -1,11 +1,14 @@
 import assert from "node:assert/strict"
 import { chromium } from "playwright-core"
+import { registerAriaSnapshotSelector } from "../src/aria-snapshot.ts"
 import { createSnapshotHelpers, fillInputs } from "../src/execute.ts"
 
 // Real DOM and Playwright locators: deliberately separate from browser-free unit tests.
 const browser = await chromium.launch({ channel: "chrome" })
 console.log(`Google Chrome ${browser.version()}`)
-const page = await browser.newPage()
+const context = await browser.newContext()
+await registerAriaSnapshotSelector(context)
+const page = await context.newPage()
 const failures: string[] = []
 const check = async (name: string, run: () => Promise<void>) => {
   try {
@@ -37,6 +40,43 @@ try {
     assert.ok(id, outline)
     await ref(id).click({ timeout: 1_000 })
     assert.equal(await page.locator("details").getAttribute("open"), "")
+  })
+  for (const role of ["", ' role="button"']) {
+    for (const mutation of ["reorder", "insert"]) {
+      await check(`summary identity ${role ? "explicit button" : "native"} after ${mutation}`, async () => {
+        await page.setContent(`<main><details><summary${role}><span>First item</span></summary></details><details><summary${role}>Second item</summary></details></main>`)
+        const registry = { selectors: new Map() }
+        const { snapshot, ref } = createSnapshotHelpers(page, registry)
+        const outline = await snapshot()
+        const id = outline.match(/(?:summary|button) "First item" \[ref=(e\d+)/)?.[1]
+        assert.ok(id, outline)
+        await ref(id).click({ timeout: 1_000 })
+        assert.equal(await page.locator("details").first().getAttribute("open"), "")
+        await page.locator("details").first().evaluate(element => element.removeAttribute("open"))
+        await page.evaluate(mutation => {
+          const main = document.querySelector("main")!
+          if (mutation === "reorder") main.prepend(main.lastElementChild!)
+          else main.insertAdjacentHTML("afterbegin", "<details><summary>Inserted item</summary></details>")
+        }, mutation)
+        const continued = createSnapshotHelpers(page, registry)
+        assert.equal(await continued.ref(id).count(), 0, "A continued execute must retain summary identity")
+        assert.equal(await ref(id).count(), 0, "A structural ref must not retarget a different summary")
+        await assert.rejects(ref(id).click({ timeout: 150 }), /Timeout/)
+        assert.equal(await page.locator("details[open]").count(), 0)
+      })
+    }
+  }
+  await check("native summary labels, image names and private descendants", async () => {
+    await page.setContent('<main><span id="label">Labelled name</span><details><summary aria-labelledby="label">Other text</summary></details><details><summary><img alt="Image name"><textarea>private-summary-value</textarea><span hidden>private-hidden-text</span></summary></details></main>')
+    const { snapshot, ref } = createSnapshotHelpers(page, { selectors: new Map() })
+    const outline = await snapshot()
+    assert.doesNotMatch(outline, /private-summary-value|private-hidden-text/)
+    for (const name of ["Labelled name", "Image name"]) {
+      const id = outline.match(new RegExp(`summary "${name}" \\[ref=(e\\d+)`))?.[1]
+      assert.ok(id, outline)
+      await ref(id).click({ timeout: 1_000 })
+    }
+    assert.equal(await page.locator("details[open]").count(), 2)
   })
   await check("portal dialog outside main", async () => {
     await page.setContent('<main><h1>Background</h1><button>Open account</button></main><div role="dialog" aria-modal="true" aria-label="New account"><label>Name<input></label><button>Save account</button></div>')
@@ -79,6 +119,34 @@ try {
     const outline = await snapshot()
     assert.match(outline, /heading "Background"/)
     assert.doesNotMatch(outline, /Invisible/)
+  })
+  for (const hidden of ['style="opacity:0"', "hidden", 'aria-hidden="true"']) {
+    await check(`ancestor-hidden modal and restored scope: ${hidden}`, async () => {
+      await page.setContent(`<main><h1>Visible background</h1><button>Real action</button></main><div id="portal" ${hidden}><div role="dialog" aria-modal="true" aria-label="Closed dialog"><button>Invisible action</button><input aria-label="Private" value="private-modal-value"></div></div>`)
+      const { snapshot } = createSnapshotHelpers(page, { selectors: new Map() })
+      const before = await snapshot()
+      assert.match(before, /heading "Visible background"/)
+      assert.match(before, /button "Real action"/)
+      assert.doesNotMatch(before, /Closed dialog|Invisible action|private-modal-value/)
+      await page.locator("#portal").evaluate(element => {
+        element.removeAttribute("style")
+        element.removeAttribute("hidden")
+        element.removeAttribute("aria-hidden")
+      })
+      const after = await snapshot()
+      assert.match(after, /dialog "Closed dialog"/)
+      assert.match(after, /button "Invisible action"/)
+      assert.doesNotMatch(after, /Visible background|Real action|private-modal-value/)
+    })
+  }
+  await check("composed hidden ancestry remains excluded in explicit scopes", async () => {
+    await page.setContent('<div id="host" style="opacity:0"><section slot="content"><button>Private slotted action</button></section></div>')
+    await page.locator("#host").evaluate(element => {
+      element.attachShadow({ mode: "open" }).innerHTML = '<div><slot name="content"></slot><button>Private shadow action</button></div>'
+    })
+    const { snapshot } = createSnapshotHelpers(page, { selectors: new Map() })
+    assert.doesNotMatch(await snapshot({ within: page.locator("section") }), /Private slotted action/)
+    assert.doesNotMatch(await snapshot({ within: page.locator("#host").locator("div") }), /Private shadow action/)
   })
   await check("search refs, explicit diff and navigation boundaries", async () => {
     await page.setContent('<main><h1>Account</h1><label>Private<input value="secret-form-value"></label><button>Checkout</button></main>')

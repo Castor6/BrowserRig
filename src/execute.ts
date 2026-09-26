@@ -23,7 +23,8 @@ import * as NetworkCapture from "./network-capture.ts"
 import type { AuthenticatedJsonOutcome, AuthenticatedJsonRequest, ExecuteAftermath, ExecuteLogEntry, ExecuteLogSummary, ExecuteMedia, WebMcpDiscovery } from "./relay-schema.ts"
 import type { SessionTarget } from "./relay-types.ts"
 import { executionContextFailureDiagnostic, runtimeFailureKind } from "./runtime-diagnostics.ts"
-import { ariaSnapshotWithoutTextControlValues, registerAriaSnapshotSelector } from "./aria-snapshot.ts"
+import { ariaSnapshotWithoutTextControlValues, registerAriaSnapshotSelector, snapshotSummarySelector } from "./aria-snapshot.ts"
+import { snapshotSummaryName } from "./snapshot-summary.ts"
 import type { WebMcpSession, WebMcpHelpers, WebMcpCallResult } from "./webmcp.ts"
 
 const nodeModules = { fs, path, os, crypto, url, util, events, stream, buffer, http, https, zlib }
@@ -328,6 +329,7 @@ type SnapshotEntry = {
 }
 
 type SnapshotRefRegistry = {
+  summarySelector?: string
   page?: Page
   url?: string
   selectors: Map<string, { readonly selector: string; readonly role: string; readonly name?: string }>
@@ -1463,8 +1465,16 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
       const quote = (value: string): string => value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
       const isVisible = (element: Element): boolean => {
         const rect = element.getBoundingClientRect()
-        const style = window.getComputedStyle(element)
-        return rect.width >= 1 && rect.height >= 1 && style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0"
+        if (rect.width < 1 || rect.height < 1) return false
+        let ancestor: Element | null = element
+        while (ancestor) {
+          const style = window.getComputedStyle(ancestor)
+          if (ancestor.hasAttribute("hidden") || ancestor.getAttribute("aria-hidden") === "true" || style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse" || style.opacity === "0") return false
+          // Slots and shadow hosts are part of the rendered ancestry too.
+          const root = ancestor.getRootNode()
+          ancestor = ancestor.assignedSlot ?? ancestor.parentElement ?? (root instanceof ShadowRoot ? root.host : null)
+        }
+        return true
       }
       const labelledName = (element: Element): string => {
         const ariaLabel = element.getAttribute("aria-label")
@@ -1502,6 +1512,7 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
         return normalize(parts.join(" "))
       }
       const accessibleName = (element: Element): string => {
+        if (element.tagName === "SUMMARY" && !element.getAttribute("role")) return snapshotSummaryName(element)
         const labelled = labelledName(element)
         if (labelled) return labelled
         if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
@@ -1547,7 +1558,10 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
         if (labelled) return labelled
         if (element instanceof HTMLFieldSetElement) return normalize(element.querySelector(":scope > legend")?.textContent ?? "")
         if (element instanceof HTMLTableElement) return normalize(element.caption?.textContent ?? "")
-        if (element instanceof HTMLDetailsElement) return normalize(element.querySelector(":scope > summary")?.textContent ?? "")
+        if (element instanceof HTMLDetailsElement) {
+          const summary = element.querySelector(":scope > summary")
+          return summary ? snapshotSummaryName(summary) : ""
+        }
         if (role === "dialog" || role === "alertdialog" || role === "group") {
           return normalize(element.querySelector("h1, h2, h3, h4, h5, h6, [role='heading']")?.textContent ?? "")
         }
@@ -1824,6 +1838,7 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
       "rootOrSettings",
       "locatorSettings",
       `const __name = (target) => target
+const snapshotSummaryName = ${snapshotSummaryName.toString()}
 return (${capture.toString()})(rootOrSettings, locatorSettings)`,
     ) as typeof capture
     const timeoutMs = options.timeout ?? defaultSnapshotTimeoutMs
@@ -1845,6 +1860,9 @@ return (${capture.toString()})(rootOrSettings, locatorSettings)`,
       }
     }
 
+    if (result.entries.some((entry) => entry.role === "summary")) {
+      registry.summarySelector = await snapshotSummarySelector(page.context())
+    }
     if (navigatedDuringCapture) {
       removeNavigationListener()
       delete registry.removeNavigationListener
@@ -1940,6 +1958,8 @@ return (${capture.toString()})(rootOrSettings, locatorSettings)`,
       ? locator.and(requiresAccessibleIdentity && snapshotRef.name !== undefined
         ? page.getByRole(role, { name: snapshotRef.name, exact: true })
         : page.getByRole(role))
+      : snapshotRef.role === "summary" && registry.summarySelector && snapshotRef.name !== undefined
+      ? locator.and(page.locator(`${registry.summarySelector}${JSON.stringify(snapshotRef.name)}`))
       : locator
     refRoots.set(resolved, snapshotRef)
     return resolved

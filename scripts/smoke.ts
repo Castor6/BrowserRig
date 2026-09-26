@@ -858,6 +858,31 @@ return {
       const smokeSession = `${marker}-session`
       return yield* Effect.gen(function* () {
         yield* runBrowserRig(["session", "new", smokeSession])
+        for (const reconnect of [false, true]) {
+          if (reconnect) yield* runBrowserRig(["session", "reset", smokeSession])
+          const summaryOutput = yield* runBrowserRig([
+            "execute", "--session", smokeSession,
+            `
+await page.setContent('<main><details><summary>First item</summary></details><details><summary>Second item</summary></details></main>')
+await snapshot()
+await ref('e1').click({ timeout: 1000 })
+return { opened: await page.locator('details').first().getAttribute('open') }
+            `,
+          ])
+          const staleOutput = yield* runBrowserRig([
+            "execute", "--session", smokeSession,
+            `
+await page.evaluate(() => {
+  const main = document.querySelector('main')
+  main.prepend(main.lastElementChild)
+})
+return { staleCount: await ref('e1').count() }
+            `,
+          ])
+          if (!summaryOutput.includes("opened: ''") || !staleOutput.includes("staleCount: 0")) {
+            return yield* Effect.fail(new Error(`native summary refs lost captured identity: ${summaryOutput} ${staleOutput}`))
+          }
+        }
         const nativeMainOutput = yield* runBrowserRig([
           "execute",
           "--session",

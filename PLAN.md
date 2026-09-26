@@ -214,7 +214,7 @@ and the target remained at `chrome-error://chromewebdata/`.
 
 BrowserRig now remembers context failures and browser crash events. Before
 the next normal execute, it gives the default page a one-second health check.
-An unhealthy relay-owned page is closed and recreated with a stale-reference
+Only a crashed, blank, or chrome-error relay-owned page is closed and recreated with a stale-reference
 warning; if it cannot be closed, execute fails with reset guidance instead of
 leaking ownership. An unhealthy adopted user tab is never closed or replaced;
 the execute fails quickly and tells the agent to reset or adopt another tab.
@@ -437,7 +437,7 @@ reconciles existing client announcements, browser grouping, and page status.
 - Return structured values, script and page logs, page errors, warnings,
   diagnostics, session identity, and per-call aftermath.
 - Health-check a default page after execution-context failure or a crash event.
-  Recreate unhealthy relay-owned pages and preserve unhealthy adopted tabs.
+  Preserve unresponsive live pages; recreate only disposable relay-owned pages.
 - Transfer returned PNG, JPEG, and WebP buffers through a dedicated media
   channel. MCP emits native image attachments without temporary files or
   duplicated base64 metadata.
@@ -833,3 +833,26 @@ same codes, still fail the save. Directory handles close on both paths. This
 fallback provides file durability and atomic visibility, but cannot promise
 power-loss durability of the directory entry on filesystems without directory
 sync support.
+
+### Preserving live pages and protected extension UI
+
+A failed execution-context health check does not prove a page is lost. Ordinary
+live relay-owned pages retain login and form state: reconnect Playwright once
+and resolve the exact default target, invalidating stale page helpers and refs.
+If the bounded second probe fails, report `session-page/owned-unresponsive`
+without closing or replacing the tab. Adopted user tabs remain untouched and
+report `session-page/adopted-unresponsive`. Detached targets retain the existing
+registry-controlled recovery path; crashed relay-owned pages remain disposable.
+No failed user script is replayed. Handoff destination failures retain exact-page
+continuity checks and explain that human completion did not lose the tab.
+
+Protected child extension frames (for example a password-manager inline menu)
+are retracted from clients and removed from replay storage. Their subsequent
+frame events stay hidden until they return to an ordinary document. Actual
+cross-extension debugger rejections mark the root `protectedUi`, shown in status
+and doctor; successful commands, removal of the last protected frame, or a new
+main document clear it. Delayed outcomes cannot update a replacement connection
+or root generation. Masked context failures and locator timeouts on that blocked
+default page receive `target/cross-extension-page` and ask the human to finish
+or dismiss the UI; they do not trigger page-health recovery. Permissions and
+extension protocol remain unchanged.

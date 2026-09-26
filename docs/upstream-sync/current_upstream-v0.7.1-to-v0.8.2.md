@@ -329,3 +329,24 @@ Chrome lifecycle evidence rather than rerunning it. Cycle-wide full smoke is
 still required at closure. Under the recorded autonomous merge authorization,
 batch 02 becomes Complete when PR #53 lands after its final checks. This record
 changes documentation only; publication remains unauthorized.
+
+## Batch 03 implementation evidence
+
+- Adapts #91 (`8bb33c886bdf995f85c0c228e13c1019b32f22d7`): keep ordinary
+  unresponsive relay-owned tabs, reconnect once to their exact target, name
+  continued unresponsiveness, clarify resolved handoff context failures, and
+  list ambiguous selected-page matches. Preserve BrowserRig's stricter exact
+  handoff target checks and reject implicit named-session creation on adoption.
+- Adapts #94 (`9a5ab7b10a78cf4f5bd9b5ad8fd674685d171613`): track and hide
+  protected extension child frames, name actual debugger blocks, and preserve
+  the page with human-action guidance. This includes the shared Chromium
+  password-manager compatibility deferred from v0.6.0; no Brave-only work,
+  extension permissions, protocol, or extension source change is required.
+- #89 direct cross-extension diagnostics were already present; this batch adds
+  the human-action warning and masked-failure attribution from final #94.
+- #93 hostile fixtures and tab-preservation invariants are being selectively
+  adapted; no wholesale gauntlet harness or timeout replay is imported.
+- Initial focused validation passed 58 tests across lifecycle, target selection,
+  protected-frame tracker, and relay frame routing. The initial typecheck found
+  one missing import, corrected before the passing typecheck. Full-suite and
+  browser evidence are pending. Batch remains Pending until independent review.

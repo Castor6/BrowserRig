@@ -269,6 +269,8 @@ export const TargetSummary = Schema.Struct({
   browserRigSessionId: Schema.optionalKey(Schema.String),
   owner: Schema.optionalKey(Schema.Literals(["relay", "user"])),
   crashed: Schema.optionalKey(Schema.Boolean),
+  /** Chrome is rejecting debugger commands while another extension's UI is open in the tab. */
+  protectedUi: Schema.optionalKey(Schema.Boolean),
 })
 
 export interface TargetSummary extends Schema.Schema.Type<typeof TargetSummary> {}

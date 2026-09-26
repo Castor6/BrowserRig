@@ -49,7 +49,7 @@ effect when that PR lands on main.
 | Batch | Scope | Branch | State | BrowserRig PR / independent review / validation |
 | --- | --- | --- | --- | --- |
 | 01 | Snapshot semantics/search, plain-text contenteditable fill, and #88 reconciliation | `feat/upstream-v0.8.2-snapshot-input` | Complete | [PR #52](https://github.com/Castor6/BrowserRig/pull/52); independent Approve at `8f57e73`, CI passed; user authorized autonomous merges on 2026-09-26; effective on landing |
-| 02 | Filesystem compatibility and ordinary MCP recording controls from #89 | `feat/upstream-v0.8.2-filesystem-recording` | Pending | Not started |
+| 02 | Filesystem compatibility and ordinary MCP recording controls from #89 | `feat/upstream-v0.8.2-filesystem-recording` | Pending | Implementation in progress; independent review pending |
 | 03 | #91/#94 page preservation and protected frames; selected #93 hostile-page regressions | `fix/upstream-v0.8.2-page-preservation` | Pending | Not started |
 
 ## Preserved product exclusions
@@ -246,3 +246,27 @@ confirmed. Subsequent approval and authorization records change documentation
 only. The user authorized autonomous reviewed merges on 2026-09-26, so batch 01
 becomes Complete when PR #52 lands after its final checks. Batches 02/03 remain
 unstarted and the completed cursor stays at v0.7.1. No publication is authorized.
+
+
+## Batch 02 implementation evidence
+
+- Selectively adapts #89 (`b1410ca101094bd0fa3d756c98985ac73630e77b`):
+  `src/fs-durability.ts` and the `SessionCatalog.save` directory-sync fallback;
+  ordinary MCP `recording_start`, `recording_stop`, `recording_status`, and
+  `recording_cancel`. Invalid parameters produce recoverable Effect failures.
+- Existing `src/relay-client.ts` recording methods, `src/relay-schema.ts` wire
+  schemas, `src/http-api.ts` session target resolution, and
+  `src/recording-relay.ts` already cover the recording backend. No backend,
+  geometry, default frame rate, extension, dependency, or DSH change is needed.
+- Upstream `relay-lifecycle-log.ts` has no BrowserRig counterpart. BrowserRig's
+  `src/relay-log.ts` is bounded best-effort fault logging without directory
+  fsync, so the upstream lifecycle-log fallback has no applicable failure here.
+  Do not add the upstream lifecycle/restart mechanism for this batch.
+- Human demonstration/flight recording, raw-client routing, persistent refs,
+  automatic snapshot deltas, and WebMCP transport changes remain excluded.
+- Initial focused tests: 45 passed across MCP and session catalog tests.
+  The first development test found argument-parser throws escaping Effect's
+  recoverable channel; parsing now uses `Effect.try`. The first typecheck
+  identified widened mode literals; the request uses the existing wire type.
+  Required full-suite/build and Chrome recording validation are pending.
+- Batch stays Pending until fresh independent approval and required checks.

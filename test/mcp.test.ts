@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
+import path from "node:path"
 import { ConfigProvider, Effect } from "effect"
 import { makeToolSpecs, mcpErrorMessage, mcpToolRequiresRelayCompatibility, parseMcpAdoptArguments, sessionDeleteIsIdempotent, toolResultForValue } from "../src/mcp.ts"
 import type * as RelayClient from "../src/relay-client.ts"
@@ -37,6 +38,65 @@ describe("MCP tool results", () => {
     expect(mcpToolRequiresRelayCompatibility("session_current")).toBe(false)
     expect(mcpToolRequiresRelayCompatibility("issue_report")).toBe(false)
     expect(mcpToolRequiresRelayCompatibility("skill")).toBe(false)
+  })
+
+  it("routes ordinary recording controls through the selected session without changing it", async () => {
+    const quality = { width: 1280, height: 720, frameRate: 25, screenshotFallback: false }
+    const recordingStart = vi.fn(() => Effect.succeed({ success: true, mode: "cdp" }))
+    const recordingStop = vi.fn(() => Effect.succeed({ success: true, quality }))
+    const recordingStatus = vi.fn(() => Effect.succeed({ isRecording: true, quality }))
+    const recordingCancel = vi.fn(() => Effect.succeed({ success: true }))
+    const relay = { recordingStart, recordingStop, recordingStatus, recordingCancel } as unknown as RelayClient.Interface
+    const current = { id: "mcp-current", established: true }
+    const specs = makeToolSpecs(relay, current)
+    const tool = (name: string) => specs.find((spec) => spec.name === name)!
+    expect(specs.some((spec) => spec.name.startsWith("flight_recorder"))).toBe(false)
+    expect(tool("recording_start")).toMatchObject({ readOnly: false, destructive: false, idempotent: false })
+    expect(tool("recording_stop")).toMatchObject({ readOnly: false, destructive: false, idempotent: false })
+    expect(tool("recording_status")).toMatchObject({ readOnly: true, destructive: false, idempotent: true })
+    expect(tool("recording_cancel")).toMatchObject({ readOnly: false, destructive: true, idempotent: true })
+    await Effect.runPromise(tool("recording_start").handle({ outputPath: "demo.mp4" }))
+    expect(recordingStart).toHaveBeenLastCalledWith({ sessionId: "mcp-current", outputPath: path.resolve("demo.mp4") })
+    await Effect.runPromise(tool("recording_start").handle({ session: "explicit", outputPath: "demo.webm", mode: "tab-capture", audio: true, frameRate: 60, maxDurationMs: 1000 }))
+    expect(recordingStart).toHaveBeenLastCalledWith({ sessionId: "explicit", outputPath: path.resolve("demo.webm"), mode: "tab-capture", audio: true, frameRate: 60, maxDurationMs: 1000 })
+    for (const [name, operation] of [["recording_status", recordingStatus], ["recording_stop", recordingStop], ["recording_cancel", recordingCancel]] as const) {
+      await Effect.runPromise(tool(name).handle({}))
+      expect(operation).toHaveBeenLastCalledWith({ sessionId: "mcp-current" })
+      const result = await Effect.runPromise(tool(name).handle({ session: "explicit" }))
+      expect(operation).toHaveBeenLastCalledWith({ sessionId: "explicit" })
+      if (name !== "recording_cancel") expect(toolResultForValue(result).structuredContent).toMatchObject({ quality })
+    }
+    expect(current).toEqual({ id: "mcp-current", established: true })
+    expect(mcpToolRequiresRelayCompatibility("recording_status")).toBe(false)
+    for (const name of ["recording_start", "recording_stop", "recording_cancel"]) {
+      expect(mcpToolRequiresRelayCompatibility(name)).toBe(true)
+    }
+  })
+
+  it.each([
+    {}, { outputPath: "" }, { outputPath: 7 },
+    { mode: "invalid" }, { mode: 1 }, { audio: "true" },
+    { frameRate: 0 }, { frameRate: 61 }, { frameRate: 1.5 },
+    { maxDurationMs: 0 }, { maxDurationMs: "100" }, { session: "" }, { session: 1 },
+  ])("rejects malformed recording start arguments: %j", async (invalid) => {
+    const recordingStart = vi.fn(() => Effect.succeed({ success: true }))
+    const relay = { recordingStart } as unknown as RelayClient.Interface
+    const spec = makeToolSpecs(relay, { id: "current", established: false }).find((spec) => spec.name === "recording_start")!
+    const args = Object.keys(invalid).length === 0 ? {} : { outputPath: "demo.webm", ...invalid }
+    const result = await Effect.runPromise(Effect.result(spec.handle(args)))
+    expect(result._tag).toBe("Failure")
+    expect(recordingStart).not.toHaveBeenCalled()
+  })
+
+  it("preserves relay recording failures and never creates a missing session", async () => {
+    const failure = new Error("No attached tab found for sessionId missing")
+    const recordingStart = vi.fn(() => Effect.fail(failure))
+    const relay = { recordingStart } as unknown as RelayClient.Interface
+    const current = { id: "missing", established: false }
+    const spec = makeToolSpecs(relay, current).find((spec) => spec.name === "recording_start")!
+    const result = await Effect.runPromise(Effect.result(spec.handle({ outputPath: "demo.mp4" })))
+    expect(result).toMatchObject({ _tag: "Failure", failure })
+    expect(current).toEqual({ id: "missing", established: false })
   })
 
   it("accepts active-tab adoption as an exclusive target selector", () => {

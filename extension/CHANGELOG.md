@@ -1,5 +1,11 @@
 # browserrig-extension
 
+## 0.1.3
+
+### Patch Changes
+
+- ea26c79: Add PNG screenshot comparisons and recording quality receipts, correct high-DPI recording geometry while retaining 25 fps and the 1280x720 fit, verify extension debugger ownership, bound title reads, and preserve visible image labels.
+
 ## 0.1.2
 
 ### Patch Changes

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Trips · Preservation Fixture</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 2rem; color: #1b1b1f; }
+  #root { min-height: 6rem; }
+  .skeleton { color: #888; }
+  button { font: inherit; padding: .6rem 1.2rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<!-- Adapted from upstream #93: bounded heavy-spa-slow-context fixture. -->
+<div id="root"><p class="skeleton">Loading application…</p></div>
+<script>
+(() => {
+  const params = new URLSearchParams(location.search)
+  const blockMs = Math.max(0, Number(params.get("block") ?? 5000))
+  const version = params.get("v") ?? "1"
+  const startedAt = performance.now()
+  window.__gauntlet = { blockMs, version, bootstrappedAt: null }
+
+  const end = startedAt + blockMs
+  while (performance.now() < end) { /* synchronous bundle evaluation */ }
+
+  const root = document.getElementById("root")
+  root.innerHTML = `
+    <h1 id="ready">SPA ready</h1>
+    <p id="version">version ${version}</p>
+    <button id="rehydrate" type="button">Rehydrate</button>
+  `
+  window.__gauntlet.bootstrappedAt = Date.now()
+  document.getElementById("rehydrate").addEventListener("click", () => {
+    const nextParams = new URLSearchParams(location.search)
+    nextParams.set("v", String(Number(version) + 1))
+    location.assign(`${location.pathname}?${nextParams.toString()}`)
+  })
+})()
+</script>
+</body>
+</html>

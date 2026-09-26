@@ -50,7 +50,7 @@ effect when that PR lands on main.
 | --- | --- | --- | --- | --- |
 | 01 | Snapshot semantics/search, plain-text contenteditable fill, and #88 reconciliation | `feat/upstream-v0.8.2-snapshot-input` | Complete | [PR #52](https://github.com/Castor6/BrowserRig/pull/52); independent Approve at `8f57e73`, CI passed; user authorized autonomous merges on 2026-09-26; effective on landing |
 | 02 | Filesystem compatibility and ordinary MCP recording controls from #89 | `feat/upstream-v0.8.2-filesystem-recording` | Complete | [PR #53](https://github.com/Castor6/BrowserRig/pull/53); independent Approve at `7843610`, CI passed; effective on landing |
-| 03 | #91/#94 page preservation and protected frames; selected #93 hostile-page regressions | `fix/upstream-v0.8.2-page-preservation` | Pending | Not started |
+| 03 | #91/#94 page preservation and protected frames; selected #93 hostile-page regressions | `fix/upstream-v0.8.2-page-preservation` | Complete | [PR #54](https://github.com/Castor6/BrowserRig/pull/54); independent Approve at `b81d8d3`, CI passed; effective on landing |
 
 ## Preserved product exclusions
 
@@ -329,3 +329,173 @@ Chrome lifecycle evidence rather than rerunning it. Cycle-wide full smoke is
 still required at closure. Under the recorded autonomous merge authorization,
 batch 02 becomes Complete when PR #53 lands after its final checks. This record
 changes documentation only; publication remains unauthorized.
+
+## Batch 03 implementation evidence
+
+- Adapts #91 (`8bb33c886bdf995f85c0c228e13c1019b32f22d7`): keep ordinary
+  unresponsive relay-owned tabs, reconnect once to their exact target, name
+  continued unresponsiveness, clarify resolved handoff context failures, and
+  list ambiguous selected-page matches. Preserve BrowserRig's stricter exact
+  handoff target checks and reject implicit named-session creation on adoption.
+- Adapts #94 (`9a5ab7b10a78cf4f5bd9b5ad8fd674685d171613`): track and hide
+  protected extension child frames, name actual debugger blocks, and preserve
+  the page with human-action guidance. This includes the shared Chromium
+  password-manager compatibility deferred from v0.6.0; no Brave-only work,
+  extension permissions, protocol, or extension source change is required.
+- #89 direct cross-extension diagnostics were already present; this batch adds
+  the human-action warning and masked-failure attribution from final #94.
+- #93 hostile fixtures and tab-preservation invariants are being selectively
+  adapted; no wholesale gauntlet harness or timeout replay is imported.
+- Initial focused validation passed 58 tests across lifecycle, target selection,
+  protected-frame tracker, and relay frame routing. The initial typecheck found
+  one missing import, corrected before the passing typecheck. Full-suite and
+  browser evidence are pending. Batch remains Pending until independent review.
+
+### Batch 03 regression and browser evidence
+
+- First coherent commit `cb0a252` was pushed and draft PR #54 opened immediately.
+  Initial full unit suite passed 827 tests in 72 files. Expanded unit suite
+  passed 831 tests; a final close-during-replacement regression adds one more
+  case. Final-head verification and review remain required.
+- #93 selected `heavy-spa-slow-context` and `typing-freezes-page` fixtures run in
+  `scripts/check-page-preservation.ts`, asserting exact target/tab/owner identity,
+  no replacement warning, eventual readability, partial input preservation, and
+  adopted-tab survival after deletion. Chrome 153.0.8010.53 passed all three
+  cases (owned SPA, adopted SPA, typing freeze):
+  `/tmp/browserrig-v082-batch03-hostile-third.log`. Chrome recovered the SPA
+  before the follow-up probe; unit tests independently force failed health
+  checks and fresh-connection recovery. No live forced-repair success is claimed.
+- Hostile first attempt failed request validation because the test omitted the
+  required `createIfMissing`; second attempt incorrectly demanded an adopted
+  failure even though the page was already healthy. The final fixture accepts
+  success or the correct bounded diagnosis; product behavior was not changed
+  to satisfy that assertion. First/second logs remain under the same prefix.
+- Existing handoff-navigation/cross-tab/target-detach and OOPIF smoke cases cover
+  the relevant #93 auth-redirect and cross-origin routing invariants. Its payment
+  model's rejection of autofill and sentinel forced-click strategy are site/agent
+  behavior, outside this driver correction. Its expected-failure generic stalled
+  read naming and implicit named-session adoption are excluded. No complete
+  upstream gauntlet, telemetry, or timeout replay is imported.
+- Real extra-extension iframe validation reproduced Chrome's cross-extension
+  rejection, named `target/cross-extension-page`, exposed `protectedUi`, and hid
+  the phantom child. Browser CDP independently confirmed the original physical
+  target, URL and title survived while Chrome set `attached: false`. The first
+  run failed its assumption that dismissal alone restores automation. Chrome
+  requires explicit reattachment in this fixture. Second/third test attempts
+  used `browser.close()` in user code to refresh the client; that existing path
+  triggers the page-close listener and clears the default reference, so their
+  subsequent read saw blank. This is not the new repair path, which clears
+  listeners first; no fix to user-code `browser.close()` semantics is claimed.
+- Final supported recovery uses exact-target activation, active adoption, reset
+  of that adopted session (release only), and active re-adoption. Original target
+  identity and document readability pass, without extension permission changes.
+  Evidence: `/tmp/browserrig-v082-batch03-protected-fourth.log`; prior first,
+  second and third logs remain. The test-only inspector and isolated browser
+  harness are reproducible with `scripts/page-preservation-browser.mjs`.
+- Late health results and close completion cannot erase a replacement session
+  page. Late debugger success/error cannot clear/set protection on a newer root.
+  The initial generation fixture accidentally held page-status initialization's
+  Runtime.evaluate; its debug log identifies the cause. Restricting the held
+  command to the fixture expression makes all four relay cases pass. This was
+  a test fixture correction, with no product timeout replay.
+
+### Batch 03 final validation and review handoff
+
+- Final behavior from `14adb55` passed the **first complete 23-case smoke run:
+  23 passed / 0 failed**, with one attempt per case. Log:
+  `/tmp/browserrig-v082-batch03-smoke23-first.log`. Exact command:
+
+  ```sh
+  BROWSERRIG_PORT=21990 BROWSERRIG_ENDPOINT=http://127.0.0.1:21990 SMOKE_CASE=local-forms,local-cart,local-checkout,reconnect-evaluate,redirect-reconnect-evaluate,session-missing-selector,execute-target-url,execute-page-recovery,execute-page-detach-recovery,execute-fill-helpers,execute-snapshot-refs,handoff-navigation,handoff-cross-tab,handoff-target-detach,oopif-reconnect,dedicated-worker,network-capture,session-download-capability,execute-ghost-cursor,session-isolation,multi-client,stale-client-checkout,raw-first-checkout pnpm smoke
+  ```
+
+- The run uses task-owned source relay port 21990 and isolated Google Chrome
+  153.0.8010.53 through the committed test harness. Neither port 19990 nor the
+  user's profile was touched. The final relay PID 25786 and browser harness
+  PID 25743 were stopped after validation; earlier task browser/relay processes
+  were also stopped. `termctrl` is unavailable, so tracked process sessions were
+  used. No extension source/build or reload requirement was introduced.
+- Final typecheck and full unit suite pass (833 tests / 72 files), including an
+  additional resolved-handoff destination diagnostic assertion. Logs:
+  `/tmp/browserrig-v082-batch03-typecheck-complete.log` and
+  `/tmp/browserrig-v082-batch03-unit-complete.log`. Final CLI build passes:
+  `/tmp/browserrig-v082-batch03-build-skill-final.log`. Repository skill,
+  installed OpenCode skill, and built `node dist/cli.js skill` output match.
+- Implementation validation before the last test/documentation-only
+  additions also passed on GitHub:
+  [CI run 36217162144](https://github.com/Castor6/BrowserRig/actions/runs/36217162144).
+  This is not independent review or a claim about a later head's CI.
+- `browserrig: patch` Changeset was generated with `pnpm changeset`. Test-only
+  extension fixture files are outside the extension package and npm file list;
+  the shipping extension and its permissions/protocol/versions are unchanged.
+- Batch 03 remains Pending for fresh independent review and final-head CI.
+  No merge, release, npm publication, Store submission, or cursor advancement is
+  claimed by this implementation handoff. No batch beyond v0.8.2 was started.
+
+### Batch 03 independent-review correction: recovered crash documents
+
+- Independent review of `12b9878` requested changes for one P1: main-document
+  navigation cleared the registry crash state but left the sandbox's crash
+  marker set. A recovered HTTP form could consequently be closed when the old
+  Playwright Page still rejected evaluates as crashed. Reviewer evidence remains
+  in `/tmp/browserrig-review-crash-navigation-http.mts` and its `.log` (and the
+  initial data-URL variant); the earlier green suite did not cover this boundary.
+- Correction `2a59f50` synchronously reports current-root main-document navigation
+  to the live session sandbox with exact target matching. It clears crash
+  classification while retaining the health check, allowing the existing fresh
+  connection repair to re-resolve the same physical tab. A document generation
+  counter also prevents close after a navigation during the probe, including a
+  same-URL reload. There is no delayed session-id-only callback or timeout replay.
+- Unit regressions cover navigation before execute, same-URL reload, navigation
+  during a probe, unaffected replacement/detach races, true unrecovered crash
+  recreation, and never closing unhealthy adopted tabs (including crashed ones).
+  Focused first run passed 135 tests; final full suite passed **837 / 72 files**
+  (`/tmp/browserrig-v082-p1-full-final.log`). Typecheck and CLI build pass in
+  `/tmp/browserrig-v082-p1-typecheck-final.log` and
+  `/tmp/browserrig-v082-p1-build.log`. Repository, installed, and built skills
+  still match; no agent workflow, shipping extension, permission, or version
+  change was needed for this correction.
+- `scripts/check-crash-navigation.ts` reproduces the review scenario through the
+  real relay and Chrome 153.0.8010.53. Independent CDP writes `saved-user-state`
+  into the recovered form before the follow-up execute. Both different-URL
+  navigation and same-URL reload preserve the original physical target/tab and
+  input, and report fresh connection repair. Evidence:
+  `/tmp/browserrig-v082-p1-real-second.log` (targets `8B4D8629A3976E15541F71D7EBAAB26E`
+  and `1C5D2ACF3A69AC1F7BE1B8E95F309AEE`, tabs 1853146857 and 1853146859).
+  The first run had already preserved the form/tab but failed the test's final
+  warning-text assertion (`connection` versus the actual `reconnected`); its log
+  is retained at `/tmp/browserrig-v082-p1-real-first.log`. The initial new-script
+  typecheck required an explicit local URL annotation; that failed output is
+  retained at `/tmp/browserrig-v082-p1-typecheck.log`.
+- The complete mandated 23-case smoke command above was rerun against correction
+  `2a59f50`: **23 passed / 0 failed** on its first complete attempt, with one run
+  per case (`/tmp/browserrig-v082-p1-smoke23-first.log`). This supersedes the
+  pre-review smoke result for final-behavior validation. Task-owned Chrome
+  harness PID 28475 and relay PID 28494 were stopped afterward; ports 21990 and
+  21992 were released. The implementation handoff did not merge or release.
+
+### Batch 03 independent approval
+
+On 2026-09-26 a fresh independent reviewer returned **Approve** for
+`b81d8d3f8c69b77d38827b0f1c1115e190b9bb6b` after reviewing the complete PR against
+`b280aaf` and upstream #91/#93/#94. The original P1 is closed; no new material
+finding remains. Exact target/session ownership, adopted tabs, handoffs,
+document-generation guards, and execute-permit boundaries remain intact.
+
+The reviewer independently passed 158 focused tests, typecheck, and skill
+equality. In isolated Chrome 153.0.8010.53, both different-URL and same-URL crash
+recovery passed on the first run with the physical target/tab and saved input
+preserved. The real protected-extension fixture also passed on the first run:
+named diagnostic, no phantom frame, and explicit re-adoption of the same target.
+Logs: `/tmp/browserrig-rereview-final-{crash,protected,chrome,typecheck}.log`.
+The reviewer's owned processes were stopped and ports 21990/21992 released.
+
+[Reviewed-head CI](https://github.com/Castor6/BrowserRig/actions/runs/36218042817)
+passed. The reviewer verified final 837-test and corrected 23/23 smoke evidence
+without claiming a second independent full smoke run. The BrowserRig patch
+Changeset is correct; the fixture extension does not ship. Chrome's protected
+frame attachment revocation remains an explicit-recovery limitation, not an
+automatic-recovery promise. Under the recorded merge authorization, batch 03
+becomes Complete when PR #54 lands after final checks. This approval record
+changes documentation only. Closure audit and cursor advancement remain next;
+no package publication is authorized.

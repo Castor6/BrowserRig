@@ -1,9 +1,11 @@
 import { PNG } from "pngjs"
-import type { Browser, BrowserContext, Page } from "playwright-core"
+import { chromium, selectors, type Browser, type BrowserContext, type Page } from "playwright-core"
 import { describe, expect, it, vi } from "vitest"
 import { Effect } from "effect"
 import {
   defaultPageClosedWarning,
+  defaultPageRepairedWarning,
+  isDisposableSessionPage,
   ExecuteSandbox,
   isSessionPageConnected,
   recoverSessionPage,
@@ -14,6 +16,406 @@ import { BrowserRigSessions } from "../src/session-manager.ts"
 import { WebMcpSession, type WebMcpEvent } from "../src/webmcp.ts"
 
 describe("execute lifecycle", () => {
+  it.each([
+    { kind: "protected extension", error: "Cannot access a chrome-extension:// URL of different extension", healthCheck: false },
+    { kind: "destroyed context", error: "Execution context was destroyed", healthCheck: true },
+    { kind: "crashed target", error: "Target closed", healthCheck: true },
+  ])("handles $kind failures without losing the session page", async ({ kind, error, healthCheck }) => {
+    const page = {
+      isClosed: () => false,
+      url: () => "https://example.test/form",
+      title: async () => "Fixture",
+      context: (): BrowserContext => context as unknown as BrowserContext,
+      on: vi.fn(),
+      off: vi.fn(),
+      once: vi.fn(),
+      evaluate: vi.fn<() => Promise<boolean>>().mockRejectedValue(new Error(error)),
+      close: vi.fn().mockResolvedValue(undefined),
+    }
+    const context = {
+      pages: () => [],
+      on: vi.fn(),
+      newPage: vi.fn().mockResolvedValueOnce(page).mockRejectedValue(new Error("Unexpected page replacement")),
+      newCDPSession: async () => ({
+        send: async () => ({ targetInfo: { targetId: "fixture-target" } }),
+        detach: async () => {},
+      }),
+    }
+    const browser = {
+      isConnected: () => true,
+      contexts: () => [context],
+      close: vi.fn().mockResolvedValue(undefined),
+    }
+    const connect = vi.spyOn(chromium, "connectOverCDP").mockResolvedValue(browser as unknown as Browser)
+    const register = vi.spyOn(selectors, "register").mockResolvedValue(undefined)
+    const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:1" })
+    try {
+      const failure = await Effect.runPromise(sandbox.execute("state.originalPage = page; return page.evaluate(() => true)"))
+      expect(failure.isError).toBe(true)
+      expect(failure.text).toContain(error)
+      if (kind === "protected extension") {
+        expect(failure.diagnostic).toBe("target/cross-extension-page")
+        expect(failure.warnings).toEqual([
+          "Chromium blocked protected extension UI, possibly a password manager. Ask the user to finish or dismiss it in the browser, then retry.",
+        ])
+      } else {
+        expect(failure.warnings).toEqual([])
+      }
+      if (kind === "crashed target") expect(sandbox.markTargetCrashed("fixture-target")).toBe(true)
+      expect(sandbox.getStatus()).toMatchObject({ connected: !healthCheck, pageUrl: "https://example.test/form" })
+
+      // Keep the permission failure active: the next execute must not probe or replace this page.
+      if (healthCheck) page.evaluate.mockResolvedValue(true)
+      const continued = await Effect.runPromise(sandbox.execute("return { samePage: page === state.originalPage }"))
+      expect(continued).toMatchObject({ isError: false, value: { samePage: true } })
+      expect(page.evaluate).toHaveBeenCalledTimes(healthCheck ? 2 : 1)
+      expect(context.newPage).toHaveBeenCalledTimes(1)
+      expect(page.close).not.toHaveBeenCalled()
+      expect(sandbox.getStatus().connected).toBe(true)
+
+      page.evaluate.mockResolvedValue(true)
+      const retried = await Effect.runPromise(sandbox.execute("return page.evaluate(() => true)"))
+      expect(retried).toMatchObject({ isError: false, value: true, warnings: [] })
+    } finally {
+      await Effect.runPromise(sandbox.disconnectSettled())
+      connect.mockRestore()
+      register.mockRestore()
+    }
+  })
+
+  it.each([
+    { kind: "rewritten evaluate", error: "Execution context was destroyed, most likely because of a navigation." },
+    { kind: "locator retry", error: "locator.inputValue: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('#payment').contentFrame().locator('#card')" },
+  ])("names protected extension UI behind a $kind failure while the relay reports the tab blocked", async ({ error }) => {
+    // Playwright hides Chrome's "Cannot access a chrome-extension:// URL of
+    // different extension" rejection behind a rewritten evaluate error or a
+    // locator timeout; only the relay saw the real message.
+    const page = {
+      isClosed: () => false,
+      url: () => "https://example.test/pay",
+      title: async () => "Fixture",
+      context: (): BrowserContext => context as unknown as BrowserContext,
+      on: vi.fn(),
+      off: vi.fn(),
+      once: vi.fn(),
+      evaluate: vi.fn<() => Promise<boolean>>().mockRejectedValue(new Error(error)),
+      close: vi.fn().mockResolvedValue(undefined),
+    }
+    const context = {
+      pages: () => [],
+      on: vi.fn(),
+      newPage: vi.fn().mockResolvedValueOnce(page).mockRejectedValue(new Error("Unexpected page replacement")),
+      newCDPSession: async () => ({
+        send: async () => ({ targetInfo: { targetId: "fixture-target" } }),
+        detach: async () => {},
+      }),
+    }
+    const browser = {
+      isConnected: () => true,
+      contexts: () => [context],
+      close: vi.fn().mockResolvedValue(undefined),
+    }
+    const connect = vi.spyOn(chromium, "connectOverCDP").mockResolvedValue(browser as unknown as Browser)
+    const register = vi.spyOn(selectors, "register").mockResolvedValue(undefined)
+    const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:1", pageHealthCheckTimeoutMs: 50 })
+    try {
+      const ready = await Effect.runPromise(sandbox.execute("state.originalPage = page; return page.url()"))
+      expect(ready).toMatchObject({ isError: false, value: "https://example.test/pay" })
+      expect(sandbox.markTargetProtectedUi("other-target", true)).toBe(false)
+      expect(sandbox.markTargetProtectedUi("fixture-target", true)).toBe(true)
+
+      const failure = await Effect.runPromise(sandbox.execute("return page.evaluate(() => true)"))
+      expect(failure.isError).toBe(true)
+      expect(failure.text).toContain(error.split("\n")[0])
+      expect(failure.diagnostic).toBe("target/cross-extension-page")
+      expect(failure.warnings).toEqual([
+        "Chromium blocked protected extension UI, possibly a password manager. Ask the user to finish or dismiss it in the browser, then retry.",
+      ])
+      // The tab is healthy; no health check, repair, or replacement follows.
+      expect(sandbox.getStatus()).toMatchObject({ connected: true, pageUrl: "https://example.test/pay" })
+      const continued = await Effect.runPromise(sandbox.execute("return { samePage: page === state.originalPage }"))
+      expect(continued).toMatchObject({ isError: false, value: { samePage: true }, warnings: [] })
+      expect(page.evaluate).toHaveBeenCalledTimes(1)
+      expect(context.newPage).toHaveBeenCalledTimes(1)
+      expect(page.close).not.toHaveBeenCalled()
+      expect(connect).toHaveBeenCalledTimes(1)
+
+      // Once the menu is dismissed the same failure is classified as before.
+      expect(sandbox.markTargetProtectedUi("fixture-target", false)).toBe(true)
+      const later = await Effect.runPromise(sandbox.execute("return page.evaluate(() => true)"))
+      expect(later.isError).toBe(true)
+      expect(later.diagnostic).not.toBe("target/cross-extension-page")
+      expect(later.warnings).toEqual([])
+    } finally {
+      await Effect.runPromise(sandbox.disconnectSettled())
+      connect.mockRestore()
+      register.mockRestore()
+    }
+  })
+
+
+  it.each(["stale context", "crash then navigation", "crash then same-URL reload"])("repairs %s over a fresh connection without replacing the tab", async (scenario) => {
+    let url = "https://example.test/sign-in"
+    const makePage = (evaluate: () => Promise<boolean>) => ({
+      isClosed: () => false,
+      url: () => url,
+      title: async () => "Fixture",
+      context: (): BrowserContext => context as unknown as BrowserContext,
+      on: vi.fn(),
+      off: vi.fn(),
+      once: vi.fn(),
+      evaluate: vi.fn(evaluate),
+      close: vi.fn().mockResolvedValue(undefined),
+    })
+    // The first Playwright view of the tab keeps failing with a stale context id.
+    const stalePage = makePage(() => Promise.reject(new Error("Execution context was destroyed")))
+    // The same tab re-resolved over a new connection answers immediately.
+    const repairedPage = makePage(() => Promise.resolve(true))
+    const pages: Array<typeof stalePage> = []
+    const context = {
+      pages: () => pages,
+      on: vi.fn(),
+      newPage: vi.fn(async () => {
+        pages.push(stalePage)
+        return stalePage
+      }),
+      newCDPSession: async () => ({
+        send: async () => ({ targetInfo: { targetId: "fixture-target" } }),
+        detach: async () => {},
+      }),
+    }
+    let connected = true
+    const browser = {
+      isConnected: () => connected,
+      contexts: () => [context],
+      close: vi.fn(async () => { connected = false }),
+    }
+    const connect = vi.spyOn(chromium, "connectOverCDP").mockImplementation(async () => {
+      connected = true
+      return browser as unknown as Browser
+    })
+    const register = vi.spyOn(selectors, "register").mockResolvedValue(undefined)
+    const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:1", pageHealthCheckTimeoutMs: 50 })
+    try {
+      const failure = await Effect.runPromise(sandbox.execute("return page.evaluate(() => true)"))
+      expect(failure.isError).toBe(true)
+      expect(failure.diagnostic).toMatch(/^execution-context\/context-destroyed/)
+      expect(sandbox.getStatus().connected).toBe(false)
+
+      if (scenario !== "stale context") {
+        sandbox.markTargetCrashed("fixture-target")
+        if (scenario === "crash then navigation") url = "https://example.test/recovered"
+        expect(sandbox.markTargetNavigated("other-target")).toBe(false)
+        expect(sandbox.markTargetNavigated("fixture-target")).toBe(true)
+      }
+
+      // Reconnecting exposes the same target id through a fresh page object.
+      pages.splice(0, pages.length, repairedPage)
+      const continued = await Effect.runPromise(sandbox.execute("return { url: page.url() }"))
+      expect(continued).toMatchObject({ isError: false, value: { url } })
+      expect(continued.warnings).toContain(defaultPageRepairedWarning)
+      expect(stalePage.close).not.toHaveBeenCalled()
+      expect(context.newPage).toHaveBeenCalledTimes(1)
+      expect(browser.close).toHaveBeenCalledTimes(1)
+      expect(connect).toHaveBeenCalledTimes(2)
+      expect(sandbox.getStatus()).toMatchObject({ connected: true, pageUrl: url })
+    } finally {
+      await Effect.runPromise(sandbox.disconnectSettled())
+      connect.mockRestore()
+      register.mockRestore()
+    }
+  })
+
+  it("reports an unresponsive relay-owned page and keeps the tab when repair does not help", async () => {
+    const page = {
+      isClosed: () => false,
+      url: () => "https://example.test/customize-your-trip",
+      title: async () => "Fixture",
+      context: (): BrowserContext => context as unknown as BrowserContext,
+      on: vi.fn(),
+      off: vi.fn(),
+      once: vi.fn(),
+      evaluate: vi.fn<() => Promise<boolean>>().mockRejectedValue(new Error("Execution context was destroyed")),
+      close: vi.fn().mockResolvedValue(undefined),
+    }
+    const pages: Array<typeof page> = []
+    const context = {
+      pages: () => pages,
+      on: vi.fn(),
+      newPage: vi.fn(async () => {
+        pages.push(page)
+        return page
+      }),
+      newCDPSession: async () => ({
+        send: async () => ({ targetInfo: { targetId: "fixture-target" } }),
+        detach: async () => {},
+      }),
+    }
+    let connected = true
+    const browser = {
+      isConnected: () => connected,
+      contexts: () => [context],
+      close: vi.fn(async () => { connected = false }),
+    }
+    const connect = vi.spyOn(chromium, "connectOverCDP").mockImplementation(async () => {
+      connected = true
+      return browser as unknown as Browser
+    })
+    const register = vi.spyOn(selectors, "register").mockResolvedValue(undefined)
+    const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:1", pageHealthCheckTimeoutMs: 50 })
+    try {
+      const failure = await Effect.runPromise(sandbox.execute("return page.evaluate(() => document.readyState)"))
+      expect(failure.isError).toBe(true)
+      expect(failure.diagnostic).toMatch(/^execution-context\/context-destroyed/)
+
+      const kept = await Effect.runPromise(sandbox.execute("return page.url()"))
+      expect(kept.isError).toBe(true)
+      expect(kept.setupFailed).toBe(true)
+      expect(kept.diagnostic).toBe("session-page/owned-unresponsive")
+      expect(kept.text).toContain("relay-owned session page is unresponsive")
+      expect(kept.text).toContain("was kept and was not replaced")
+      expect(kept.warnings).toEqual([])
+      expect(page.close).not.toHaveBeenCalled()
+      expect(context.newPage).toHaveBeenCalledTimes(1)
+      expect(sandbox.getStatus()).toMatchObject({ connected: false, pageUrl: "https://example.test/customize-your-trip" })
+    } finally {
+      await Effect.runPromise(sandbox.disconnectSettled())
+      connect.mockRestore()
+      register.mockRestore()
+    }
+  })
+
+  it("still recreates a crashed relay-owned page", async () => {
+    const page = {
+      isClosed: () => false,
+      url: () => "https://example.test/form",
+      title: async () => "Fixture",
+      context: (): BrowserContext => context as unknown as BrowserContext,
+      on: vi.fn(),
+      off: vi.fn(),
+      once: vi.fn(),
+      evaluate: vi.fn<() => Promise<boolean>>().mockRejectedValue(new Error("Target crashed")),
+      close: vi.fn().mockResolvedValue(undefined),
+    }
+    const freshPage = { ...page, url: () => "about:blank", evaluate: vi.fn().mockResolvedValue(true), close: vi.fn() }
+    const context = {
+      pages: () => [],
+      on: vi.fn(),
+      newPage: vi.fn().mockResolvedValueOnce(page).mockResolvedValueOnce(freshPage),
+      newCDPSession: async () => ({
+        send: async () => ({ targetInfo: { targetId: "fixture-target" } }),
+        detach: async () => {},
+      }),
+    }
+    const browser = {
+      isConnected: () => true,
+      contexts: () => [context],
+      close: vi.fn().mockResolvedValue(undefined),
+    }
+    const connect = vi.spyOn(chromium, "connectOverCDP").mockResolvedValue(browser as unknown as Browser)
+    const register = vi.spyOn(selectors, "register").mockResolvedValue(undefined)
+    const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:1" })
+    try {
+      const failure = await Effect.runPromise(sandbox.execute("return page.evaluate(() => true)"))
+      expect(failure.isError).toBe(true)
+      expect(sandbox.markTargetCrashed("fixture-target")).toBe(true)
+
+      const recovered = await Effect.runPromise(sandbox.execute("return page.url()"))
+      expect(recovered).toMatchObject({ isError: false, value: "about:blank" })
+      expect(recovered.warnings).toEqual([
+        "The session default page target crashed; checking it before the next execute.",
+        "The session default page was unresponsive; created a new page. References to the old page in state are stale.",
+      ])
+      expect(page.close).toHaveBeenCalledTimes(1)
+      expect(context.newPage).toHaveBeenCalledTimes(2)
+    } finally {
+      await Effect.runPromise(sandbox.disconnectSettled())
+      connect.mockRestore()
+      register.mockRestore()
+    }
+  })
+
+
+  it.each(["replace", "detach"] as const)("does not apply a late health result after target %s", async (change) => {
+    let finish!: () => void
+    let started!: () => void
+    const checking = new Promise<void>((resolve) => { started = resolve })
+    const fixture = makeMultiPageBrowserFixture([
+      { targetId: "old", targetUrl: "https://example.test/form", evaluate: () => { started(); return new Promise<void>((resolve) => { finish = resolve }) } },
+      { targetId: "new", targetUrl: "https://example.test/replacement", initiallyVisible: false },
+    ])
+    const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:1" })
+    Object.assign(sandbox, { browser: fixture.browser })
+    await Effect.runPromise(sandbox.execute("return page.url()"))
+    sandbox.markTargetCrashed("old")
+    const pending = Effect.runPromise(sandbox.execute("return page.url()"))
+    await checking
+    if (change === "replace") {
+      fixture.replace("old", "new")
+      sandbox.markTargetReplaced("old", "new")
+    } else {
+      fixture.detach("old")
+      sandbox.markTargetDetached("old")
+    }
+    finish()
+    expect(await pending).toMatchObject({ isError: true, diagnostic: "session-page/target-unavailable" })
+    expect(fixture.newPageCalls()).toBe(1)
+    if (change === "replace") {
+      expect(await Effect.runPromise(sandbox.execute("return page.url()"))).toMatchObject({ isError: false, value: "https://example.test/replacement" })
+    }
+  })
+
+  it("keeps a crashed tab when a same-URL main document reload arrives during its probe", async () => {
+    let started!: () => void
+    const checking = new Promise<void>((resolve) => { started = resolve })
+    const fixture = makeMultiPageBrowserFixture([
+      { targetId: "old", targetUrl: "https://example.test/form", evaluate: () => { started(); return new Promise(() => {}) } },
+    ])
+    const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:1", pageHealthCheckTimeoutMs: 30 })
+    Object.assign(sandbox, { browser: fixture.browser })
+    await Effect.runPromise(sandbox.execute("return page.url()"))
+    const original = fixture.browser.contexts()[0]!.pages()[0]!
+    const close = vi.spyOn(original, "close")
+    sandbox.markTargetCrashed("old")
+    const pending = Effect.runPromise(sandbox.execute("return page.url()"))
+    await checking
+    expect(sandbox.markTargetNavigated("old")).toBe(true)
+    expect(await pending).toMatchObject({ isError: true })
+    expect(close).not.toHaveBeenCalled()
+    expect(fixture.newPageCalls()).toBe(1)
+  })
+
+  it("does not erase a replacement that arrives while closing a crashed page", async () => {
+    const fixture = makeMultiPageBrowserFixture([
+      { targetId: "old", targetUrl: "https://example.test/form", evaluate: async () => { throw new Error("Target crashed") } },
+      { targetId: "new", targetUrl: "https://example.test/replacement", initiallyVisible: false },
+    ])
+    const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:1" })
+    Object.assign(sandbox, { browser: fixture.browser })
+    await Effect.runPromise(sandbox.execute("return page.url()"))
+    const old = fixture.browser.contexts()[0]!.pages()[0]!
+    old.close = async () => { fixture.replace("old", "new"); sandbox.markTargetReplaced("old", "new") }
+    sandbox.markTargetCrashed("old")
+    expect(await Effect.runPromise(sandbox.execute("return page.url()"))).toMatchObject({ isError: true, diagnostic: "session-page/target-unavailable" })
+    expect(await Effect.runPromise(sandbox.execute("return page.url()"))).toMatchObject({ isError: false, value: "https://example.test/replacement" })
+    expect(fixture.newPageCalls()).toBe(1)
+  })
+
+  it("explains a resolved handoff with a stalled destination without losing the exact page", async () => {
+    vi.useFakeTimers()
+    const fixture = makeMultiPageBrowserFixture([{ targetId: "handoff", targetUrl: "https://example.test/sign-in", evaluate: async () => { throw new Error("Execution context was destroyed") } }])
+    const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:1", requestHandoff: async () => "resolved" })
+    Object.assign(sandbox, { browser: fixture.browser })
+    try {
+      const result = Effect.runPromise(sandbox.execute("await handoff('Sign in'); return 'unexpected'"))
+      await vi.advanceTimersByTimeAsync(15_100)
+      expect(await result).toMatchObject({ isError: true, text: expect.stringContaining("Handoff resolved (Sign in)"), diagnostic: expect.stringContaining("execution-context/context-destroyed") })
+      expect((await result).text).toContain("The tab was kept")
+      expect(fixture.newPageCalls()).toBe(1)
+      expect(sandbox.getStatus().pageUrl).toBe("https://example.test/sign-in")
+    } finally { vi.useRealTimers() }
+  })
+
   it("binds screenshotDiff to the selected page and extracts its PNG media", async () => {
     const f = makeWebMcpSandboxFixture()
     const browser = (f.sandbox as unknown as { browser: Browser }).browser
@@ -278,11 +680,12 @@ describe("execute lifecycle", () => {
     expect(error instanceof Error ? error.message : "").toContain("could not be closed")
   })
 
-  it("fails fast without closing an unhealthy adopted page", async () => {
+  it.each([false, true])("never closes an unhealthy adopted page (crashed=%s)", async (crashed) => {
     let closed = false
     const error = await Effect.runPromise(recoverSessionPage({
       ownsPage: false,
       url: "https://example.test/form",
+      crashed,
       timeoutMs: 20,
       healthCheck: () => Promise.reject(new Error("Execution context was destroyed")),
       close: () => {
@@ -297,6 +700,74 @@ describe("execute lifecycle", () => {
     expect(error).toBeInstanceOf(Error)
     expect(error instanceof Error ? error.message : "").toContain("adopted session page is unresponsive")
     expect(closed).toBe(false)
+  })
+
+  it("keeps a relay-owned page with user state instead of closing it", async () => {
+    let closed = false
+    const result = await Effect.runPromise(recoverSessionPage({
+      ownsPage: true,
+      url: "https://example.test/sign-in",
+      timeoutMs: 20,
+      healthCheck: () => Promise.reject(new Error("Execution context was destroyed")),
+      close: () => {
+        closed = true
+        return Promise.resolve()
+      },
+    }))
+
+    expect(result).toBe("repair")
+    expect(closed).toBe(false)
+  })
+
+  it("diagnoses a relay-owned page that stays unresponsive after repair without closing it", async () => {
+    let closed = false
+    const error = await Effect.runPromise(recoverSessionPage({
+      ownsPage: true,
+      url: "https://example.test/sign-in",
+      timeoutMs: 20,
+      repaired: true,
+      healthCheck: () => Promise.reject(new Error("Execution context was destroyed")),
+      close: () => {
+        closed = true
+        return Promise.resolve()
+      },
+    })).then(
+      () => undefined,
+      (cause: unknown) => cause,
+    )
+
+    expect(error).toBeInstanceOf(Error)
+    const message = error instanceof Error ? error.message : ""
+    expect(message).toContain("relay-owned session page is unresponsive")
+    expect(message).toContain("even after reconnecting")
+    expect(message).toContain("was kept")
+    expect(closed).toBe(false)
+  })
+
+  it("recreates a crashed relay-owned page regardless of its URL", async () => {
+    let closed = false
+    const result = await Effect.runPromise(recoverSessionPage({
+      ownsPage: true,
+      url: "https://example.test/form",
+      timeoutMs: 20,
+      crashed: true,
+      healthCheck: () => Promise.reject(new Error("Target crashed")),
+      close: () => {
+        closed = true
+        return Promise.resolve()
+      },
+    }))
+
+    expect(result).toBe("recreate")
+    expect(closed).toBe(true)
+  })
+
+  it("classifies which relay-owned documents are disposable", () => {
+    expect(isDisposableSessionPage({ url: "about:blank" })).toBe(true)
+    expect(isDisposableSessionPage({ url: "" })).toBe(true)
+    expect(isDisposableSessionPage({ url: "chrome-error://chromewebdata/" })).toBe(true)
+    expect(isDisposableSessionPage({ url: "https://example.test/form", crashed: true })).toBe(true)
+    expect(isDisposableSessionPage({ url: "https://example.test/form" })).toBe(false)
   })
 
   it("keeps a page that passes the bounded health check", async () => {

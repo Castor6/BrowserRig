@@ -96,10 +96,12 @@ const makeFakeSandbox = (options?: {
         })).pipe(Effect.tap(() => Effect.sync(() => {
           persistenceTarget = { id: selection.targetId, owner: "user" }
         }))),
+    markTargetNavigated: (targetId) => persistenceTarget?.id === targetId,
     markTargetCrashed: (targetId) => {
       crashedTargets.push(targetId)
       return persistenceTarget?.id === targetId
     },
+    markTargetProtectedUi: (targetId) => persistenceTarget?.id === targetId,
     markTargetDetached: (targetId) => {
       detachedTargets.push(targetId)
       const affected = persistenceTarget?.id === targetId

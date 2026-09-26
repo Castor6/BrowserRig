@@ -309,3 +309,10 @@ never resizes mismatched images or maintains an implicit baseline.
 Output dimensions/rate and compositor received/retained/coalesced/dropped frame
 counters exposed alongside a recording. These counters do not certify distinct
 motion. `screenshotFallback` identifies a single stop-time screenshot held as video.
+
+**Protected Frame**:
+A child document at a browser-internal or other-extension URL, such as a
+password-manager inline menu. BrowserRig hides it from CDP clients. Chrome may
+block debugger commands while it exists; that permission boundary needs human
+action and is distinct from a crashed or unresponsive page.
+_Avoid_: Phantom frame, crashed target

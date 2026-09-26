@@ -539,8 +539,26 @@ Common diagnoses:
   inventory, BrowserRig forgets the dead identity without closing a
   guessed tab.
 - Repeated execution-context errors: run one short follow-up so BrowserRig
-  can health-check the page. It may recreate a relay-owned page, but it never
-  replaces an unhealthy adopted user tab; reset or re-adopt that tab.
+  can health-check the page. Ordinary live relay-owned pages are kept and
+  re-resolved over one fresh connection; continued failure reports
+  `session-page/owned-unresponsive`. Only crashed, blank, or chrome-error
+  relay-owned pages may be closed and recreated. Adopted user tabs are never
+  replaced and report `session-page/adopted-unresponsive`. Ask the user to let
+  the preserved tab settle or navigate it. Explicit `session reset --session <id>`
+  closes a relay-owned tab but only releases an adopted user tab.
+- A resolved handoff whose destination context stays unavailable keeps the tab;
+  a short follow-up execute re-checks it. No failed script is replayed.
+- `target/cross-extension-page` and `protected-ui=true` in status/doctor mean
+  Chrome blocked another extension's UI, possibly an inline password-manager
+  menu opened by focusing a field. Finish or dismiss it in the browser and retry.
+  Do not reset the page, access vault contents, or weaken browser security.
+  Masked context errors and locator timeouts receive the same guidance while
+  the relay knows that the default tab is blocked. Chrome can also revoke debugger
+  attachment; dismissal alone may not restore it. Activate the preserved tab
+  and explicitly re-attach with `session adopt --active --session <id>`. If the
+  sandbox stays stale after successful adoption, reset that adopted session
+  (which releases its user tab), then re-adopt the same active tab. Do not reset
+  a relay-owned session merely to dismiss protected UI.
 - Fill timeout on login fields: inspect first, then try `fillInput` after
   confirming the selector or locator resolves. String selectors search open
   shadow roots recursively; closed shadow roots remain unavailable.

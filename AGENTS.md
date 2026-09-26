@@ -156,8 +156,12 @@ local Node relay.
 - Execute results carry per-call `warnings` and an `aftermath` summary
   (URL movement, navigations, error counts, handoffs). After an execution-context
   diagnostic or target crash, the next normal execute performs a bounded page
-  health check: recreate unhealthy relay-owned pages only after the old page
-  closes, but never close or replace unhealthy adopted user tabs. Crash events
+  health check: preserve ordinary live pages and reconnect once to the exact target.
+  Only crashed, blank, or chrome-error relay-owned pages may be recreated after
+  closing; never close or replace unhealthy adopted user tabs. Main-document
+  navigation clears crash classification while retaining the pending health check
+  for stale Playwright connections; document generations also guard same-URL
+  reloads during a probe against destructive recovery. Crash events
   reject pending debugger commands for only that tab and remain visible in
   status/doctor until navigation or detach.
   Do not add a passive `page.on("dialog")` listener for aftermath: it would
@@ -261,6 +265,11 @@ local Node relay.
 - `Target.setAutoAttach` forwards dedicated `worker` targets to Playwright, but
   resumes and suppresses unsupported children such as page-scoped service
   workers. Exposing an unroutable paused child can hang its parent navigation.
+- Protected child extension frames are hidden from CDP events and replay; never
+  hide the main frame without child evidence. Record actual cross-extension
+  debugger failures as `protectedUi` for the exact connection/root generation.
+  Masked context errors and locator timeouts receive `target/cross-extension-page`
+  and human-action guidance, without page replacement.
 - OOPIF reconnect depends on replaying stored child target attaches plus the
   current child frame navigation on the child session for stock Playwright.
 - Relay shutdown should await HTTP and websocket close callbacks so scoped tests

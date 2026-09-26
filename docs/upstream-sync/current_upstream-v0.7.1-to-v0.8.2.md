@@ -398,3 +398,36 @@ changes documentation only; publication remains unauthorized.
   Runtime.evaluate; its debug log identifies the cause. Restricting the held
   command to the fixture expression makes all four relay cases pass. This was
   a test fixture correction, with no product timeout replay.
+
+### Batch 03 final validation and review handoff
+
+- Final behavior from `14adb55` passed the **first complete 23-case smoke run:
+  23 passed / 0 failed**, with one attempt per case. Log:
+  `/tmp/browserrig-v082-batch03-smoke23-first.log`. Exact command:
+
+  ```sh
+  BROWSERRIG_PORT=21990 BROWSERRIG_ENDPOINT=http://127.0.0.1:21990 SMOKE_CASE=local-forms,local-cart,local-checkout,reconnect-evaluate,redirect-reconnect-evaluate,session-missing-selector,execute-target-url,execute-page-recovery,execute-page-detach-recovery,execute-fill-helpers,execute-snapshot-refs,handoff-navigation,handoff-cross-tab,handoff-target-detach,oopif-reconnect,dedicated-worker,network-capture,session-download-capability,execute-ghost-cursor,session-isolation,multi-client,stale-client-checkout,raw-first-checkout pnpm smoke
+  ```
+
+- The run uses task-owned source relay port 21990 and isolated Google Chrome
+  153.0.8010.53 through the committed test harness. Neither port 19990 nor the
+  user's profile was touched. The final relay PID 25786 and browser harness
+  PID 25743 were stopped after validation; earlier task browser/relay processes
+  were also stopped. `termctrl` is unavailable, so tracked process sessions were
+  used. No extension source/build or reload requirement was introduced.
+- Final typecheck and full unit suite pass (833 tests / 72 files), including an
+  additional resolved-handoff destination diagnostic assertion. Logs:
+  `/tmp/browserrig-v082-batch03-typecheck-complete.log` and
+  `/tmp/browserrig-v082-batch03-unit-complete.log`. Final CLI build passes:
+  `/tmp/browserrig-v082-batch03-build-skill-final.log`. Repository skill,
+  installed OpenCode skill, and built `node dist/cli.js skill` output match.
+- Implementation validation before the last test/documentation-only
+  additions also passed on GitHub:
+  [CI run 36217162144](https://github.com/Castor6/BrowserRig/actions/runs/36217162144).
+  This is not independent review or a claim about a later head's CI.
+- `browserrig: patch` Changeset was generated with `pnpm changeset`. Test-only
+  extension fixture files are outside the extension package and npm file list;
+  the shipping extension and its permissions/protocol/versions are unchanged.
+- Batch 03 remains Pending for fresh independent review and final-head CI.
+  No merge, release, npm publication, Store submission, or cursor advancement is
+  claimed by this implementation handoff. No batch beyond v0.8.2 was started.

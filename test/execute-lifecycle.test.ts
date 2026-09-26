@@ -373,6 +373,21 @@ describe("execute lifecycle", () => {
     expect(fixture.newPageCalls()).toBe(1)
   })
 
+  it("explains a resolved handoff with a stalled destination without losing the exact page", async () => {
+    vi.useFakeTimers()
+    const fixture = makeMultiPageBrowserFixture([{ targetId: "handoff", targetUrl: "https://example.test/sign-in", evaluate: async () => { throw new Error("Execution context was destroyed") } }])
+    const sandbox = new ExecuteSandbox({ endpointUrl: "http://127.0.0.1:1", requestHandoff: async () => "resolved" })
+    Object.assign(sandbox, { browser: fixture.browser })
+    try {
+      const result = Effect.runPromise(sandbox.execute("await handoff('Sign in'); return 'unexpected'"))
+      await vi.advanceTimersByTimeAsync(15_100)
+      expect(await result).toMatchObject({ isError: true, text: expect.stringContaining("Handoff resolved (Sign in)"), diagnostic: expect.stringContaining("execution-context/context-destroyed") })
+      expect((await result).text).toContain("The tab was kept")
+      expect(fixture.newPageCalls()).toBe(1)
+      expect(sandbox.getStatus().pageUrl).toBe("https://example.test/sign-in")
+    } finally { vi.useRealTimers() }
+  })
+
   it("binds screenshotDiff to the selected page and extracts its PNG media", async () => {
     const f = makeWebMcpSandboxFixture()
     const browser = (f.sandbox as unknown as { browser: Browser }).browser

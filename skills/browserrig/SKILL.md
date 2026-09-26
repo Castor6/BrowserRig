@@ -555,7 +555,10 @@ Common diagnoses:
   Masked context errors and locator timeouts receive the same guidance while
   the relay knows that the default tab is blocked. Chrome can also revoke debugger
   attachment; dismissal alone may not restore it. Activate the preserved tab
-  and explicitly re-attach with `session adopt --active --session <id>`.
+  and explicitly re-attach with `session adopt --active --session <id>`. If the
+  sandbox stays stale after successful adoption, reset that adopted session
+  (which releases its user tab), then re-adopt the same active tab. Do not reset
+  a relay-owned session merely to dismiss protected UI.
 - Fill timeout on login fields: inspect first, then try `fillInput` after
   confirming the selector or locator resolves. String selectors search open
   shadow roots recursively; closed shadow roots remain unavailable.

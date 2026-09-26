@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { chromium } from "playwright-core"
-import { createSnapshotHelpers } from "../src/execute.ts"
+import { createSnapshotHelpers, fillInputs } from "../src/execute.ts"
 
 // Real DOM and Playwright locators: deliberately separate from browser-free unit tests.
 const browser = await chromium.launch({ channel: "chrome" })
@@ -79,6 +79,42 @@ try {
     const outline = await snapshot()
     assert.match(outline, /heading "Background"/)
     assert.doesNotMatch(outline, /Invisible/)
+  })
+  await check("search refs, explicit diff and navigation boundaries", async () => {
+    await page.setContent('<main><h1>Account</h1><label>Private<input value="secret-form-value"></label><button>Checkout</button></main>')
+    const { snapshot, ref } = createSnapshotHelpers(page, { selectors: new Map() })
+    const outline = await snapshot({ find: /checkout/gi, context: 0 })
+    assert.match(outline, /1 matching snapshot line/)
+    assert.doesNotMatch(outline, /secret-form-value/)
+    const id = outline.match(/ref=(e\d+)/)?.[1]
+    assert.ok(id, outline)
+    assert.equal(await ref(id).count(), 1)
+    await assert.rejects(snapshot({ diff: true, find: "checkout" }), /either diff or find/)
+    assert.match(await snapshot({ diff: true }), /0 additions, 0 removals/)
+    assert.throws(() => ref(id), /Unknown snapshot ref/)
+    await snapshot({ find: "checkout" })
+    await page.goto("about:blank#next-document")
+    assert.throws(() => ref(id), /stale after a page change/)
+  })
+  await check("contenteditable plain text, events, focus and target validation", async () => {
+    await page.setContent('<input id="focus"><div id="editor" contenteditable="true"><b>Before</b></div><div id="disabled" contenteditable="false">Keep</div><div id="host"></div>')
+    await page.locator("#focus").focus()
+    await page.evaluate(() => {
+      const editor = document.querySelector("#editor")!
+      for (const type of ["input", "change"]) editor.addEventListener(type, () => editor.setAttribute(`data-${type}`, "yes"))
+      document.querySelector("#host")!.attachShadow({ mode: "open" }).innerHTML = '<div id="shadow-editor" contenteditable="plaintext-only">Before</div>'
+    })
+    await fillInputs(page, [{ selector: "#editor", value: "<b>Literal</b>\nNext" }, { selector: page.locator("#shadow-editor"), value: "Shadow text" }])
+    assert.equal(await page.locator("#editor").textContent(), "<b>Literal</b>\nNext")
+    assert.equal(await page.locator("#editor b").count(), 0)
+    assert.equal(await page.locator("#editor").getAttribute("data-input"), "yes")
+    assert.equal(await page.locator("#editor").getAttribute("data-change"), "yes")
+    assert.equal(await page.locator("#shadow-editor").textContent(), "Shadow text")
+    assert.equal(await page.evaluate(() => document.activeElement?.id), "focus")
+    await assert.rejects(fillInputs(page, [{ selector: "#disabled", value: "private-rejected-value" }]), /expects input, textarea, or contenteditable/)
+    assert.equal(await page.locator("#disabled").textContent(), "Keep")
+    await fillInputs(page, [{ selector: "#shadow-editor", value: "String shadow target" }])
+    assert.equal(await page.locator("#shadow-editor").textContent(), "String shadow target")
   })
 } finally {
   await browser.close()

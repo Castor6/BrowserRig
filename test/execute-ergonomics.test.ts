@@ -629,6 +629,14 @@ describe("snapshot helpers", () => {
       '  - button "Pay now" [ref=e3]',
     ].join("\n"))
     expect(helpers.ref("e2")).toBe(resolved)
+    await expect(helpers.snapshot({ find: "CHECKOUT", context: -1 })).resolves.toBe([
+      "1 matching snapshot line:", "...", '  - link "Checkout" [ref=e2]',
+    ].join("\n"))
+    await expect(helpers.snapshot({ find: /link/g, context: 0 })).resolves.toContain("2 matching snapshot lines:")
+    await expect(helpers.snapshot({ find: "missing", context: 0 })).resolves.toBe('No snapshot lines matched "missing".')
+    await expect(helpers.snapshot({ find: "checkout", diff: true })).rejects.toThrow("either diff or find")
+    await expect(helpers.snapshot({ diff: true })).resolves.toBe("0 additions, 0 removals, 5 unchanged")
+    expect(() => helpers.ref("e2")).toThrow("Unknown snapshot ref")
   })
 
   it("requires a compatible full snapshot before diffing", async () => {

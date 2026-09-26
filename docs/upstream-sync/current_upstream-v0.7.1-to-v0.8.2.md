@@ -44,7 +44,7 @@ No later cycle is active. All batch states remain Pending until reviewed and lan
 
 | Batch | Scope | Branch | State | BrowserRig PR / independent review / validation |
 | --- | --- | --- | --- | --- |
-| 01 | Snapshot semantics/search, plain-text contenteditable fill, and #88 reconciliation | `feat/upstream-v0.8.2-snapshot-input` | Pending | Implementation started; review and validation pending |
+| 01 | Snapshot semantics/search, plain-text contenteditable fill, and #88 reconciliation | `feat/upstream-v0.8.2-snapshot-input` | Pending | [PR #52](https://github.com/Castor6/BrowserRig/pull/52); independent review pending; validation below |
 | 02 | Filesystem compatibility and ordinary MCP recording controls from #89 | `feat/upstream-v0.8.2-filesystem-recording` | Pending | Not started |
 | 03 | #91/#94 page preservation and protected frames; selected #93 hostile-page regressions | `fix/upstream-v0.8.2-page-preservation` | Pending | Not started |
 
@@ -73,7 +73,8 @@ imports, exact upstream versions, and release automation.
 - #88 (`3bb4e05b178e2b482877ab56297aa89fa6f72b91`): already covered by
   landed #87 debugger ownership checks. Its runtime diff only inlines the
   `getAttachedTabIds` wrapper; its proof change factors worker lookup and tab
-  attachment. No demonstrated remaining safety need; skip the unnecessary refactor.
+  attachment. BrowserRig evidence: `extension/src/debugger-ownership.ts` and
+  `test/extension-debugger-ownership.test.ts`. No demonstrated remaining safety need; skip the unnecessary refactor.
 - #89 (`b1410ca101094bd0fa3d756c98985ac73630e77b`): adapt number/search input
   roles, native summary refs, visible portal/modal scope, alertdialog structure,
   bounded repeated-list reservation, bounded string/RegExp search with context,
@@ -84,5 +85,48 @@ imports, exact upstream versions, and release automation.
 - Initial focused validation: `pnpm exec vitest run test/execute-ergonomics.test.ts`
   passed 32 tests. `pnpm exec tsx scripts/check-snapshot.ts` passed eight real-DOM
   cases in isolated Google Chrome 153.0.8010.53. No user profile or relay was used.
-- Full unit, typecheck, build, expanded browser validation, and independent review
-  are pending. No full smoke-set success is claimed.
+- Initial coherent implementation `c317e4b` was pushed and draft PR #52 opened
+  immediately. Its CI [validate run](https://github.com/Castor6/BrowserRig/actions/runs/36213498485)
+  passed. Independent review is pending; no review waiver or merge is claimed.
+- `pnpm typecheck`, `pnpm test` (784 tests / 70 files), and `pnpm build:cli`
+  passed. Unit evidence: `/tmp/browserrig-v082-unit-first.log`. Expanded
+  `pnpm exec tsx scripts/check-snapshot.ts` passed ten cases in Google Chrome
+  153.0.8010.53, including explicit diff/search rejection, search baseline/ref
+  invalidation, navigation invalidation, plain-text editable events, unchanged
+  focus, rejected non-editable targets, and Locator/string open-shadow targets.
+  Evidence: `/tmp/browserrig-v082-chrome-expanded-first.log`.
+- `scripts/smoke.ts` extends `execute-fill-helpers` to cover the single helper's
+  contenteditable path. Its full-structure fixture now explicitly selects
+  `within: "main"`: a single visible modal intentionally becomes the default
+  snapshot root. `scripts/check-snapshot.ts` separately checks default portal
+  scope, explicit main scope, non-modal surroundings, and hidden modals. The
+  repository and installed OpenCode skill document this behavior and compare
+  equal to built `node dist/cli.js skill` output.
+- No extension source change or dependency/runtime cohort change was needed.
+  No new Effect APIs were introduced. `termctrl` is unavailable on PATH and in
+  the tool catalog; tracked task-owned processes replace it for validation.
+- Full 23-case smoke first attempt: **0 passed / 23 failed**, all at page
+  creation with `Target.createTarget: No current window`, before business
+  checks. Isolated Chrome launched without an ordinary window. Original log:
+  `/tmp/browserrig-v082-smoke23-first.log`; this result is never overwritten.
+  The harness was corrected to create one initial `about:blank` default-window
+  target through CDP before extension load. No timeout replay or product fix
+  was used for this environment correction.
+- Second full smoke run: **23 passed / 0 failed**, on the task-owned source relay at port
+  21990 and isolated Chrome 153.0.8010.53. Only a temporary extension copy has
+  its relay port changed; `Extensions.loadUnpacked` loads it with Chrome's
+  `--enable-unsafe-extension-debugging`. The user's browser and port 19990
+  are untouched. Evidence: `/tmp/browserrig-v082-smoke23-second.log`.
+
+- Exact second-run command (all mandated cases, one attempt per case):
+
+  ```bash
+  BROWSERRIG_PORT=21990 BROWSERRIG_ENDPOINT=http://127.0.0.1:21990 SMOKE_CASE=local-forms,local-cart,local-checkout,reconnect-evaluate,redirect-reconnect-evaluate,session-missing-selector,execute-target-url,execute-page-recovery,execute-page-detach-recovery,execute-fill-helpers,execute-snapshot-refs,handoff-navigation,handoff-cross-tab,handoff-target-detach,oopif-reconnect,dedicated-worker,network-capture,session-download-capability,execute-ghost-cursor,session-isolation,multi-client,stale-client-checkout,raw-first-checkout pnpm smoke
+  ```
+
+- Task-owned relay PID 10469 and Chrome harness PID 10712 were stopped after
+  validation. No ongoing relay/browser is required for review. Temporary logs
+  and harness evidence remain under `/tmp/browserrig-v082-*`.
+- Remaining gates: fresh independent review, final-head CI, and explicit user
+  merge approval. Batches 02/03 remain unstarted; cursor advancement is blocked
+  until the full cycle and its closure audit complete.

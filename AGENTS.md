@@ -98,7 +98,9 @@ local Node relay.
   reappears; JavaScript `state` and snapshot refs intentionally reset and warn.
   Win the endpoint port before loading or writing this catalog. Successful
   durable lifecycle operations await atomic replacement plus file and directory
-  sync. Corrupt catalogs fail relay startup and are never overwritten.
+  sync. Only directory sync may tolerate EPERM, EINVAL, or ENOTSUP for filesystem
+  compatibility; file sync and other I/O failures remain fatal. Corrupt catalogs
+  fail relay startup and are never overwritten.
 - Preserve a live compatible extension connection when another browser/profile
   connects. Reject the contender, probe the active socket, and report contention
   in status/doctor; switching browsers requires the active connection to close.

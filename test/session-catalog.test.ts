@@ -115,6 +115,61 @@ describe("SessionCatalog", () => {
     expect(fs.readdirSync(path.dirname(filePath))).toEqual(["sessions.json"])
   })
 
+  it.each(["EPERM", "EINVAL", "ENOTSUP"])("tolerates unsupported directory sync code %s", async (code) => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "browserrig-session-catalog-"))
+    temporaryDirectories.push(home)
+    const filePath = defaultSessionCatalogPath(20001, home)
+    const directory = path.dirname(filePath)
+    const catalog = new SessionCatalog(filePath)
+    const sessions: PersistedSession[] = [{ id: "windows", createdAt: "now", updatedAt: "now", readOnly: false }]
+    const open = fsPromises.open.bind(fsPromises)
+    const handles: fsPromises.FileHandle[] = []
+    vi.spyOn(fsPromises, "open").mockImplementation(async (file, flags, mode) => {
+      const handle = await open(file, flags, mode)
+      handles.push(handle)
+      vi.spyOn(handle, "close")
+      if (file === directory) {
+        const failure = Object.assign(new Error(`Unsupported directory sync: ${code}`), { code })
+        vi.spyOn(handle, "sync").mockRejectedValueOnce(failure)
+      }
+      return handle
+    })
+
+    await expect(catalog.save(sessions)).resolves.toBeUndefined()
+    await expect(catalog.load()).resolves.toEqual(sessions)
+    expect(handles).toHaveLength(2)
+    for (const handle of handles) expect(handle.close).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ["file", "EPERM"], ["file", "EINVAL"], ["file", "ENOTSUP"],
+    ["directory", "EIO"], ["directory", "ENOSPC"], ["directory", "EACCES"],
+  ])("preserves %s sync failure %s", async (target, code) => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "browserrig-session-catalog-"))
+    temporaryDirectories.push(home)
+    const filePath = defaultSessionCatalogPath(20001, home)
+    const catalog = new SessionCatalog(filePath)
+    const previous: PersistedSession[] = [{ id: "alpha", createdAt: "now", updatedAt: "now", readOnly: false }]
+    await catalog.save(previous)
+    const failure = Object.assign(new Error("Injected sync failure"), { code })
+    const open = fsPromises.open.bind(fsPromises)
+    const handles: fsPromises.FileHandle[] = []
+    vi.spyOn(fsPromises, "open").mockImplementation(async (file, flags, mode) => {
+      const handle = await open(file, flags, mode)
+      handles.push(handle)
+      vi.spyOn(handle, "close")
+      if ((file === path.dirname(filePath)) === (target === "directory")) {
+        vi.spyOn(handle, "sync").mockRejectedValueOnce(failure)
+      }
+      return handle
+    })
+
+    await expect(catalog.save([])).rejects.toMatchObject({ cause: failure })
+    await expect(catalog.load()).resolves.toEqual(target === "directory" ? [] : previous)
+    expect(fs.readdirSync(path.dirname(filePath))).toEqual(["sessions.json"])
+    for (const handle of handles) expect(handle.close).toHaveBeenCalledOnce()
+  })
+
   it("reports invalid data without overwriting it", async () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "browserrig-session-catalog-"))
     temporaryDirectories.push(home)

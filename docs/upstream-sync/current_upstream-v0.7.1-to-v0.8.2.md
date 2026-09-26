@@ -49,7 +49,7 @@ effect when that PR lands on main.
 | Batch | Scope | Branch | State | BrowserRig PR / independent review / validation |
 | --- | --- | --- | --- | --- |
 | 01 | Snapshot semantics/search, plain-text contenteditable fill, and #88 reconciliation | `feat/upstream-v0.8.2-snapshot-input` | Complete | [PR #52](https://github.com/Castor6/BrowserRig/pull/52); independent Approve at `8f57e73`, CI passed; user authorized autonomous merges on 2026-09-26; effective on landing |
-| 02 | Filesystem compatibility and ordinary MCP recording controls from #89 | `feat/upstream-v0.8.2-filesystem-recording` | Pending | Not started |
+| 02 | Filesystem compatibility and ordinary MCP recording controls from #89 | `feat/upstream-v0.8.2-filesystem-recording` | Complete | [PR #53](https://github.com/Castor6/BrowserRig/pull/53); independent Approve at `7843610`, CI passed; effective on landing |
 | 03 | #91/#94 page preservation and protected frames; selected #93 hostile-page regressions | `fix/upstream-v0.8.2-page-preservation` | Pending | Not started |
 
 ## Preserved product exclusions
@@ -246,3 +246,86 @@ confirmed. Subsequent approval and authorization records change documentation
 only. The user authorized autonomous reviewed merges on 2026-09-26, so batch 01
 becomes Complete when PR #52 lands after its final checks. Batches 02/03 remain
 unstarted and the completed cursor stays at v0.7.1. No publication is authorized.
+
+
+## Batch 02 implementation evidence
+
+- Selectively adapts #89 (`b1410ca101094bd0fa3d756c98985ac73630e77b`):
+  `src/fs-durability.ts` and the `SessionCatalog.save` directory-sync fallback;
+  ordinary MCP `recording_start`, `recording_stop`, `recording_status`, and
+  `recording_cancel`. Invalid parameters produce recoverable Effect failures.
+- Existing `src/relay-client.ts` recording methods, `src/relay-schema.ts` wire
+  schemas, `src/http-api.ts` session target resolution, and
+  `src/recording-relay.ts` already cover the recording backend. No backend,
+  geometry, default frame rate, extension, dependency, or DSH change is needed.
+- Upstream `relay-lifecycle-log.ts` has no BrowserRig counterpart. BrowserRig's
+  `src/relay-log.ts` is bounded best-effort fault logging without directory
+  fsync, so the upstream lifecycle-log fallback has no applicable failure here.
+  Do not add the upstream lifecycle/restart mechanism for this batch.
+- Human demonstration/flight recording, raw-client routing, persistent refs,
+  automatic snapshot deltas, and WebMCP transport changes remain excluded.
+- Initial focused tests: 45 passed across MCP and session catalog tests.
+  The first development test found argument-parser throws escaping Effect's
+  recoverable channel; parsing now uses `Effect.try`. The first typecheck
+  identified widened mode literals; the request uses the existing wire type.
+  Required full-suite/build and Chrome recording validation are recorded below.
+- Batch stays Pending until fresh independent approval and required checks.
+
+
+### Batch 02 validation and handoff
+
+- First coherent implementation `f18207d` was pushed and draft PR #53 opened
+  immediately. Its [CI validate](https://github.com/Castor6/BrowserRig/actions/runs/36215729586)
+  passed. Includes a `browserrig: minor` Changeset generated with `pnpm changeset`.
+- `pnpm typecheck`, `pnpm test` (808 tests / 70 files), and `pnpm build:cli`
+  passed on that implementation. Logs: `/tmp/browserrig-v082-batch02-typecheck.log`,
+  `/tmp/browserrig-v082-batch02-unit-first.log`, and
+  `/tmp/browserrig-v082-batch02-build.log`.
+- The first built-MCP/Chrome run passed lifecycle and media assertions, but
+  showed a generic Effect argument-error message. The final correction preserves
+  original validation messages through `Effect.try`'s explicit error mapper.
+  Final `pnpm typecheck`, `pnpm build:cli`, and the 45 MCP/session-catalog tests
+  passed (`/tmp/browserrig-v082-batch02-{typecheck,build,focused}-final.log`).
+  The full 808-test result remains historical to the first implementation;
+  final-head CI and independent review remain required.
+- Both real MCP stdio runs used isolated Google Chrome 153.0.8010.53 and the
+  task-owned relay on port 21990. Final run:
+  `/tmp/browserrig-v082-batch02-mcp-recording-final.mjs`; log:
+  `/tmp/browserrig-v082-batch02-mcp-final.log`. It verifies tool registration,
+  missing-page failure, execute-established MCP-current session, relative paths,
+  start/status/stop/cancel, explicit session selection, unrelated-session
+  status/stop isolation, 30 fps option forwarding, cancelled artifact absence,
+  and exact `frameRate must be at most 60` error text for rate 61.
+- Final MP4 was decoded with ffmpeg and inspected with ffprobe: 756x412,
+  25 fps, 38 frames, 1.520 seconds; receipt `screenshotFallback: false`.
+  The extracted first frame shows the expected title and animated colored box.
+  Artifact: `/tmp/browserrig-v082-batch02-artifacts-final/motion.mp4`.
+  First-run evidence is retained separately in
+  `/tmp/browserrig-v082-batch02-mcp-first.log` and its artifact directory.
+- No extension source or package dependency changes. The isolated harness loads
+  a temporary extension copy with port 21990; the user profile and port 19990
+  are untouched. Tab-capture/audio and Windows are not live-tested in this
+  batch; existing recording tests and injected filesystem failures cover the
+  selected adapter/compatibility paths. No 23-case smoke rerun is claimed;
+  cycle-wide smoke remains a closure requirement.
+- Repository skill, installed OpenCode skill, and built `browserrig skill`
+  compare equal. No domain-language change requires a CONTEXT.md edit.
+- Task-owned relay PIDs 16473/16732 and Chrome harness PID 16475 were stopped;
+  port 21990 is released. Review requires no running test process.
+### Batch 02 independent approval
+
+On 2026-09-26 a fresh independent reviewer returned **Approve** for
+`784361065f0c8e2a68fa6785d28bb8e49b7ad0f6` after comparing the full PR with the
+scoped upstream #89 code and tests. No material findings remain. The reviewer
+independently passed 106 tests across MCP, session catalog, recording relay,
+HTTP API, and relay client, and verified skill equality and the final media
+with ffprobe. [Reviewed-head CI](https://github.com/Castor6/BrowserRig/actions/runs/36215918372)
+passed typecheck, all 808 tests in 70 files, and builds.
+
+The reviewer confirmed the minor Changeset, narrow directory-sync fallback,
+shared RelayClient routing, and absence of extension/DSH/recording-core changes.
+Windows and audio/tab-capture remain untested live; the reviewer inspected the
+Chrome lifecycle evidence rather than rerunning it. Cycle-wide full smoke is
+still required at closure. Under the recorded autonomous merge authorization,
+batch 02 becomes Complete when PR #53 lands after its final checks. This record
+changes documentation only; publication remains unauthorized.

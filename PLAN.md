@@ -73,10 +73,11 @@ Verification:
 - Extend reconnect, OOPIF, and multi-client smoke cases to cover root detach and
   conflicting client auto-attach settings.
 
-### 3. Extend recording surfaces
+### 3. Recording surfaces
 
-- Add MCP recording start, stop, status, and cancel tools after the relay path is
-  robust.
+- CLI and MCP expose ordinary recording start, stop, status, and cancel. MCP
+  controls use the shared RelayClient and an existing explicit or MCP-current
+  session; status does not start or replace the relay.
 - Build the flight-recorder ring buffer only after chunk streaming lands.
 
 Verification:
@@ -820,3 +821,15 @@ command, runtime installer, or Effect dependency upgrade.
   descendant image alt text while preserving hidden/value omission rules.
 - Smoke cases produce one attempt and one verdict. Timeout results are never
   silently replayed; explicit repetitions remain separately reported results.
+
+
+### Filesystem compatibility for durable session catalogs
+
+Session catalog saves retain atomic replacement and mandatory file sync. After
+replacement, directory sync tolerates only `EPERM`, `EINVAL`, and `ENOTSUP`,
+which indicate unsupported directory syncing on affected filesystems. Other
+errors, including directory open failures and file sync failures with these
+same codes, still fail the save. Directory handles close on both paths. This
+fallback provides file durability and atomic visibility, but cannot promise
+power-loss durability of the directory entry on filesystems without directory
+sync support.

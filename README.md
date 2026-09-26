@@ -513,6 +513,17 @@ browserrig recording status --session github
 browserrig recording stop --session github
 ```
 
+MCP clients can use `recording_start`, `recording_status`, `recording_stop`, and
+`recording_cancel`. Pass `session` to select an existing session, or omit it to
+use this MCP process's current session. Establish its page with `execute` or
+`session_adopt` before starting; recording controls never create a session.
+`recording_start` requires `outputPath` (relative to the MCP working directory)
+and accepts `mode`, `audio`, `frameRate` (1–60), and `maxDurationMs`.
+`recording_status` is observational and does not start or replace the relay;
+`recording_cancel` discards the unfinished artifact. Status and stop preserve
+available quality counters. CDP retains its 25 fps default and 1280×720 fit.
+
+
 Recording commands accept `--json`; CDP stop/status include capture-quality
 receipts that distinguish output rate from received/retained compositor frames
 and flag stop-time screenshot fallback. CDP retains the 25 fps default and the

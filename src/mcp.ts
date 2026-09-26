@@ -4,6 +4,7 @@ import { McpProtocol, McpSchema, McpServer } from "effect/unstable/ai"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import type { RecordingStartRequest } from "./relay-schema.ts"
 import type { JsonObject } from "./protocol.ts"
 import { getObject, parseTargetSelection } from "./relay-helpers.ts"
 import { issueAutoSubmitConfig, parseIssueClassification, recordIssueReport } from "./issue-report.ts"
@@ -334,6 +335,85 @@ export function makeToolSpecs(relay: RelayClient.Interface, currentSession: Curr
       handle: (input) => relay.networkCancel({ sessionId: optionalStringField(input, "session") ?? currentSession.id }),
     },
     {
+      name: "recording_start",
+      description: "Start recording an existing session tab. Run execute or session_adopt first to establish its page. CDP mode records video to WebM or MP4; tab-capture mode supports WebM and optional audio.",
+      inputSchema: objectSchema({
+        session: { type: "string", description: "Optional session id. Defaults to this MCP server's current session." },
+        outputPath: { type: "string", description: "Recording artifact path, resolved against the MCP process working directory." },
+        mode: { type: "string", enum: ["auto", "tab-capture", "cdp"], description: "Recording backend. Defaults to auto." },
+        audio: { type: "boolean", description: "Capture tab audio in tab-capture mode." },
+        frameRate: { type: "integer", minimum: 1, maximum: 60, description: "Requested frame rate. CDP defaults to 25 fps." },
+        maxDurationMs: { type: "integer", minimum: 1, description: "Maximum recording duration in milliseconds." },
+      }, ["outputPath"]),
+      readOnly: false,
+      destructive: false,
+      idempotent: false,
+      handle: (input) => Effect.try({ try: (): RecordingStartRequest => {
+        const object = requireObject(input)
+        const mode = optionalRecordingStringField(object, "mode")
+        if (mode !== undefined && mode !== "auto" && mode !== "tab-capture" && mode !== "cdp") {
+          throw new Error("mode must be auto, tab-capture, or cdp")
+        }
+        const frameRate = optionalPositiveIntegerField(object, "frameRate")
+        if (frameRate !== undefined && frameRate > 60) throw new Error("frameRate must be at most 60")
+        const maxDurationMs = optionalPositiveIntegerField(object, "maxDurationMs")
+        const audio = optionalBooleanField(object, "audio")
+        if (object.audio !== undefined && typeof object.audio !== "boolean") {
+          throw new Error("audio must be a boolean")
+        }
+        return {
+          sessionId: optionalRecordingStringField(object, "session") ?? currentSession.id,
+          outputPath: path.resolve(requiredStringField(object, "outputPath")),
+          ...(mode ? { mode } : {}),
+          ...(audio === undefined ? {} : { audio }),
+          ...(frameRate === undefined ? {} : { frameRate }),
+          ...(maxDurationMs === undefined ? {} : { maxDurationMs }),
+        }
+      }, catch: recordingArgumentError }).pipe(Effect.flatMap((request) => relay.recordingStart(request))),
+    },
+    {
+      name: "recording_stop",
+      description: "Stop the active recording for a session and finalize its artifact.",
+      inputSchema: objectSchema({ session: { type: "string", description: "Optional session id. Defaults to this MCP server's current session." } }),
+      readOnly: false,
+      destructive: false,
+      idempotent: false,
+      handle: (input) => Effect.try({
+        try: () => ({ sessionId: optionalRecordingStringField(input, "session") ?? currentSession.id }),
+        catch: recordingArgumentError,
+      }).pipe(
+        Effect.flatMap((target) => relay.recordingStop(target)),
+      ),
+    },
+    {
+      name: "recording_status",
+      description: "Return bounded status and quality counters for a session recording.",
+      inputSchema: objectSchema({ session: { type: "string", description: "Optional session id. Defaults to this MCP server's current session." } }),
+      readOnly: true,
+      destructive: false,
+      idempotent: true,
+      handle: (input) => Effect.try({
+        try: () => ({ sessionId: optionalRecordingStringField(input, "session") ?? currentSession.id }),
+        catch: recordingArgumentError,
+      }).pipe(
+        Effect.flatMap((target) => relay.recordingStatus(target)),
+      ),
+    },
+    {
+      name: "recording_cancel",
+      description: "Cancel a session recording and discard its unfinished artifact.",
+      inputSchema: objectSchema({ session: { type: "string", description: "Optional session id. Defaults to this MCP server's current session." } }),
+      readOnly: false,
+      destructive: true,
+      idempotent: true,
+      handle: (input) => Effect.try({
+        try: () => ({ sessionId: optionalRecordingStringField(input, "session") ?? currentSession.id }),
+        catch: recordingArgumentError,
+      }).pipe(
+        Effect.flatMap((target) => relay.recordingCancel(target)),
+      ),
+    },
+    {
       name: "secrets_status",
       description: "Return secret profile references, sources, and expiration metadata without revealing credential values.",
       inputSchema: objectSchema({ name: { type: "string", description: "Secret profile name." } }, ["name"]),
@@ -499,7 +579,7 @@ const registerTools = Effect.gen(function* () {
 })
 
 export function mcpToolRequiresRelayCompatibility(name: string): boolean {
-  return name !== "status" && name !== "session_current" && name !== "issue_report" && name !== "skill"
+  return name !== "recording_status" && name !== "status" && name !== "session_current" && name !== "issue_report" && name !== "skill"
 }
 
 export const runMcpServer: Effect.Effect<never, Error> = Layer.launch(
@@ -574,6 +654,16 @@ function requiredStringField(input: unknown, field: string): string {
     throw new Error(`${field} is required`)
   }
   return value
+}
+
+function recordingArgumentError(cause: unknown): Error {
+  return cause instanceof Error ? cause : new Error(String(cause))
+}
+
+function optionalRecordingStringField(input: unknown, field: string): string | undefined {
+  const object = requireObject(input)
+  if (object[field] === undefined) return undefined
+  return requiredStringField(object, field)
 }
 
 function optionalStringField(input: unknown, field: string): string | undefined {

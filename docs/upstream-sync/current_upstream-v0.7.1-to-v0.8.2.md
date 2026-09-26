@@ -1,6 +1,6 @@
 ---
 title: Upstream Sync v0.7.1 to v0.8.2
-description: Authorized selective implementation with independent review and separate merge approval.
+description: Authorized selective implementation and reviewed batch merges through v0.8.2.
 status: active
 upstream_from: v0.7.1
 upstream_to: v0.8.2
@@ -14,13 +14,17 @@ target_checked: 2026-09-26
 On 2026-09-26 the user explicitly resumed the recorded unfinished sync:
 “好的，继续同步上游，就是这些未完成的。” This authorizes implementation,
 branches, commits, pushes, and pull requests for the three recorded batches.
-It does not authorize merging or publication. Obtain explicit merge approval
-after independent review and passing checks. PR #50's review waiver applies
-only to that historical pull request.
+The initial resumption did not authorize merging or publication. Later on
+2026-09-26 the user explicitly authorized subsequent autonomous merges:
+“后续你可以自行合并”. The coordinator may merge the recorded cycle's batch and
+closure-documentation PRs after independent approval and passing required checks.
+This does not authorize release PRs, npm publication, or Store submission.
+PR #50's review waiver applies only to that historical pull request.
 
 The completed cursor remains **v0.7.1** (`ebb37682f34771a5271f0c0c8305c1687ac4a601`).
 BrowserRig PRs #48, #50, and #51 are merged; implementation starts from `fe151eb`.
-No later cycle is active. All batch states remain Pending until reviewed and landed.
+No later cycle is active. A batch marked Complete in its approved PR takes
+effect when that PR lands on main.
 
 ## Exact analyzed range
 
@@ -44,7 +48,7 @@ No later cycle is active. All batch states remain Pending until reviewed and lan
 
 | Batch | Scope | Branch | State | BrowserRig PR / independent review / validation |
 | --- | --- | --- | --- | --- |
-| 01 | Snapshot semantics/search, plain-text contenteditable fill, and #88 reconciliation | `feat/upstream-v0.8.2-snapshot-input` | Pending | [PR #52](https://github.com/Castor6/BrowserRig/pull/52); independent Approve at `8f57e73`, CI passed; awaiting explicit merge approval; validation below |
+| 01 | Snapshot semantics/search, plain-text contenteditable fill, and #88 reconciliation | `feat/upstream-v0.8.2-snapshot-input` | Complete | [PR #52](https://github.com/Castor6/BrowserRig/pull/52); independent Approve at `8f57e73`, CI passed; user authorized autonomous merges on 2026-09-26; effective on landing |
 | 02 | Filesystem compatibility and ordinary MCP recording controls from #89 | `feat/upstream-v0.8.2-filesystem-recording` | Pending | Not started |
 | 03 | #91/#94 page preservation and protected frames; selected #93 hostile-page regressions | `fix/upstream-v0.8.2-page-preservation` | Pending | Not started |
 
@@ -238,6 +242,7 @@ remains the historical run above; subsequent focused validation covers the
 corrections without claiming a fresh full-set run.
 
 The `browserrig: minor` Changeset and unchanged extension-source scope were
-confirmed. This approval record changes documentation only. Batch 01 remains
-Pending until explicit user merge approval and landing; batches 02/03 remain
+confirmed. Subsequent approval and authorization records change documentation
+only. The user authorized autonomous reviewed merges on 2026-09-26, so batch 01
+becomes Complete when PR #52 lands after its final checks. Batches 02/03 remain
 unstarted and the completed cursor stays at v0.7.1. No publication is authorized.

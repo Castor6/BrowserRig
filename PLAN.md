@@ -271,8 +271,8 @@ require a new extension capture protocol and permission model.
   approved merge, and stopped that run. The user resumed the recorded unfinished
   work on 2026-09-26. The sole [active cycle](docs/upstream-sync/current_upstream-v0.7.1-to-v0.8.2.md)
   covers three serial batches through v0.8.2; the completed cursor stays v0.7.1.
-  Implementation and pull requests are authorized, with independent review and
-  separate explicit merge approval required. Upstream #88 belongs to this range.
+  The user subsequently authorized autonomous batch and closure-documentation
+  merges after independent approval and passing checks. Upstream #88 belongs to this range.
   Native WebMCP default discovery landed in companion PR #48 as `c3a6b3d`.
   The records retain actual validation and review limits; no publication or
   Version Packages merge is authorized.

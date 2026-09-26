@@ -17,7 +17,7 @@ branches or starting an agent.
 ## Current state
 
 - **Latest completed upstream sync:** `v0.7.1` (completed 2026-09-25, PR #50)
-- **Active cycle:** [`v0.7.1 -> v0.8.2`](current_upstream-v0.7.1-to-v0.8.2.md), resumed 2026-09-26; three pending serial batches
+- **Active cycle:** [`v0.7.1 -> v0.8.2`](current_upstream-v0.7.1-to-v0.8.2.md), resumed 2026-09-26; batch 01 completes with PR #52, two pending serial batches
 - **WebMCP companion:** default-on native discovery completed in PR #48
 - **BrowserRig package version:** independent from the upstream sync cursor
 
@@ -26,8 +26,9 @@ native WebMCP default discovery. After the v0.7.1 corrections and validation,
 the user explicitly waived further review, approved merging PR #50, and stopped
 this run. The archive preserves both actual review verdicts and this exception;
 it does not claim final independent approval. The user explicitly resumed the recorded unfinished work on 2026-09-26.
-The active record preserves the analysis and authorizes implementation and pull
-requests; independent review and explicit merge approval are required.
+The user subsequently authorized autonomous merges on the same date. The active
+record authorizes implementation and batch/closure PR merges after independent
+approval and passing required checks.
 No package publication or Version Packages merge is authorized.
 
 "Completed through `vX.Y.Z`" means every upstream pull request reachable in
@@ -81,7 +82,7 @@ browser-specific differences do not block a Chrome-validated sync.
 
 This policy applies to future work. Preserve historical Brave test evidence in
 archived cycles. The v0.8.2 cycle resumed on 2026-09-26 under the active record's
-implementation-only authorization.
+implementation and reviewed-merge authorization.
 
 ## Product decision gate
 

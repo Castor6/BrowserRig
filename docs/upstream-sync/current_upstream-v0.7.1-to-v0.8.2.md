@@ -431,3 +431,46 @@ changes documentation only; publication remains unauthorized.
 - Batch 03 remains Pending for fresh independent review and final-head CI.
   No merge, release, npm publication, Store submission, or cursor advancement is
   claimed by this implementation handoff. No batch beyond v0.8.2 was started.
+
+### Batch 03 independent-review correction: recovered crash documents
+
+- Independent review of `12b9878` requested changes for one P1: main-document
+  navigation cleared the registry crash state but left the sandbox's crash
+  marker set. A recovered HTTP form could consequently be closed when the old
+  Playwright Page still rejected evaluates as crashed. Reviewer evidence remains
+  in `/tmp/browserrig-review-crash-navigation-http.mts` and its `.log` (and the
+  initial data-URL variant); the earlier green suite did not cover this boundary.
+- Correction `2a59f50` synchronously reports current-root main-document navigation
+  to the live session sandbox with exact target matching. It clears crash
+  classification while retaining the health check, allowing the existing fresh
+  connection repair to re-resolve the same physical tab. A document generation
+  counter also prevents close after a navigation during the probe, including a
+  same-URL reload. There is no delayed session-id-only callback or timeout replay.
+- Unit regressions cover navigation before execute, same-URL reload, navigation
+  during a probe, unaffected replacement/detach races, true unrecovered crash
+  recreation, and never closing unhealthy adopted tabs (including crashed ones).
+  Focused first run passed 135 tests; final full suite passed **837 / 72 files**
+  (`/tmp/browserrig-v082-p1-full-final.log`). Typecheck and CLI build pass in
+  `/tmp/browserrig-v082-p1-typecheck-final.log` and
+  `/tmp/browserrig-v082-p1-build.log`. Repository, installed, and built skills
+  still match; no agent workflow, shipping extension, permission, or version
+  change was needed for this correction.
+- `scripts/check-crash-navigation.ts` reproduces the review scenario through the
+  real relay and Chrome 153.0.8010.53. Independent CDP writes `saved-user-state`
+  into the recovered form before the follow-up execute. Both different-URL
+  navigation and same-URL reload preserve the original physical target/tab and
+  input, and report fresh connection repair. Evidence:
+  `/tmp/browserrig-v082-p1-real-second.log` (targets `8B4D8629A3976E15541F71D7EBAAB26E`
+  and `1C5D2ACF3A69AC1F7BE1B8E95F309AEE`, tabs 1853146857 and 1853146859).
+  The first run had already preserved the form/tab but failed the test's final
+  warning-text assertion (`connection` versus the actual `reconnected`); its log
+  is retained at `/tmp/browserrig-v082-p1-real-first.log`. The initial new-script
+  typecheck required an explicit local URL annotation; that failed output is
+  retained at `/tmp/browserrig-v082-p1-typecheck.log`.
+- The complete mandated 23-case smoke command above was rerun against correction
+  `2a59f50`: **23 passed / 0 failed** on its first complete attempt, with one run
+  per case (`/tmp/browserrig-v082-p1-smoke23-first.log`). This supersedes the
+  pre-review smoke result for final-behavior validation. Task-owned Chrome
+  harness PID 28475 and relay PID 28494 were stopped afterward; ports 21990 and
+  21992 were released. Batch 03 remains Pending for fresh independent review and
+  final-head CI; no merge or release was performed.

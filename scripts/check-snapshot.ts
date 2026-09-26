@@ -139,6 +139,36 @@ try {
       assert.doesNotMatch(after, /Visible background|Real action|private-modal-value/)
     })
   }
+  for (const visibility of ["hidden", "collapse"]) {
+    for (const native of [false, true]) {
+      await check(`${native ? "native" : "ARIA"} modal restores ancestor visibility:${visibility}`, async () => {
+        const modal = native
+          ? '<dialog><h2>Visible modal</h2><button>Confirm</button><input aria-label="Private" value="private-restored-modal"></dialog>'
+          : '<div role="dialog" aria-modal="true" style="visibility:visible"><h2>Visible modal</h2><button>Confirm</button><input aria-label="Private" value="private-restored-modal"></div>'
+        await page.setContent(`<main><h1>Background</h1><div style="visibility:${visibility}">${modal}</div></main>`)
+        if (native) await page.locator("dialog").evaluate(element => (element as HTMLDialogElement).showModal())
+        const { snapshot, ref } = createSnapshotHelpers(page, { selectors: new Map() })
+        const outline = await snapshot()
+        assert.match(outline, /heading "Visible modal"/)
+        assert.doesNotMatch(outline, /Background|private-restored-modal/)
+        const id = outline.match(/button "Confirm" \[ref=(e\d+)/)?.[1]
+        assert.ok(id, outline)
+        await page.getByRole("button", { name: "Confirm" }).evaluate(element => {
+          element.addEventListener("click", () => element.setAttribute("data-clicked", "yes"))
+        })
+        await ref(id).click({ timeout: 1_000 })
+        assert.equal(await page.getByRole("button", { name: "Confirm" }).getAttribute("data-clicked"), "yes")
+      })
+    }
+  }
+  await check("visible descendants override visibility but not ancestor opacity", async () => {
+    await page.setContent('<main><div style="visibility:hidden"><button>Still hidden</button><button style="visibility:visible">Restored action</button><p style="visibility:visible">Restored notice</p></div><div style="opacity:0"><button style="visibility:visible;opacity:1">Transparent action</button></div></main>')
+    const { snapshot } = createSnapshotHelpers(page, { selectors: new Map() })
+    const outline = await snapshot()
+    assert.match(outline, /button "Restored action"/)
+    assert.match(outline, /p "Restored notice"/)
+    assert.doesNotMatch(outline, /Still hidden|Transparent action/)
+  })
   await check("composed hidden ancestry remains excluded in explicit scopes", async () => {
     await page.setContent('<div id="host" style="opacity:0"><section slot="content"><button>Private slotted action</button></section></div>')
     await page.locator("#host").evaluate(element => {

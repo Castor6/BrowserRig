@@ -1466,10 +1466,13 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
       const isVisible = (element: Element): boolean => {
         const rect = element.getBoundingClientRect()
         if (rect.width < 1 || rect.height < 1) return false
+        // Visibility is inherited but descendants may explicitly restore it.
+        const visibility = window.getComputedStyle(element).visibility
+        if (visibility === "hidden" || visibility === "collapse") return false
         let ancestor: Element | null = element
         while (ancestor) {
           const style = window.getComputedStyle(ancestor)
-          if (ancestor.hasAttribute("hidden") || ancestor.getAttribute("aria-hidden") === "true" || style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse" || style.opacity === "0") return false
+          if (ancestor.hasAttribute("hidden") || ancestor.getAttribute("aria-hidden") === "true" || style.display === "none" || style.opacity === "0") return false
           // Slots and shadow hosts are part of the rendered ancestry too.
           const root = ancestor.getRootNode()
           ancestor = ancestor.assignedSlot ?? ancestor.parentElement ?? (root instanceof ShadowRoot ? root.host : null)

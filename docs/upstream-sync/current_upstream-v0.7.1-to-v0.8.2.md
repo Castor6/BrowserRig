@@ -130,3 +130,64 @@ imports, exact upstream versions, and release automation.
 - Remaining gates: fresh independent review, final-head CI, and explicit user
   merge approval. Batches 02/03 remain unstarted; cursor advancement is blocked
   until the full cycle and its closure audit complete.
+
+## Batch 01 independent review and corrections
+
+The fresh independent review of `23baf146f718bf5976a435bfbb1518ddf8aa2b2c`
+returned **Changes requested** on 2026-09-26, with two P2 findings:
+
+1. Native summary refs used only their structural CSS selector; reordering two
+   no-id details siblings could make the first ref open the second item.
+2. Automatic modal scope considered only the dialog's own style; an opacity-zero
+   ancestor could hide the dialog while its descendants still displaced main.
+
+Correction commit: `2ad144c` (`fix: guard summary refs and hidden modal scope`).
+
+The correction keeps the structural selector and intersects native summaries
+with their captured, untruncated identity through a read-only action in the
+existing ARIA selector engine. Native summary has no Playwright ARIA button
+role, so the ordinary role/name intersection cannot resolve it. Capture and
+matching share `src/snapshot-summary.ts`, including labels, image alt text, and
+excluded hidden/native text-control descendants. No new selector registration
+lifecycle is introduced: the sandbox already registers the ARIA engine for each
+connected context before page/locator work, including `connectOverCDP` defaults.
+The engine identifier lives in the existing session snapshot-ref registry,
+not in each execute's helper closure, so a later execute retains the same
+identity guard. Navigation/reset keeps the existing ref invalidation rules.
+
+Modal/root visibility now checks rendered ancestry, including assigned slots
+and shadow hosts. Chrome tests cover opacity-zero, hidden, and aria-hidden
+parents, restoration to modal scope, and composed hidden ancestry. An additional
+privacy fixture exposed pre-existing raw `summary.textContent` aggregation in
+the details group label. The coordinator approved using the same safe summary
+name reader there; other structural-name readers are unchanged.
+
+Correction validation (Google Chrome 153.0.8010.53):
+
+- `pnpm typecheck`, `pnpm test` (784 tests / 70 files), and `pnpm build:cli`
+  passed. Final unit log: `/tmp/browserrig-v082-review-unit-final.log`.
+- `pnpm exec tsx scripts/check-snapshot.ts`: 19 passed, including normal native
+  and explicit-button clicks; reorder/insert failures; recreating helpers with
+  the same registry; labelled/image identities; private descendants; hidden
+  ancestors and restored scope. Log: `/tmp/browserrig-v082-review-chrome-final.log`.
+- First targeted relay run with `SMOKE_CASE=local-forms,execute-snapshot-refs,reconnect-evaluate`
+  passed 3/3 on task-owned port 21990. It includes the existing concurrent ARIA
+  redaction/cleanup fixture. Log: `/tmp/browserrig-v082-review-smoke-first.log`.
+- After strengthening the cross-execute registry regression, the final
+  `SMOKE_CASE=execute-snapshot-refs` run passed 1/1. This checks a captured
+  summary in a later execute, then repeats after `session reset` closes the
+  sandbox and a fresh CDP connection/context is registered. Log:
+  `/tmp/browserrig-v082-review-smoke-final.log`. Both runs used
+  `BROWSERRIG_PORT=21990 BROWSERRIG_ENDPOINT=http://127.0.0.1:21990 pnpm smoke`.
+- Earlier development probes are retained: a discarded separate-engine design
+  failed because it registered after locator initialization
+  (`/tmp/browserrig-v082-review-chrome-first.log`); the next probe identified the
+  details-label privacy fixture (`/tmp/browserrig-v082-review-chrome-second.log`).
+  These are not reported as passing validations.
+- The earlier 23/23 smoke evidence remains historical to `23baf14`; this narrow
+  correction was validated with the targeted cases above, not another full set.
+  Fresh independent re-review and final-head CI remain required. Batch 01 is
+  still Pending and no merge/publication has been authorized.
+
+Task-owned correction relay PID 12958 and Chrome harness PID 12605 were stopped
+after final validation; port 21990 is released.

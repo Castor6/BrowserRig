@@ -191,3 +191,37 @@ Correction validation (Google Chrome 153.0.8010.53):
 
 Task-owned correction relay PID 12958 and Chrome harness PID 12605 were stopped
 after final validation; port 21990 is released.
+
+### Focused visibility re-review correction
+
+The fresh re-review of `c7f1b50ae84c1b33786fb282ca04e915b998a0ac` returned
+**Changes requested** on 2026-09-26 for one P2: ancestor `visibility:hidden` or
+`visibility:collapse` incorrectly suppressed a descendant that restored
+`visibility:visible`, including an ARIA modal and native `dialog.showModal()`.
+Reviewer reproduction: `/tmp/browserrig-rereview-visibility-minimal.mts` and
+`.log`. The reviewer independently passed summary identity, cross-helper and
+CDP default-context registration/reconnection, and ARIA masking. Prior-head CI
+was successful; that does not substitute for final-delta review.
+
+Correction commit `21b2fc9` checks the candidate element's computed visibility
+(which includes inheritance and explicit overrides) and reserves the composed
+ancestor loop for cumulative opacity/display and hidden/aria-hidden exclusions.
+It changes no summary identity, ref lifetime, or value-masking mechanism.
+
+Validation after this correction:
+
+- `pnpm typecheck` and `pnpm build:cli` passed.
+- `pnpm exec vitest run test/execute-ergonomics.test.ts`: 32/32 passed;
+  `/tmp/browserrig-v082-visibility-unit.log`.
+- `pnpm exec tsx scripts/check-snapshot.ts`: 24/24 passed in Google Chrome
+  153.0.8010.53; `/tmp/browserrig-v082-visibility-final.log`. Five new cases cover
+  ARIA and native modals under both hidden/collapse ancestors, successful ref
+  clicks, omitted private values, ordinary restored descendants, inherited
+  visibility remaining hidden, and opacity-zero ancestors remaining excluded.
+  All prior summary identity/privacy and hidden-ancestor checks still pass.
+- No full unit-suite or 23-case smoke rerun is claimed for this five-line
+  visibility correction. Existing full-suite evidence remains recorded above.
+  Chrome was isolated and closed by the check; no task relay was started.
+
+Fresh focused review and final-head CI remain pending. No merge or cursor
+advancement is authorized by this correction.

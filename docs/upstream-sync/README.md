@@ -17,7 +17,7 @@ branches or starting an agent.
 ## Current state
 
 - **Latest completed upstream sync:** `v0.7.1` (completed 2026-09-25, PR #50)
-- **Active cycle:** [`v0.7.1 -> v0.8.2`](current_upstream-v0.7.1-to-v0.8.2.md), resumed 2026-09-26; batch 01 landed in PR #52, batch 02 completes with PR #53, batch 03 pending
+- **Active cycle:** [`v0.7.1 -> v0.8.2`](current_upstream-v0.7.1-to-v0.8.2.md), resumed 2026-09-26; batches 01/02 landed in PRs #52/#53, batch 03 completes with PR #54; closure audit follows
 - **WebMCP companion:** default-on native discovery completed in PR #48
 - **BrowserRig package version:** independent from the upstream sync cursor
 

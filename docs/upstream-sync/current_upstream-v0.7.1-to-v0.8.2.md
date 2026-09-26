@@ -50,7 +50,7 @@ effect when that PR lands on main.
 | --- | --- | --- | --- | --- |
 | 01 | Snapshot semantics/search, plain-text contenteditable fill, and #88 reconciliation | `feat/upstream-v0.8.2-snapshot-input` | Complete | [PR #52](https://github.com/Castor6/BrowserRig/pull/52); independent Approve at `8f57e73`, CI passed; user authorized autonomous merges on 2026-09-26; effective on landing |
 | 02 | Filesystem compatibility and ordinary MCP recording controls from #89 | `feat/upstream-v0.8.2-filesystem-recording` | Complete | [PR #53](https://github.com/Castor6/BrowserRig/pull/53); independent Approve at `7843610`, CI passed; effective on landing |
-| 03 | #91/#94 page preservation and protected frames; selected #93 hostile-page regressions | `fix/upstream-v0.8.2-page-preservation` | Pending | [Draft PR #54](https://github.com/Castor6/BrowserRig/pull/54); implementation and validation in progress; independent review pending |
+| 03 | #91/#94 page preservation and protected frames; selected #93 hostile-page regressions | `fix/upstream-v0.8.2-page-preservation` | Complete | [PR #54](https://github.com/Castor6/BrowserRig/pull/54); independent Approve at `b81d8d3`, CI passed; effective on landing |
 
 ## Preserved product exclusions
 
@@ -472,5 +472,30 @@ changes documentation only; publication remains unauthorized.
   per case (`/tmp/browserrig-v082-p1-smoke23-first.log`). This supersedes the
   pre-review smoke result for final-behavior validation. Task-owned Chrome
   harness PID 28475 and relay PID 28494 were stopped afterward; ports 21990 and
-  21992 were released. Batch 03 remains Pending for fresh independent review and
-  final-head CI; no merge or release was performed.
+  21992 were released. The implementation handoff did not merge or release.
+
+### Batch 03 independent approval
+
+On 2026-09-26 a fresh independent reviewer returned **Approve** for
+`b81d8d3f8c69b77d38827b0f1c1115e190b9bb6b` after reviewing the complete PR against
+`b280aaf` and upstream #91/#93/#94. The original P1 is closed; no new material
+finding remains. Exact target/session ownership, adopted tabs, handoffs,
+document-generation guards, and execute-permit boundaries remain intact.
+
+The reviewer independently passed 158 focused tests, typecheck, and skill
+equality. In isolated Chrome 153.0.8010.53, both different-URL and same-URL crash
+recovery passed on the first run with the physical target/tab and saved input
+preserved. The real protected-extension fixture also passed on the first run:
+named diagnostic, no phantom frame, and explicit re-adoption of the same target.
+Logs: `/tmp/browserrig-rereview-final-{crash,protected,chrome,typecheck}.log`.
+The reviewer's owned processes were stopped and ports 21990/21992 released.
+
+[Reviewed-head CI](https://github.com/Castor6/BrowserRig/actions/runs/36218042817)
+passed. The reviewer verified final 837-test and corrected 23/23 smoke evidence
+without claiming a second independent full smoke run. The BrowserRig patch
+Changeset is correct; the fixture extension does not ship. Chrome's protected
+frame attachment revocation remains an explicit-recovery limitation, not an
+automatic-recovery promise. Under the recorded merge authorization, batch 03
+becomes Complete when PR #54 lands after final checks. This approval record
+changes documentation only. Closure audit and cursor advancement remain next;
+no package publication is authorized.

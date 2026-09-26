@@ -16,19 +16,18 @@ branches or starting an agent.
 
 ## Current state
 
-- **Latest completed upstream sync:** `v0.7.1` (completed 2026-09-25, PR #50)
-- **Active cycle:** [`v0.7.1 -> v0.8.2`](current_upstream-v0.7.1-to-v0.8.2.md), resumed 2026-09-26; batches 01/02 landed in PRs #52/#53, batch 03 completes with PR #54; closure audit follows
+- **Latest completed upstream sync:** `v0.8.2` (completed 2026-09-26, PRs #52/#53/#54)
+- **Active cycle:** none; all three approved batches landed and independent closure audit passed
+- **Latest record:** [`v0.7.1 -> v0.8.2`](archive/2026-09-26_upstream-v0.7.1-to-v0.8.2.md)
 - **WebMCP companion:** default-on native discovery completed in PR #48
 - **BrowserRig package version:** independent from the upstream sync cursor
 
-On 2026-09-25 the user approved six selected outcome groups through `v0.8.2` and
-native WebMCP default discovery. After the v0.7.1 corrections and validation,
-the user explicitly waived further review, approved merging PR #50, and stopped
-this run. The archive preserves both actual review verdicts and this exception;
-it does not claim final independent approval. The user explicitly resumed the recorded unfinished work on 2026-09-26.
-The user subsequently authorized autonomous merges on the same date. The active
-record authorizes implementation and batch/closure PR merges after independent
-approval and passing required checks.
+The user resumed the recorded v0.8.2 scope on 2026-09-26 and authorized autonomous
+batch and closure merges after independent approval and passing checks. PRs
+#52/#53/#54 landed all selected outcomes, and a fresh closure audit confirmed
+complete dispositions, reviews, and final validation. The archived record
+preserves failed attempts, corrections, and actual browser limitations.
+No subsequent version range is active or queued for implementation.
 No package publication or Version Packages merge is authorized.
 
 "Completed through `vX.Y.Z`" means every upstream pull request reachable in
@@ -81,8 +80,8 @@ Other Chromium-family browsers may work through shared behavior, but their
 browser-specific differences do not block a Chrome-validated sync.
 
 This policy applies to future work. Preserve historical Brave test evidence in
-archived cycles. The v0.8.2 cycle resumed on 2026-09-26 under the active record's
-implementation and reviewed-merge authorization.
+archived cycles. The v0.8.2 cycle completed on 2026-09-26 with Chrome validation;
+its archive records the implementation and reviewed-merge authorization.
 
 ## Product decision gate
 
@@ -309,6 +308,8 @@ starts only after the finalization PR merges.
 Archived cycle records are immutable except for factual corrections.
 
 ## Archive
+
+- [`2026-09-26: v0.7.1 -> v0.8.2`](archive/2026-09-26_upstream-v0.7.1-to-v0.8.2.md)
 
 - [`2026-09-25: v0.6.0 -> v0.7.1`](archive/2026-09-25_upstream-v0.6.0-to-v0.7.1.md)
 

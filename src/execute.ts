@@ -304,6 +304,8 @@ export type SnapshotOptions = {
   readonly interactive?: boolean
   readonly compact?: boolean
   readonly diff?: boolean
+  readonly find?: string | RegExp
+  readonly context?: number
   readonly depth?: number
   readonly maxItems?: number
   readonly timeout?: number
@@ -1382,6 +1384,9 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
 } {
   const refRoots = new WeakMap<Locator, { readonly selector: string; readonly role: string; readonly name?: string }>()
   const snapshot: SnapshotHelper = async (options = {}) => {
+    if (options.diff && options.find !== undefined) {
+      throw new Error("snapshot() accepts either diff or find, not both")
+    }
     const within = options.within
     const refRoot = typeof within === "object" ? refRoots.get(within) : undefined
     const locator = typeof within === "object" && !refRoot ? within : undefined
@@ -1514,12 +1519,16 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
         if (explicit) return explicit
         if (/^H[1-6]$/.test(element.tagName)) return "heading"
         if (element instanceof HTMLAnchorElement) return "link"
-        if (element instanceof HTMLButtonElement || element.tagName === "SUMMARY") return "button"
+        if (element instanceof HTMLButtonElement) return "button"
+        // Chromium exposes native disclosure controls without an ARIA button role.
+        if (element.tagName === "SUMMARY") return "summary"
         if (element instanceof HTMLTextAreaElement) return "textbox"
         if (element instanceof HTMLSelectElement) return "combobox"
         if (element instanceof HTMLInputElement) {
           if (element.type === "checkbox") return "checkbox"
           if (element.type === "radio") return "radio"
+          if (element.type === "number") return "spinbutton"
+          if (element.type === "search") return "searchbox"
           if (element.type === "button" || element.type === "submit" || element.type === "reset") return "button"
           return "textbox"
         }
@@ -1539,7 +1548,7 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
         if (element instanceof HTMLFieldSetElement) return normalize(element.querySelector(":scope > legend")?.textContent ?? "")
         if (element instanceof HTMLTableElement) return normalize(element.caption?.textContent ?? "")
         if (element instanceof HTMLDetailsElement) return normalize(element.querySelector(":scope > summary")?.textContent ?? "")
-        if (role === "dialog" || role === "group") {
+        if (role === "dialog" || role === "alertdialog" || role === "group") {
           return normalize(element.querySelector("h1, h2, h3, h4, h5, h6, [role='heading']")?.textContent ?? "")
         }
         if (role === "code") return normalize(element.textContent ?? "")
@@ -1584,6 +1593,11 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
               }
               return matches[0] as Element
             }
+            const dialogs = Array.from(document.querySelectorAll("dialog, [role='dialog'], [role='alertdialog']")).filter(isVisible)
+            const modals = dialogs.filter((dialog) => dialog.matches(":modal, [aria-modal='true']"))
+            if (modals.length === 1) return modals[0] as Element
+            // Portals commonly sit beside main; retain non-modal dialog surroundings.
+            if (dialogs.length > 0) return document.body
             const mainLandmarks = Array.from(document.querySelectorAll("main, [role='main']")).filter(isVisible)
             return mainLandmarks.length === 1 ? mainLandmarks[0] as Element : document.body
           })()
@@ -1659,7 +1673,7 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
         return level
       }
 
-      const structuralSelector = "fieldset, [role='group'], dialog, [role='dialog'], [role='tablist'], details, table, [role='table'], tr, [role='row'], ul, ol, [role='list'], li, [role='listitem'], pre"
+      const structuralSelector = "fieldset, [role='group'], dialog, [role='dialog'], [role='alertdialog'], [role='tablist'], details, table, [role='table'], tr, [role='row'], ul, ol, [role='list'], li, [role='listitem'], pre"
       const structuralKeys = new WeakMap<Element, string>()
       let nextStructuralKey = 1
       const structuralKey = (element: Element): string => {
@@ -1734,6 +1748,7 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
         ...Array.from(root.querySelectorAll(candidateSelector)),
       ]
       const collapsedNavigation = new Set<Element>()
+      let reservedLists = 0
 
       for (const element of candidates) {
         if (entries.length >= settings.maxCandidates) {
@@ -1760,7 +1775,7 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
         if (settings.interactive && isParagraph && !isSafetyText) continue
         const identityName = isStructural ? structuralName(element, role) : accessibleName(element)
         const fallbackName = role === "group" ? "Group"
-          : role === "dialog" ? "Dialog"
+          : role === "dialog" || role === "alertdialog" ? "Dialog"
           : role === "table" ? "Table"
           : role === "list" ? "List"
           : role === "tablist" ? "Tab list"
@@ -1786,7 +1801,10 @@ export function createSnapshotHelpers(page: Page, registry: SnapshotRefRegistry)
             role,
             interactive: isInteractive,
             primaryLink,
-            structuralEssential: isStructural && role !== "row" && role !== "listitem",
+            // Repeated list wrappers must not exhaust the budget before their
+            // primary links and controls. Retained wrappers still provide nesting.
+            structuralEssential: isStructural && role !== "row" && role !== "listitem" &&
+              (role !== "list" || reservedLists++ < Math.max(1, Math.floor(settings.maxItems / 10))),
           }),
         })
       }
@@ -1875,7 +1893,9 @@ return (${capture.toString()})(rootOrSettings, locatorSettings)`,
         return formatSnapshotLine(entry, id)
       })
       registry.previousSnapshot = { page, signature, entries, nextRef }
-      return lines.join("\n")
+      return options.find === undefined
+        ? lines.join("\n")
+        : findSnapshotLines(lines, options.find, options.context)
     }
 
     nextRef = previousSnapshot?.nextRef ?? 1
@@ -1926,6 +1946,37 @@ return (${capture.toString()})(rootOrSettings, locatorSettings)`,
   }
 
   return { snapshot, ref }
+}
+
+function findSnapshotLines(lines: readonly string[], query: string | RegExp, requestedContext: number | undefined): string {
+  const context = Math.max(0, Math.min(10, Math.floor(Number.isFinite(requestedContext) ? requestedContext! : 2)))
+  const matches: number[] = []
+  for (const [index, line] of lines.entries()) {
+    const matched = typeof query === "string"
+      ? line.toLowerCase().includes(query.toLowerCase())
+      : (() => {
+          query.lastIndex = 0
+          return query.test(line)
+        })()
+    if (matched) matches.push(index)
+  }
+  if (matches.length === 0) {
+    return `No snapshot lines matched ${typeof query === "string" ? JSON.stringify(query) : query.toString()}.`
+  }
+  const included = new Set<number>()
+  for (const index of matches) {
+    for (let candidate = Math.max(0, index - context); candidate <= Math.min(lines.length - 1, index + context); candidate++) {
+      included.add(candidate)
+    }
+  }
+  const output: string[] = []
+  let previous = -2
+  for (const index of [...included].sort((left, right) => left - right)) {
+    if (index > previous + 1) output.push("...")
+    output.push(lines[index]!)
+    previous = index
+  }
+  return [`${matches.length} matching snapshot ${matches.length === 1 ? "line" : "lines"}:`, ...output].join("\n")
 }
 
 function formatSnapshotLine(entry: SnapshotRenderedEntry, id?: string): string {
@@ -1998,6 +2049,8 @@ function snapshotRefAriaRole(role: string): Parameters<Page["getByRole"]>[0] | u
     case "link":
     case "menuitem":
     case "radio":
+    case "searchbox":
+    case "spinbutton":
     case "tab":
     case "textbox":
       return role
@@ -2013,16 +2066,19 @@ async function fillInput(options: { readonly page: Page; readonly target: InputT
   }
   const locator = options.target
   await locator.evaluate((element, nextValue) => {
-    if (!(element instanceof HTMLInputElement) && !(element instanceof HTMLTextAreaElement)) {
-      throw new Error("fillInput expects an input or textarea locator")
-    }
-    const prototype = Object.getPrototypeOf(element) as HTMLInputElement | HTMLTextAreaElement
-    const valueSetter = Object.getOwnPropertyDescriptor(element, "value")?.set
-    const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set
-    if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
-      prototypeValueSetter.call(element, nextValue)
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+      const prototype = Object.getPrototypeOf(element) as HTMLInputElement | HTMLTextAreaElement
+      const valueSetter = Object.getOwnPropertyDescriptor(element, "value")?.set
+      const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set
+      if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
+        prototypeValueSetter.call(element, nextValue)
+      } else {
+        element.value = nextValue
+      }
+    } else if (element instanceof HTMLElement && element.isContentEditable) {
+      element.textContent = nextValue
     } else {
-      element.value = nextValue
+      throw new Error("fillInput expects an input, textarea, or contenteditable locator")
     }
     element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: nextValue }))
     element.dispatchEvent(new Event("change", { bubbles: true }))
@@ -2070,16 +2126,19 @@ export async function fillInputs(page: Page, fields: ReadonlyArray<InputField>):
         } else {
           element = field.target
         }
-        if (!(element instanceof HTMLInputElement) && !(element instanceof HTMLTextAreaElement)) {
-          throw new Error(`fillInputs expects input or textarea ${field.label}`)
-        }
-        const prototype = Object.getPrototypeOf(element) as HTMLInputElement | HTMLTextAreaElement
-        const valueSetter = Object.getOwnPropertyDescriptor(element, "value")?.set
-        const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set
-        if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
-          prototypeValueSetter.call(element, field.value)
+        if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+          const prototype = Object.getPrototypeOf(element) as HTMLInputElement | HTMLTextAreaElement
+          const valueSetter = Object.getOwnPropertyDescriptor(element, "value")?.set
+          const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set
+          if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
+            prototypeValueSetter.call(element, field.value)
+          } else {
+            element.value = field.value
+          }
+        } else if (element instanceof HTMLElement && element.isContentEditable) {
+          element.textContent = field.value
         } else {
-          element.value = field.value
+          throw new Error(`fillInputs expects input, textarea, or contenteditable ${field.label}`)
         }
         element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: field.value }))
         element.dispatchEvent(new Event("change", { bubbles: true }))

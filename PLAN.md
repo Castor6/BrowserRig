@@ -268,10 +268,11 @@ require a new extension capture protocol and permission model.
   2026-09-25. PR #46 merged and an independent closure audit completed the
   `v0.6.0` cycle on that date. PR #50 completes selected intake through
   `v0.7.1`; the user explicitly waived further review after the recorded fixes,
-  approved merge, and stopped this run. There is no active cycle. The analyzed
-  `v0.7.1 -> v0.8.2` scope is saved in the
-  [queued record](docs/upstream-sync/queued_upstream-v0.7.1-to-v0.8.2.md) for a
-  future user-requested resumption. Upstream #88 belongs to that later range.
+  approved merge, and stopped that run. The user resumed the recorded unfinished
+  work on 2026-09-26. The sole [active cycle](docs/upstream-sync/current_upstream-v0.7.1-to-v0.8.2.md)
+  covers three serial batches through v0.8.2; the completed cursor stays v0.7.1.
+  Implementation and pull requests are authorized, with independent review and
+  separate explicit merge approval required. Upstream #88 belongs to this range.
   Native WebMCP default discovery landed in companion PR #48 as `c3a6b3d`.
   The records retain actual validation and review limits; no publication or
   Version Packages merge is authorized.
@@ -510,7 +511,14 @@ reconciles existing client announcements, browser grouping, and page status.
 
 ### Inspection And Interaction Helpers
 
-- `snapshot(options?)` provides a bounded semantic read-before-act view.
+- `snapshot(options?)` provides a bounded semantic read-before-act view, including
+  number/search inputs, native disclosure controls, and portal dialogs. Repeated
+  list wrappers reserve only a bounded share of the item budget.
+- `snapshot({ find, context })` searches that bounded view with a string or RegExp
+  and up to ten surrounding lines. Search establishes a full baseline and rejects
+  combination with explicit diff; latest-snapshot ref invalidation is unchanged.
+- Fill helpers accept contenteditable targets and replace their contents with
+  plain text, dispatching input/change without moving focus.
 - `snapshot({ diff: true })` compares against the previous compatible snapshot
   and exposes refs only for current additions or changes.
 - `ref(id)` resolves controls from the latest valid snapshot and fails closed

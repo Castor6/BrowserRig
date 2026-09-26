@@ -191,18 +191,30 @@ without `start`. The default timeout is ten minutes.
 Completion: the prompt was presented only after WAIT was registered, the action
 settled, and the authenticated result was independently verified.
 
+The `fillInput(target, text)` and `fillInputs(page, fields)` fallbacks also
+accept contenteditable elements. They replace the entire editable content with
+plain text, emit `input` and `change`, and do not move focus. Use them only when
+replacing the editor contents is intended; formatting and child nodes are removed.
+
 ## Inspection Tools
 
 Use the least expensive view that answers the question:
 
 - `snapshot()` is the compact read-before-act default. It prioritizes semantic
   groups, alerts, lists, tables, headings, links, and controls. Text input and
-  textarea values are omitted.
+  textarea values are omitted. A single visible modal becomes the default scope;
+  non-modal portal dialogs remain visible alongside the page. Use `within` to
+  select another scope explicitly.
 - `ref("e12")` resolves a control from the latest snapshot. Refs fail closed
   after navigation or incompatible DOM drift.
 - `snapshot({ diff: true })` reports semantic changes from the compatible prior
   baseline. A diff invalidates earlier refs and exposes refs only for added or
   changed current lines.
+- `snapshot({ find: "checkout", context: 2 })` searches the bounded snapshot
+  case-insensitively; a RegExp is also accepted. Context is clamped to 0–10
+  surrounding lines. Search does not inspect content beyond `maxItems`; increase
+  the budget or narrow `within` when needed. It creates a fresh full baseline
+  and cannot be combined with `diff`. Refs keep their latest-snapshot lifetime.
 - `within` accepts a Locator or an exact CSS selector. String selectors are
   checked immediately and must match exactly one element; use a Locator for
   Playwright auto-waiting or semantic landmarks.

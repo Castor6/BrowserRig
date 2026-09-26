@@ -270,10 +270,12 @@ require a new extension capture protocol and permission model.
   `v0.6.0` cycle on that date. PR #50 completes selected intake through
   `v0.7.1`; the user explicitly waived further review after the recorded fixes,
   approved merge, and stopped that run. The user resumed the recorded unfinished
-  work on 2026-09-26. The sole [active cycle](docs/upstream-sync/current_upstream-v0.7.1-to-v0.8.2.md)
-  covers three serial batches through v0.8.2; the completed cursor stays v0.7.1.
-  The user subsequently authorized autonomous batch and closure-documentation
-  merges after independent approval and passing checks. Upstream #88 belongs to this range.
+  work on 2026-09-26 and authorized autonomous reviewed batch and closure merges.
+  PRs #52/#53/#54 completed the three serial batches; a fresh independent
+  closure audit approved the [v0.8.2 archive](docs/upstream-sync/archive/2026-09-26_upstream-v0.7.1-to-v0.8.2.md).
+  The completed cursor is v0.8.2 and no active cycle remains. Final validation
+  includes 837 unit tests, the full 23-case smoke set, and real Chrome recovery
+  checks. Upstream #88 was already covered; release-only metadata was skipped.
   Native WebMCP default discovery landed in companion PR #48 as `c3a6b3d`.
   The records retain actual validation and review limits; no publication or
   Version Packages merge is authorized.

@@ -12,6 +12,10 @@ on:
         description: Type BrowserRig to build release artifacts from main
         required: true
         type: string
+      stage_version:
+        description: Optional exact npm version to stage for human approval (blank builds only)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -37,6 +41,8 @@ jobs:
         )
       }}
     runs-on: ubuntu-latest
+    outputs:
+      artifact-name: ${{ steps.intent.outputs.artifact-name }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -51,6 +57,22 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
       - run: npm install --global npm@11.18.0
+      - id: intent
+        name: Validate release intent
+        env:
+          STAGE_VERSION: ${{ inputs.stage_version }}
+          RELEASE_EVENT: ${{ github.event_name }}
+          RELEASE_COMMIT: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs'
+          const version = JSON.parse(fs.readFileSync('package.json', 'utf8')).version
+          const requested = process.env.STAGE_VERSION || ''
+          if (requested && requested !== version) throw new Error('stage_version must match package.json exactly')
+          const staged = process.env.RELEASE_EVENT === 'pull_request' || requested !== ''
+          const prefix = staged ? 'browserrig-release-candidate-v2-' : 'browserrig-build-only-'
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `artifact-name=${prefix}${process.env.RELEASE_COMMIT}\n`)
+          JS
       - run: pnpm install --frozen-lockfile
       - run: pnpm run ci
       - run: pnpm package:npm
@@ -59,7 +81,7 @@ jobs:
           --commit ${{ github.event.pull_request.merge_commit_sha || github.sha }}
       - uses: actions/upload-artifact@v7
         with:
-          name: browserrig-release-candidate-v1-${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          name: ${{ steps.intent.outputs.artifact-name }}
           path: |
             artifacts/browserrig-*.tgz
             artifacts/browserrig-extension-*.zip
@@ -71,11 +93,14 @@ jobs:
   publish-npm:
     if: >-
       ${{
-        github.event_name == 'pull_request' &&
+        (github.event_name == 'pull_request' &&
         github.event.pull_request.merged == true &&
         github.event.pull_request.base.ref == 'main' &&
         github.event.pull_request.head.ref == 'changeset-release/main' &&
-        github.event.pull_request.head.repo.full_name == github.repository
+        github.event.pull_request.head.repo.full_name == github.repository) ||
+        (github.event_name == 'workflow_dispatch' &&
+        github.ref == 'refs/heads/main' &&
+        inputs.confirm_package == 'BrowserRig' && inputs.stage_version != '')
       }}
     needs: package
     runs-on: ubuntu-latest
@@ -86,7 +111,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
@@ -96,7 +121,7 @@ jobs:
       - run: npm install --global npm@11.18.0
       - uses: actions/download-artifact@v8
         with:
-          name: browserrig-release-candidate-v1-${{ github.event.pull_request.merge_commit_sha }}
+          name: ${{ needs.package.outputs.artifact-name }}
           path: artifacts
       - id: candidate
         name: Verify the immutable release candidate
@@ -108,65 +133,29 @@ jobs:
               throw new Error("Release manifest commit does not match this workflow")
             }
             console.log(value.npmArtifactPath)
-          ' "$result" "${{ github.event.pull_request.merge_commit_sha }}")"
+          ' "$result" "${{ github.event.pull_request.merge_commit_sha || github.sha }}")"
           case "$npm_artifact" in
             "$GITHUB_WORKSPACE"/artifacts/browserrig-*.tgz) ;;
             *) echo "Release manifest returned an unsafe npm artifact path" >&2; exit 1 ;;
           esac
           echo "npm-artifact=$npm_artifact" >> "$GITHUB_OUTPUT"
-      - name: Publish verified npm package
+      - name: Stage verified npm package for human approval
         run: >-
-          npm publish "${{ steps.candidate.outputs.npm-artifact }}"
+          npm stage publish "${{ steps.candidate.outputs.npm-artifact }}"
           --access public
           --provenance
           --registry=https://registry.npmjs.org
+      - name: Explain npm approval
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## npm approval required
+          The candidate is staged, not publicly published. Open npm's **Staged Packages** tab,
+          inspect the version and provenance, and approve it with 2FA.
+          Alternatively use `npm stage list browserrig`, `npm stage view <stage-id>`,
+          and `npm stage approve <stage-id>` in your authenticated local npm CLI.
 
-  publish-extension:
-    if: >-
-      ${{
-        github.event_name == 'pull_request' &&
-        github.event.pull_request.merged == true &&
-        github.event.pull_request.base.ref == 'main' &&
-        github.event.pull_request.head.ref == 'changeset-release/main' &&
-        github.event.pull_request.head.repo.full_name == github.repository
-      }}
-    needs:
-      - package
-      - publish-npm
-    runs-on: ubuntu-latest
-    environment: chrome-web-store-publishing
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22.22.0
-          package-manager-cache: false
-      - uses: actions/download-artifact@v8
-        with:
-          name: browserrig-release-candidate-v1-${{ github.event.pull_request.merge_commit_sha }}
-          path: artifacts
-      - id: google-auth
-        name: Authenticate to Google Cloud with GitHub OIDC
-        uses: google-github-actions/auth@v3
-        with:
-          workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.CHROME_WEB_STORE_SERVICE_ACCOUNT }}
-          token_format: access_token
-          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
-          create_credentials_file: false
-      - name: Upload and submit the verified extension
-        env:
-          CHROME_WEB_STORE_ACCESS_TOKEN: ${{ steps.google-auth.outputs.access_token }}
-          CHROME_WEB_STORE_PUBLISHER_ID: ${{ vars.CHROME_WEB_STORE_PUBLISHER_ID }}
-        run: >-
-          node scripts/publish-chrome-web-store.ts
-          --artifacts artifacts
-          --commit ${{ github.event.pull_request.merge_commit_sha }}
-          --publisher-id "$CHROME_WEB_STORE_PUBLISHER_ID"
-          --item-id dbobcmjamjdknplkplgdihdnmdjklpin
+          **Publish GitHub release** checks every five minutes after approval. You can also
+          run it manually on main. It verifies the public npm tarball, submits the retained
+          Chrome extension ZIP, and publishes the GitHub Release. Do not rebuild or rerun
+          staging for a version that is already staged; inspect it first.
+          EOF

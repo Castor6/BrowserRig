@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { pathToFileURL } from "node:url"
 import { unzipSync } from "fflate"
+import { browserRigChromeWebStoreItemId, publishChromeWebStore } from "./publish-chrome-web-store.ts"
 import {
   renderSha256Sums,
   validateReleaseManifest,
@@ -8,6 +9,7 @@ import {
 } from "./release-manifest.js"
 
 const candidateArtifactPrefix = "browserrig-release-candidate-v1-"
+const stagedArtifactPrefix = "browserrig-release-candidate-v2-"
 const manifestFilename = "release-manifest.json"
 const checksumsFilename = "SHA256SUMS"
 const maxCandidateEntries = 16
@@ -20,7 +22,7 @@ export interface ReleaseCandidate {
   readonly files: ReadonlyMap<string, Uint8Array>
 }
 
-export type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>
+export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
 
 export interface FinalizeGitHubReleaseOptions {
   readonly repository: string
@@ -29,6 +31,7 @@ export interface FinalizeGitHubReleaseOptions {
   readonly githubApiBaseUrl?: string
   readonly githubUploadsBaseUrl?: string
   readonly npmRegistryBaseUrl?: string
+  readonly beforePublish?: ((candidate: ReleaseCandidate) => Promise<void>) | undefined
   readonly maxRuns?: number
   readonly fetch?: FetchLike
 }
@@ -516,6 +519,7 @@ const finalizeCandidateRelease = async (
   client: GitHubClient,
   repositoryPath: string,
   candidate: ReleaseCandidate,
+  beforePublish?: (candidate: ReleaseCandidate) => Promise<void>,
 ): Promise<"created" | "no-op"> => {
   const { manifest } = candidate
   const releasesResponse = await client.request(`${repositoryPath}/releases?per_page=100`)
@@ -608,6 +612,8 @@ const finalizeCandidateRelease = async (
   }
 
   if (!release.draft) return "no-op"
+  // Store submission may be retried after a crash; the publisher reconciles its remote state.
+  await beforePublish?.(candidate)
   const publishResponse = await client.request(`${repositoryPath}/releases/${release.id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -633,7 +639,7 @@ export const finalizeGitHubRelease = async (
   if (workflow.length === 0 || workflow.includes("/") || workflow.includes("\\")) {
     throw new Error("workflow must be a workflow filename")
   }
-  const maxRuns = options.maxRuns ?? 20
+  const maxRuns = options.maxRuns ?? 100
   if (!Number.isSafeInteger(maxRuns) || maxRuns < 1 || maxRuns > 100) {
     throw new Error("maxRuns must be an integer from 1 to 100")
   }
@@ -645,16 +651,21 @@ export const finalizeGitHubRelease = async (
   const client = makeGitHubClient(fetcher, options.token, apiBaseUrl, uploadsBaseUrl)
   const repositoryPath = `repos/${options.repository}`
   const runsResponse = await client.request(
-    `${repositoryPath}/actions/workflows/${encodeURIComponent(workflow)}/runs?status=completed&event=pull_request&per_page=${maxRuns}`,
+    `${repositoryPath}/actions/workflows/${encodeURIComponent(workflow)}/runs?status=completed&per_page=${maxRuns}`,
   )
   const runs = parseWorkflowRuns(await responseJson(runsResponse, "GitHub workflow runs"))
-    .filter((run) => run.status === "completed" && run.event === "pull_request")
+    .filter((run) => run.status === "completed" && (run.event === "pull_request" || run.event === "workflow_dispatch"))
     .sort((left, right) => right.id - left.id)
 
   for (const run of runs) {
     const artifactsResponse = await client.request(`${repositoryPath}/actions/runs/${run.id}/artifacts?per_page=100`)
     const candidateArtifacts = parseArtifacts(await responseJson(artifactsResponse, "GitHub artifacts"))
-      .filter((artifact) => !artifact.expired && artifact.name.startsWith(candidateArtifactPrefix))
+      // v2 marks explicit staging intent, including version-confirmed manual recovery.
+      // Legacy manual build-only runs must never become release candidates.
+      .filter((artifact) => !artifact.expired && (
+        artifact.name.startsWith(stagedArtifactPrefix) ||
+        (run.event === "pull_request" && artifact.name.startsWith(candidateArtifactPrefix))
+      ))
     if (candidateArtifacts.length > 1) {
       throw new Error(`workflow run ${run.id} contains multiple release candidate artifacts`)
     }
@@ -666,13 +677,14 @@ export const finalizeGitHubRelease = async (
 
     const archiveResponse = await client.request(`${repositoryPath}/actions/artifacts/${artifact.id}/zip`)
     const candidate = readReleaseCandidateArchive(new Uint8Array(await archiveResponse.arrayBuffer()))
-    const expectedArtifactName = `${candidateArtifactPrefix}${candidate.manifest.commit}`
+    const prefix = artifact.name.startsWith(stagedArtifactPrefix) ? stagedArtifactPrefix : candidateArtifactPrefix
+    const expectedArtifactName = `${prefix}${candidate.manifest.commit}`
     if (artifact.name !== expectedArtifactName) {
       throw new Error(`workflow run ${run.id} artifact name does not match its release commit`)
     }
     if (await verifyPublishedNpmArtifact(fetcher, npmRegistryBaseUrl, candidate) === "not-published") continue
 
-    const status = await finalizeCandidateRelease(client, repositoryPath, candidate)
+    const status = await finalizeCandidateRelease(client, repositoryPath, candidate, options.beforePublish)
     return {
       status,
       tag: candidate.manifest.tag,
@@ -692,6 +704,7 @@ interface CliOptions {
   readonly githubUploadsBaseUrl: string
   readonly npmRegistryBaseUrl: string
   readonly maxRuns: number
+  readonly publishExtension: boolean
 }
 
 const argumentValue = (args: ReadonlyArray<string>, index: number, name: string): string => {
@@ -712,7 +725,8 @@ export const parseFinalizeCliOptions = (
   let githubApiBaseUrl = environment.GITHUB_API_URL ?? "https://api.github.com"
   let githubUploadsBaseUrl = "https://uploads.github.com"
   let npmRegistryBaseUrl = "https://registry.npmjs.org"
-  let maxRuns = 20
+  let maxRuns = 100
+  let publishExtension = false
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]
@@ -722,6 +736,7 @@ export const parseFinalizeCliOptions = (
     else if (argument === "--github-api-url") githubApiBaseUrl = argumentValue(args, index++, argument)
     else if (argument === "--github-uploads-url") githubUploadsBaseUrl = argumentValue(args, index++, argument)
     else if (argument === "--npm-registry-url") npmRegistryBaseUrl = argumentValue(args, index++, argument)
+    else if (argument === "--publish-extension") publishExtension = true
     else if (argument === "--max-runs") {
       const value = argumentValue(args, index++, argument)
       maxRuns = Number(value)
@@ -745,6 +760,7 @@ export const parseFinalizeCliOptions = (
     githubUploadsBaseUrl,
     npmRegistryBaseUrl,
     maxRuns,
+    publishExtension,
   }
 }
 
@@ -754,7 +770,20 @@ export const runFinalizeCli = async (
   fetcher: FetchLike = fetch,
 ): Promise<FinalizeGitHubReleaseResult> => {
   const options = parseFinalizeCliOptions(args, environment)
-  return finalizeGitHubRelease({ ...options, fetch: fetcher })
+  const beforePublish = options.publishExtension ? async (candidate: ReleaseCandidate) => {
+    const extensionBytes = candidate.files.get(candidate.manifest.extension.file)
+    if (!extensionBytes) throw new Error("Missing verified extension bytes")
+    const result = await publishChromeWebStore({
+      accessToken: environment.CHROME_WEB_STORE_ACCESS_TOKEN ?? "",
+      publisherId: environment.CHROME_WEB_STORE_PUBLISHER_ID ?? "",
+      itemId: browserRigChromeWebStoreItemId,
+      extensionVersion: candidate.manifest.extension.version,
+      extensionBytes,
+      fetcher,
+    })
+    console.log(`Chrome Web Store: ${result.status} ${result.version} (${result.state})`)
+  } : undefined
+  return finalizeGitHubRelease({ ...options, fetch: fetcher, beforePublish })
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {

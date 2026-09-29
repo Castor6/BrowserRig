@@ -1,12 +1,10 @@
 # BrowserRig
 
-## 1.0.0
-
-### Major Changes
-
-- c3a6b3d: Enable native WebMCP discovery by default for CLI, MCP, DSH, and SDK executions. Remove the experimental environment switch; existing environment-based opt-outs no longer apply. The deprecated per-call experimentalWebMcp field still accepts false to opt out for that call, while omitted or true enables discovery. Unsupported browsers keep ordinary Playwright execution available.
+## 0.5.0
 
 ### Minor Changes
+
+- c3a6b3d: Enable native WebMCP discovery by default for CLI, MCP, DSH, and SDK executions. Remove the experimental environment switch; existing environment-based opt-outs no longer apply. The deprecated per-call experimentalWebMcp field still accepts false to opt out for that call, while omitted or true enables discovery. Unsupported browsers keep ordinary Playwright execution available.
 
 - 1384104: Add bounded compact snapshot search with surrounding context, improve refs for numeric/search inputs and disclosure controls, and include portal dialogs without losing important list actions. Fill helpers now support plain-text contenteditable fields without moving focus.
 - b280aaf: Add session-scoped MCP recording controls and allow session persistence on filesystems that reject directory sync, while preserving file sync and other I/O failures.

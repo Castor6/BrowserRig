@@ -8,88 +8,59 @@ let finalizerWorkflow = ""
 
 beforeAll(async () => {
   const workflows = path.join(process.cwd(), ".github", "workflows")
-  const [candidate, finalizer] = await Promise.all([
+  ;[candidateWorkflow, finalizerWorkflow] = await Promise.all([
     fs.readFile(path.join(workflows, "release.yml"), "utf8"),
     fs.readFile(path.join(workflows, "publish-github-release.yml"), "utf8"),
   ])
-  candidateWorkflow = candidate
-  finalizerWorkflow = finalizer
 })
 
 describe("release workflows", () => {
-  it("publishes npm only from an immutable candidate after a Version Packages merge", () => {
-    const publishJob = candidateWorkflow.slice(
-      candidateWorkflow.indexOf("  publish-npm:"),
-      candidateWorkflow.indexOf("  publish-extension:"),
-    )
-
-    expect(publishJob).toContain("github.event_name == 'pull_request'")
-    expect(publishJob).toContain("github.event.pull_request.merged == true")
-    expect(publishJob).toContain("github.event.pull_request.head.ref == 'changeset-release/main'")
-    expect(publishJob).toContain("github.event.pull_request.head.repo.full_name == github.repository")
-    expect(publishJob).toContain("needs: package")
-    expect(publishJob).toContain("environment: npm-publishing")
-    expect(publishJob).toContain("id-token: write")
-    expect(publishJob).toContain("actions/download-artifact@v8")
-    expect(publishJob).not.toMatch(/NPM_TOKEN|NODE_AUTH_TOKEN/)
-    expect(candidateWorkflow.match(/browserrig-release-candidate-v1-/g)).toHaveLength(3)
-    expect(publishJob).toContain("node scripts/release-manifest.ts --verify --artifacts artifacts")
-    expect(publishJob).toContain("value.manifest.commit !== process.argv[2]")
-    expect(publishJob).not.toContain("pnpm install")
-    expect(publishJob).toContain("npm publish")
-    expect(publishJob).not.toContain("npm stage publish")
-    expect(publishJob.trimEnd()).toMatch(/--registry=https:\/\/registry\.npmjs\.org$/)
+  it("stages the immutable candidate with OIDC and leaves approval to the maintainer", () => {
+    const job = candidateWorkflow.slice(candidateWorkflow.indexOf("  publish-npm:"))
+    expect(job).toContain("github.event.pull_request.merged == true")
+    expect(job).toContain("github.event.pull_request.head.ref == 'changeset-release/main'")
+    expect(job).toContain("github.event.pull_request.head.repo.full_name == github.repository")
+    expect(job).toContain("needs: package")
+    expect(job).toContain("environment: npm-publishing")
+    expect(job).toContain("id-token: write")
+    expect(job).toContain("name: ${{ needs.package.outputs.artifact-name }}")
+    expect(job).toContain("node scripts/release-manifest.ts --verify --artifacts artifacts")
+    expect(job).toContain("value.manifest.commit !== process.argv[2]")
+    expect(job).toContain('npm stage publish "${{ steps.candidate.outputs.npm-artifact }}"')
+    expect(job).toContain("--provenance")
+    expect(job).toContain("GITHUB_STEP_SUMMARY")
+    expect(job).not.toContain("pnpm install")
+    expect(job).not.toMatch(/NPM_TOKEN|NODE_AUTH_TOKEN|npm publish /)
+    expect(candidateWorkflow).not.toContain("publish-extension:")
+    expect(candidateWorkflow).not.toContain("google-github-actions/auth")
   })
 
-  it("submits the same verified extension candidate for automatic Store publishing", () => {
-    const publishJob = candidateWorkflow.slice(candidateWorkflow.indexOf("  publish-extension:"))
-
-    expect(publishJob).toContain("github.event_name == 'pull_request'")
-    expect(publishJob).toContain("github.event.pull_request.merged == true")
-    expect(publishJob).toContain("github.event.pull_request.head.ref == 'changeset-release/main'")
-    expect(publishJob).toContain("github.event.pull_request.head.repo.full_name == github.repository")
-    expect(publishJob).toContain("- package\n      - publish-npm")
-    expect(publishJob).toContain("environment: chrome-web-store-publishing")
-    expect(publishJob).toContain("id-token: write")
-    expect(publishJob).toContain("actions/download-artifact@v8")
-    expect(publishJob).toContain("google-github-actions/auth@v3")
-    expect(publishJob).toContain("workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}")
-    expect(publishJob).toContain("service_account: ${{ vars.CHROME_WEB_STORE_SERVICE_ACCOUNT }}")
-    expect(publishJob).toContain("access_token_scopes: https://www.googleapis.com/auth/chromewebstore")
-    expect(publishJob).toContain("create_credentials_file: false")
-    expect(publishJob).toContain("node scripts/publish-chrome-web-store.ts")
-    expect(publishJob).toContain("--commit ${{ github.event.pull_request.merge_commit_sha }}")
-    expect(publishJob).toContain("--item-id dbobcmjamjdknplkplgdihdnmdjklpin")
-    expect(publishJob).not.toContain("github.event_name == 'workflow_dispatch'")
-    expect(publishJob).not.toMatch(/credentials_json|SERVICE_ACCOUNT_KEY|REFRESH_TOKEN|CLIENT_SECRET/)
-    expect(publishJob).not.toContain("pnpm install")
-  })
-
-  it("retains the complete candidate without publishing a manual rebuild", () => {
+  it("requires exact version confirmation for manual staging and isolates build-only artifacts", () => {
+    expect(candidateWorkflow).toContain("inputs.confirm_package == 'BrowserRig'")
+    expect(candidateWorkflow).toContain("inputs.stage_version != ''")
+    expect(candidateWorkflow).toContain("github.ref == 'refs/heads/main'")
+    expect(candidateWorkflow).toContain("STAGE_VERSION: ${{ inputs.stage_version }}")
+    expect(candidateWorkflow).toContain("requested !== version")
+    expect(candidateWorkflow).toContain("'browserrig-release-candidate-v2-' : 'browserrig-build-only-'")
     expect(candidateWorkflow).toContain("retention-days: 90")
     expect(candidateWorkflow).toContain("artifacts/release-manifest.json")
     expect(candidateWorkflow).toContain("artifacts/SHA256SUMS")
-    expect(candidateWorkflow).toContain("github.event_name == 'workflow_dispatch'")
-
-    const npmPublishJob = candidateWorkflow.slice(
-      candidateWorkflow.indexOf("  publish-npm:"),
-      candidateWorkflow.indexOf("  publish-extension:"),
-    )
-    const extensionPublishJob = candidateWorkflow.slice(candidateWorkflow.indexOf("  publish-extension:"))
-    expect(npmPublishJob).not.toContain("github.event_name == 'workflow_dispatch'")
-    expect(extensionPublishJob).not.toContain("github.event_name == 'workflow_dispatch'")
   })
 
-  it("finalizes from main with GitHub-only least privilege", () => {
-    expect(finalizerWorkflow).toContain("cron: \"17,47 * * * *\"")
+  it("checks every five minutes or manually and gates Store submission on verified npm publication", () => {
+    expect(finalizerWorkflow).toContain('cron: "*/5 * * * *"')
     expect(finalizerWorkflow).toContain("workflow_dispatch:")
     expect(finalizerWorkflow).toContain("actions: read")
     expect(finalizerWorkflow).toContain("contents: write")
-    expect(finalizerWorkflow).not.toContain("id-token:")
-    expect(finalizerWorkflow).not.toMatch(/NPM_TOKEN|NODE_AUTH_TOKEN/)
+    expect(finalizerWorkflow).toContain("id-token: write")
+    expect(finalizerWorkflow).toContain("environment: chrome-web-store-publishing")
     expect(finalizerWorkflow).toContain("github.repository == 'Castor6/BrowserRig'")
     expect(finalizerWorkflow).toContain("github.ref == 'refs/heads/main'")
     expect(finalizerWorkflow).toContain("ref: ${{ github.sha }}")
-    expect(finalizerWorkflow).toContain("pnpm release:github --workflow release.yml")
+    expect(finalizerWorkflow).toContain("pnpm release:github --workflow release.yml --publish-extension")
+    expect(finalizerWorkflow).toContain("google-github-actions/auth@v3")
+    expect(finalizerWorkflow).toContain("create_credentials_file: false")
+    expect(finalizerWorkflow).toContain("access_token_scopes: https://www.googleapis.com/auth/chromewebstore")
+    expect(finalizerWorkflow).not.toMatch(/NPM_TOKEN|NODE_AUTH_TOKEN|credentials_json|SERVICE_ACCOUNT_KEY|REFRESH_TOKEN|CLIENT_SECRET/)
   })
 })

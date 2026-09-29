@@ -2,7 +2,7 @@ name: Publish GitHub release
 
 on:
   schedule:
-    - cron: "17,47 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -18,6 +18,11 @@ jobs:
     if: github.repository == 'Castor6/BrowserRig' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: chrome-web-store-publishing
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -31,6 +36,17 @@ jobs:
           node-version: 22.22.0
           package-manager-cache: false
       - run: pnpm install --frozen-lockfile
-      - run: pnpm release:github --workflow release.yml
+      - id: google-auth
+        name: Authenticate to Google Cloud with GitHub OIDC
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.CHROME_WEB_STORE_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+          create_credentials_file: false
+      - run: pnpm release:github --workflow release.yml --publish-extension
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          CHROME_WEB_STORE_ACCESS_TOKEN: ${{ steps.google-auth.outputs.access_token }}
+          CHROME_WEB_STORE_PUBLISHER_ID: ${{ vars.CHROME_WEB_STORE_PUBLISHER_ID }}

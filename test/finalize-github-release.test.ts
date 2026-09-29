@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { zipSync } from "fflate"
 import {
   finalizeGitHubRelease,
+  runFinalizeCli,
   parseReleaseManifest,
   readReleaseCandidateArchive,
   releaseBody,
@@ -247,7 +248,8 @@ const requestBodyBytes = async (body: BodyInit | null | undefined): Promise<Uint
   throw new Error("expected a byte request body")
 }
 
-const finalize = (api: ReleaseApiMock) => finalizeGitHubRelease({
+const finalize = (api: ReleaseApiMock, beforePublish?: (candidate: ReleaseCandidate) => Promise<void>) => finalizeGitHubRelease({
+  beforePublish,
   repository,
   token: "test-token",
   workflow: "release.yml",
@@ -258,6 +260,80 @@ const finalize = (api: ReleaseApiMock) => finalizeGitHubRelease({
 })
 
 describe("GitHub Release finalizer", () => {
+  it("submits verified extension bytes before making the Release public and retries a failed submission", async () => {
+    const api = new ReleaseApiMock(makeCandidate())
+    const submit = vi.fn(async (candidate: ReleaseCandidate) => {
+      expect(candidate.manifest).toEqual(api.fixture.candidate.manifest)
+      expect(candidate.files.get(candidate.manifest.extension.file)).toEqual(
+        api.fixture.candidate.files.get(candidate.manifest.extension.file),
+      )
+      expect(api.release?.draft).toBe(true)
+      expect(api.assets.size).toBe(4)
+      throw new Error("Store temporarily unavailable")
+    })
+    await expect(finalize(api, submit)).rejects.toThrow("Store temporarily unavailable")
+    expect(api.release?.draft).toBe(true)
+    expect(api.mutations.some((mutation) => mutation.method === "PATCH")).toBe(false)
+    const mutations = api.mutations.length
+    const retry = vi.fn(async () => {})
+    await expect(finalize(api, retry)).resolves.toMatchObject({ status: "created" })
+    expect(retry).toHaveBeenCalledTimes(1)
+    expect(api.mutations.length).toBe(mutations + 1)
+    await expect(finalize(api, retry)).resolves.toMatchObject({ status: "no-op" })
+    expect(retry).toHaveBeenCalledTimes(1)
+  })
+
+  it("never submits to the Store before approval or after a public tarball conflict", async () => {
+    const api = new ReleaseApiMock(makeCandidate())
+    const submit = vi.fn(async () => {})
+    api.npmStatus = 404
+    await expect(finalize(api, submit)).resolves.toMatchObject({ status: "waiting" })
+    api.npmStatus = 200
+    api.npmTarballBytes = encoder.encode("conflict")
+    await expect(finalize(api, submit)).rejects.toThrow("tarball bytes conflict")
+    expect(submit).not.toHaveBeenCalled()
+    expect(api.mutations).toEqual([])
+  })
+
+  it("accepts explicit manual v2 staging but excludes manual builds and legacy manual candidates", async () => {
+    const api = new ReleaseApiMock(makeCandidate())
+    api.workflowRuns[0]!.event = "workflow_dispatch"
+    await expect(finalize(api)).resolves.toMatchObject({ status: "waiting" })
+    api.artifactName = `browserrig-build-only-${api.fixture.candidate.manifest.commit}`
+    await expect(finalize(api)).resolves.toMatchObject({ status: "waiting" })
+    expect(api.mutations).toEqual([])
+    api.artifactName = `browserrig-release-candidate-v2-${api.fixture.candidate.manifest.commit}`
+    await expect(finalize(api)).resolves.toMatchObject({ status: "created" })
+  })
+
+  it("wires the CLI Store gate to the verified candidate and resumes an existing Store submission", async () => {
+    const api = new ReleaseApiMock(makeCandidate())
+    let storeRequests = 0
+    const fetcher: FetchLike = async (input, init) => {
+      if (String(input).startsWith("https://chromewebstore.googleapis.com/")) {
+        storeRequests++
+        expect(String(input)).toContain(":fetchStatus")
+        expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer store-token")
+        return jsonResponse({
+          itemId: "dbobcmjamjdknplkplgdihdnmdjklpin",
+          submittedItemRevisionStatus: {
+            state: "PENDING_REVIEW",
+            distributionChannels: [{ crxVersion: "0.1.1" }],
+          },
+        })
+      }
+      return api.fetch(input, init)
+    }
+    await expect(runFinalizeCli([
+      "--publish-extension", "--github-api-url", apiBaseUrl,
+      "--github-uploads-url", uploadsBaseUrl, "--npm-registry-url", registryBaseUrl,
+    ], {
+      GITHUB_REPOSITORY: repository, GITHUB_TOKEN: "test-token",
+      CHROME_WEB_STORE_ACCESS_TOKEN: "store-token", CHROME_WEB_STORE_PUBLISHER_ID: "publisher",
+    }, fetcher)).resolves.toMatchObject({ status: "created" })
+    expect(storeRequests).toBe(1)
+  })
+
   it("creates a draft, uploads the exact candidate assets, then publishes it", async () => {
     const api = new ReleaseApiMock(makeCandidate())
 
@@ -354,7 +430,7 @@ describe("GitHub Release finalizer", () => {
     expect(api.release).toBeUndefined()
   })
 
-  it("requests only pull-request workflow runs and defensively ignores manual runs", async () => {
+  it("inspects completed runs without finalizing legacy manual artifacts", async () => {
     const api = new ReleaseApiMock(makeCandidate())
     api.workflowRuns = [{ id: 42, status: "completed", conclusion: "success", event: "workflow_dispatch" }]
 
@@ -363,9 +439,9 @@ describe("GitHub Release finalizer", () => {
       reason: "no-published-candidate",
     })
     const runsRequest = api.requests.find((request) => request.url.includes("/actions/workflows/"))
-    expect(runsRequest?.url).toContain("event=pull_request")
+    expect(runsRequest?.url).not.toContain("event=pull_request")
     expect(runsRequest?.url).toContain("status=completed")
-    expect(api.requests.some((request) => request.url.includes("/actions/runs/42/artifacts"))).toBe(false)
+    expect(api.requests.some((request) => request.url.includes("/actions/artifacts/55/zip"))).toBe(false)
   })
 
   it("rejects an artifact whose name does not bind to the manifest commit", async () => {

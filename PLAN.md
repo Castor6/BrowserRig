@@ -334,18 +334,21 @@ require a new extension capture protocol and permission model.
   A maintainer decides when to merge it. Merging that repository-owned branch
   automatically builds one immutable npm and extension release candidate at
   the exact merge commit, records its component versions and checksums, and
-  publishes the exact npm tarball through a direct-publish OIDC trusted
-  publisher. After npm succeeds, the same workflow downloads and verifies that
-  retained candidate, exchanges GitHub OIDC for a short-lived Google service
-  account token, and submits its exact extension ZIP through Chrome Web Store
-  API V2 with `DEFAULT_PUBLISH`. Store review remains mandatory; approval makes
-  the update public automatically. Merging the version pull request is the
-  explicit and irreversible release approval for both channels. A manual
-  rebuild path remains available but never publishes either artifact. After the
-  exact tarball becomes public, a separate scheduled finalizer verifies its
-  registry integrity against the retained candidate, creates the npm-version
-  Git tag and GitHub Release, and attaches the original npm tarball, extension
-  ZIP, manifest, and checksums. It never rebuilds or overwrites a release.
+  stages the exact npm tarball through an OIDC trusted publisher. A maintainer
+  approves the staged package with npm 2FA. The separate finalizer runs every
+  five minutes (or manually), verifies the public npm tarball against the
+  retained candidate, prepares and verifies GitHub Release draft assets, submits
+  the exact extension ZIP with keyless Google OIDC and `DEFAULT_PUBLISH`, then
+  publishes the GitHub Release. Store failure leaves a retryable draft; an
+  already complete Release does not resubmit the extension. Store review remains
+  mandatory. The npm trust relationship permits staging, and the Google provider
+  must authorize `publish-github-release.yml` in `chrome-web-store-publishing`.
+  Manual dispatch is build-only unless an exact `stage_version` confirms staging
+  and subsequent publication after npm approval. v2 artifact names distinguish
+  explicit staging intent from build-only artifacts; legacy manual candidates
+  remain excluded. Serialize releases and finish within the 90-day retention.
+  Never rebuild or overwrite a staged/published version's candidate. No npm or
+  Google long-lived credentials are used.
 - The browser extension is publicly available from the
   [Chrome Web Store](https://chromewebstore.google.com/detail/browserrig/dbobcmjamjdknplkplgdihdnmdjklpin).
   Store installations receive approved updates automatically. The `0.0.1`

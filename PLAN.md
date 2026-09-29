@@ -313,6 +313,12 @@ require a new extension capture protocol and permission model.
 - The same prebuilt npm artifact is the DSH bundle. DSH installs it per profile
   with `dsh plugin --profile <name> add browserrig`; the bundle resolves its own
   matching CLI runtime and does not require a global command or separate skill.
+- The unpublished npm release originally prepared as `1.0.0` is corrected to
+  `0.5.0` by maintainer decision. Retiring the experimental WebMCP environment
+  switch is classified as a minor change for this release; the changelog must
+  still explain that environment-based opt-outs no longer apply. The extension
+  keeps its independently calculated `0.1.3` version. This metadata correction
+  does not add another Changeset bump or reuse the failed `1.0.0` candidate.
 - Releasable pull requests carry Changesets. A scoped GitHub workflow maintains
   one shared `Version Packages` pull request that batches version and changelog
   updates. It authenticates with the encrypted, repository-scoped
